@@ -1,0 +1,1178 @@
+\documentclass[12pt,a4paper]{article}
+
+% ============================================================================
+% TỰ ĐỘNG TƯƠNG THÍCH MỌI TRÌNH BIÊN DỊCH TRÊN OVERLEAF (pdfLaTeX / XeLaTeX / LuaLaTeX)
+% ============================================================================
+\usepackage{iftex}
+\ifPDFTeX
+    \usepackage[utf8]{vietnam}
+\else
+    \usepackage{fontspec}
+    \setmainfont{Latin Modern Roman}
+    \setsansfont{Latin Modern Sans}
+    \setmonofont{Latin Modern Mono}
+    \usepackage[vietnamese]{babel}
+\fi
+
+% ============================================================================
+% CẤU HÌNH CĂN LỀ CHUẨN BÁO CÁO ĐỒ ÁN TỐT NGHIỆP (TRÁI 3CM, PHẢI 2CM, TRÊN/DƯỚI 2.5CM)
+% ============================================================================
+\usepackage{geometry}
+\geometry{
+    a4paper,
+    left=3.0cm,
+    right=2.0cm,
+    top=2.5cm,
+    bottom=2.5cm,
+    headheight=16pt,
+    headsep=18pt,
+    footskip=28pt
+}
+
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc}
+\usepackage[hidelinks, unicode]{hyperref}
+
+% ============================================================================
+% BẢNG MÀU TRANG NHÃ CHUẨN BÁO CÁO
+% ============================================================================
+\definecolor{primaryblue}{RGB}{18, 60, 120}
+\definecolor{headerblue}{RGB}{218, 232, 252}
+\definecolor{rowlight}{RGB}{246, 249, 254}
+\definecolor{accentgreen}{RGB}{22, 120, 75}
+\definecolor{lightgreen}{RGB}{232, 247, 239}
+\definecolor{warnorange}{RGB}{210, 90, 10}
+\definecolor{lightorange}{RGB}{255, 244, 230}
+
+% Cấu hình đường kẻ bảng đóng khung sắc nét
+\arrayrulecolor{primaryblue!80!black}
+\setlength{\arrayrulewidth}{0.5pt}
+\renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{5pt}
+
+% Định nghĩa kiểu cột bảng chuẩn (Căn trái tự nhiên, không bị giãn chữ hay tràn ô)
+\newcolumntype{L}[1]{>{\footnotesize\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\footnotesize\centering\arraybackslash}p{#1}}
+\newcolumntype{M}[1]{>{\footnotesize\ttfamily\raggedright\arraybackslash}p{#1}}
+
+% Cấu hình Chú thích Bảng & Hình
+\captionsetup{
+    font={small},
+    labelfont={bf, color=primaryblue},
+    labelsep=colon,
+    skip=6pt
+}
+
+% Cấu hình giãn dòng và đoạn văn
+\setstretch{1.22}
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+
+% Cấu hình Header & Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\textit{\textcolor{primaryblue}{Hồ sơ Thiết kế Hệ thống -- Giám sát Văn phòng Thông minh}}}
+\fancyhead[R]{\footnotesize\textit{\textcolor{primaryblue}{Đồ án Tốt nghiệp CNTT}}}
+\fancyfoot[L]{\footnotesize\textcolor{gray}{Khoa Công nghệ Thông tin}}
+\fancyfoot[R]{\footnotesize\textbf{Trang \thepage}}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% Định dạng tiêu đề Chương / Mục
+\titleformat{\section}
+    {\Large\bfseries\color{primaryblue}}
+    {\thesection.}
+    {0.6em}
+    {}
+    [\vspace{-4pt}\textcolor{primaryblue}{\rule{\textwidth}{1.0pt}}]
+
+\titleformat{\subsection}
+    {\large\bfseries\color{primaryblue!90!black}}
+    {\thesubsection}
+    {0.6em}
+    {}
+    {}
+
+\titleformat{\subsubsection}
+    {\normalsize\bfseries\color{black!85}}
+    {\thesubsubsection}
+    {0.6em}
+    {}
+    {}
+
+\titlespacing*{\section}{0pt}{14pt}{8pt}
+\titlespacing*{\subsection}{0pt}{12pt}{6pt}
+\titlespacing*{\subsubsection}{0pt}{10pt}{4pt}
+
+\begin{document}
+
+% ============================================================================
+% TRANG BÌA ĐÓNG KHUNG ĐÔI CHUẨN ĐỒ ÁN TỐT NGHIỆP
+% ============================================================================
+\begin{titlepage}
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[line width=1.8pt, color=primaryblue]
+            ($(current page.north west) + (2.5cm,-2.0cm)$)
+            rectangle
+            ($(current page.south east) + (-1.8cm,2.0cm)$);
+        \draw[line width=0.6pt, color=primaryblue]
+            ($(current page.north west) + (2.65cm,-2.15cm)$)
+            rectangle
+            ($(current page.south east) + (-1.95cm,2.15cm)$);
+    \end{tikzpicture}
+
+    \centering
+    \vspace*{0.6cm}
+    {\large \textbf{BỘ GIÁO DỤC VÀ ĐÀO TẠO}\par}
+    {\Large \textbf{\textcolor{primaryblue}{KHOA CÔNG NGHỆ THÔNG TIN}}\par}
+    \vspace{0.3cm}
+    \textcolor{primaryblue}{\rule{0.45\textwidth}{0.8pt}}\par
+    \vspace{1.6cm}
+
+    {\LARGE \bfseries HỒ SƠ PHÂN TÍCH VÀ THIẾT KẾ HỆ THỐNG\par}
+    \vspace{0.8cm}
+
+    {\huge \bfseries \textcolor{primaryblue}{HỆ THỐNG THỊ GIÁC MÁY TÍNH}}\\[6pt]
+    {\huge \bfseries \textcolor{primaryblue}{GIÁM SÁT VĂN PHÒNG THÔNG MINH}}\par
+    \vspace{0.4cm}
+    {\large \textit{(Hỗ trợ Chấm công Tự động, Giám sát Hiện diện Chỗ ngồi và An ninh Ngoài giờ)}\par}
+
+    \vspace{1.4cm}
+    \begin{tikzpicture}
+        \node[
+            draw=primaryblue,
+            line width=0.8pt,
+            fill=rowlight,
+            rounded corners=5pt,
+            inner sep=14pt,
+            text width=0.84\textwidth,
+            align=left
+        ] {
+            \centering\textbf{\textcolor{primaryblue}{THÔNG TIN CÔNG NGHỆ VÀ HẠ TẦNG TRIỂN KHAI}}\par
+            \vspace{6pt}
+            \normalfont\small
+            \begin{tabular}{@{} >{\bfseries}p{4.3cm} p{8.5cm} @{}}
+                $\bullet$ Hệ thống Backend: & C\# .NET (\textit{ASP.NET Core WebAPI -- Kiến trúc Modular Monolith}) \\[3pt]
+                $\bullet$ Dịch vụ Nhận diện AI: & Dịch vụ xử lý hình ảnh độc lập (\textit{Nhận diện khuôn mặt \& chỗ ngồi}) \\[3pt]
+                $\bullet$ Giao diện Quản trị: & React + TypeScript (\textit{Cập nhật trạng thái trực tiếp qua SignalR}) \\[3pt]
+                $\bullet$ Cơ sở dữ liệu \& Lưu trữ: & PostgreSQL 16 + Lưu trữ đám mây Cloudflare R2 / MinIO \\[3pt]
+                $\bullet$ Hạ tầng Triển khai: & Docker Compose, Máy chủ VPS, Tên miền \texttt{.id.vn}, Cloudflare SSL
+            \end{tabular}
+        };
+    \end{tikzpicture}
+
+    \vfill
+    \begin{tabular}{p{6.5cm} p{6.5cm}}
+        \textbf{Nhóm sinh viên thực hiện:} & \textbf{Nội dung hồ sơ thiết kế:} \\
+        -- Chuyên ngành: Công nghệ Thông tin & 1. Đặc tả Yêu cầu Chức năng \& Phi chức năng \\
+        -- Định hướng: Kỹ thuật Phần mềm & 2. Sơ đồ Phân rã Chức năng (FDD) \\
+        & 3. Thiết kế Kiến trúc Hệ thống \\
+        & 4. Thiết kế Cơ sở Dữ liệu \& Sơ đồ ERD \\
+    \end{tabular}
+
+    \vspace{1.0cm}
+    {\normalsize \textbf{Tháng 10 năm 2026}\par}
+    \vspace*{0.4cm}
+\end{titlepage}
+
+% ============================================================================
+% TÓM TẮT NỘI DUNG & MỤC LỤC
+% ============================================================================
+\newpage
+\section*{Tóm tắt Hồ sơ Thiết kế}
+\addcontentsline{toc}{section}{Tóm tắt Hồ sơ Thiết kế}
+
+\begin{tikzpicture}
+    \node[draw=primaryblue, fill=rowlight, rounded corners=4pt, inner sep=12pt, text width=\dimexpr\textwidth-26pt\relax, align=justify] {
+        Tài liệu này trình bày hồ sơ phân tích và thiết kế hệ thống cho đề tài: \textbf{``Hệ thống Thị giác Máy tính Giám sát Văn phòng Thông minh''}. Nội dung tài liệu bao gồm 4 phần chính:
+        \begin{enumerate}[nosep, leftmargin=1.5em, topsep=4pt]
+            \item \textbf{Đặc tả Yêu cầu Chức năng và Phi chức năng}: Mô tả các chức năng nghiệp vụ mà phần mềm cung cấp cho từng nhóm người dùng và các yêu cầu về hiệu năng, độ chính xác, bảo mật và tính dễ sử dụng.
+            \item \textbf{Sơ đồ Phân rã Chức năng (FDD)}: Phân chia hệ thống thành 5 phân hệ nghiệp vụ và 25 chức năng chi tiết, đồng thời ánh xạ sang các module trong mã nguồn dự án.
+            \item \textbf{Thiết kế Kiến trúc Hệ thống}: Trình bày sơ đồ kiến trúc tổng thể kết hợp giữa Backend C\# .NET (\textit{Modular Monolith}), Dịch vụ AI xử lý hình ảnh, giao diện Web React và quy trình phối hợp xử lý giữa các thành phần.
+            \item \textbf{Thiết kế Cơ sở Dữ liệu (ERD)}: Mô tả sơ đồ quan hệ thực thể gồm 12 bảng dữ liệu trên hệ quản trị PostgreSQL, từ điển dữ liệu chi tiết và cách tổ chức lưu trữ ảnh, video trên đám mây.
+        \end{enumerate}
+    };
+\end{tikzpicture}
+
+\vspace{0.4cm}
+\tableofcontents
+\newpage
+
+% ============================================================================
+% CHƯƠNG 1: TỔNG QUAN HỆ THỐNG VÀ PHÂN QUYỀN NGƯỜI DÙNG
+% ============================================================================
+\section{Tổng quan Hệ thống và Bối cảnh Nghiệp vụ}
+
+\subsection{Bối cảnh và Mục tiêu Đề tài}
+Trong công tác quản lý văn phòng hiện nay, việc chấm công, theo dõi sự hiện diện của nhân sự và đảm bảo an ninh tòa nhà ngoài giờ làm việc thường gặp phải ba vấn đề thực tế:
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+    \item \textbf{Hạn chế của chấm công truyền thống}: Việc chấm công bằng thẻ từ hoặc vân tay dễ xảy ra tình trạng quên thẻ, chấm công hộ hoặc gây ùn tắc tại khu vực cửa ra vào vào đầu giờ sáng.
+    \item \textbf{Khó khăn trong việc theo dõi hiện diện tại chỗ ngồi}: Doanh nghiệp cần nắm bắt tình hình làm việc thực tế tại các phòng ban nhưng không muốn sử dụng các biện pháp xâm phạm quyền riêng tư cá nhân như cài phần mềm theo dõi màn hình máy tính.
+    \item \textbf{Nguy cơ mất an ninh ngoài giờ hành chính}: Vào ban đêm (từ 19:00 đến 06:30 sáng hôm sau), ngày cuối tuần hoặc dịp nghỉ lễ, văn phòng cần được giám sát tự động để phát hiện kịp thời người lạ đột nhập hoặc nhân viên ở lại văn phòng khi chưa đăng ký làm thêm giờ.
+\end{itemize}
+
+Hệ thống được xây dựng nhằm tự động hóa các nghiệp vụ trên thông qua hệ thống camera văn phòng, giúp ghi nhận chấm công tự động, hiển thị sơ đồ chỗ ngồi trực quan trên nền tảng Web và gửi cảnh báo an ninh tức thời cho bộ phận bảo vệ.
+
+\subsection{Đối chiếu Yêu cầu Kỹ thuật và Hạ tầng Triển khai}
+
+\begin{table}[H]
+\centering
+\caption{Bảng đối chiếu các hạng mục kỹ thuật và hạ tầng triển khai của dự án}
+\begin{tabular}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.30\textwidth-2\tabcolsep\relax}|L{\dimexpr0.56\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Hạng mục} & \textbf{Yêu cầu Kỹ thuật} & \textbf{Giải pháp Triển khai trong Dự án} \\
+\hline
+\textbf{CLO1.1} & Kiến trúc Backend \textit{Modular Monolith} & Xây dựng hệ thống Backend bằng C\# .NET chia thành 5 phân hệ nghiệp vụ độc lập: Hồ sơ sinh trắc, Chấm công, Giám sát chỗ ngồi, An ninh ngoài giờ và Báo cáo. \\
+\hline
+\rowcolor{rowlight}
+\textbf{CLO1.2} & Dịch vụ Nhận diện Hình ảnh (AI) & Tách riêng dịch vụ xử lý hình ảnh (\texttt{ai\_service}) chuyên đảm nhận việc phát hiện khuôn mặt, nhận diện người tại bàn làm việc và trích xuất video sự cố. \\
+\hline
+\textbf{CLO1.3} & Lưu trữ Đám mây (Cloudflare R2 / MinIO) & Tích hợp dịch vụ lưu trữ đối tượng \textbf{Cloudflare R2} (tương thích chuẩn S3) để lưu trữ an toàn ảnh mẫu nhân viên, ảnh chụp chấm công và video an ninh. \\
+\hline
+\rowcolor{rowlight}
+\textbf{CLO1.4} & Đóng gói Docker Compose & Đóng gói toàn bộ các thành phần của hệ thống (\texttt{backend}, \texttt{ai\_service}, \texttt{frontend}, \texttt{postgres}, \texttt{nginx}) thông qua \texttt{docker-compose.yml}. \\
+\hline
+\textbf{CLO1.5} & Tên miền \texttt{.id.vn} \& Bảo mật SSL & Sử dụng tên miền \texttt{.id.vn} kết nối qua Cloudflare DNS và cấu hình chứng chỉ bảo mật HTTPS (\textit{Full Strict SSL}) cho máy chủ Web. \\
+\hline
+\rowcolor{rowlight}
+\textbf{CLO1.6} & Triển khai Máy chủ VPS \& CI/CD & Triển khai ứng dụng lên máy chủ đám mây VPS Linux và thiết lập quy trình tự động kiểm thử, cập nhật phiên bản mới qua \textbf{GitHub Actions}. \\
+\hline
+\textbf{CLO2} & Hồ sơ Thiết kế \& Kiểm thử & Xây dựng đầy đủ tài liệu phân tích thiết kế hệ thống và kịch bản kiểm thử tự động cho các chức năng nghiệp vụ. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Các Nhóm Người dùng trong Hệ thống (Actors)}
+
+\begin{table}[H]
+\centering
+\caption{Danh sách các nhóm người dùng tương tác với hệ thống}
+\begin{tabular}{|C{\dimexpr0.08\textwidth-2\tabcolsep\relax}|L{\dimexpr0.25\textwidth-2\tabcolsep\relax}|C{\dimexpr0.17\textwidth-2\tabcolsep\relax}|L{\dimexpr0.50\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\textbf{STT} & \textbf{Nhóm người dùng} & \textbf{Mã vai trò} & \textbf{Mô tả vai trò và trách nhiệm chính} \\
+\hline
+1 & \textbf{Quản trị viên Hệ thống} & \texttt{ADMIN} & Quản lý tài khoản người dùng, kết nối camera, vẽ vùng vị trí bàn làm việc trên màn hình cấu hình và thiết lập tham số hệ thống. \\
+\hline
+\rowcolor{rowlight}
+2 & \textbf{Chuyên viên Nhân sự} & \texttt{HR} & Quản lý hồ sơ nhân viên, đăng ký ảnh khuôn mặt mẫu, duyệt đơn nghỉ phép/làm thêm giờ và xuất báo cáo chấm công hàng tháng. \\
+\hline
+3 & \textbf{Trưởng bộ phận} & \texttt{DEPT\_LEAD} & Theo dõi sơ đồ trạng thái chỗ ngồi của nhân viên thuộc phòng ban mình quản lý và nhận thông báo khi nhân viên vắng mặt quá thời gian quy định. \\
+\hline
+\rowcolor{rowlight}
+4 & \textbf{Nhân viên An ninh} & \texttt{SECURITY} & Giám sát màn hình camera an ninh trực tiếp, nhận cảnh báo khi có người xâm nhập ngoài giờ và lập biên bản xác nhận xử lý sự cố. \\
+\hline
+5 & \textbf{Nhân viên Văn phòng} & \texttt{EMPLOYEE} & Được hệ thống tự động nhận diện chấm công khi đi qua cửa sảnh và ghi nhận thời gian làm việc thực tế tại vị trí bàn được phân công. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Ma trận Phân quyền Sử dụng Chức năng (RBAC)}
+
+\begin{table}[H]
+\centering
+\caption{Ma trận phân quyền truy cập chức năng theo từng vai trò}
+\begin{tabular}{|L{\dimexpr0.38\textwidth-2\tabcolsep\relax}|C{\dimexpr0.15\textwidth-2\tabcolsep\relax}|C{\dimexpr0.15\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Chức năng Hệ thống} & \textbf{Admin} & \textbf{Nhân sự (HR)} & \textbf{Trưởng BP} & \textbf{An ninh} \\
+\hline
+Quản lý hồ sơ và đăng ký khuôn mặt & Toàn quyền & Thực hiện & Không & Không \\
+\hline
+\rowcolor{rowlight}
+Xem bảng công và xuất báo cáo Excel & Toàn quyền & Toàn quyền & Xem phòng ban & Không \\
+\hline
+Xem sơ đồ trạng thái chỗ ngồi trực tiếp & Toàn quyền & Toàn quyền & Xem phòng ban & Không \\
+\hline
+\rowcolor{rowlight}
+Nhận thông báo nhân viên rời bàn lâu & Xem & Không & Tiếp nhận & Không \\
+\hline
+Xem luồng video camera trực tiếp & Tất cả camera & Camera sảnh & Camera phòng & Tất cả camera \\
+\hline
+\rowcolor{rowlight}
+Khoanh vùng vị trí bàn làm việc & Toàn quyền & Không & Không & Không \\
+\hline
+Xử lý và đóng cảnh báo an ninh ngoài giờ & Toàn quyền & Không & Không & Thực hiện \\
+\hline
+\rowcolor{rowlight}
+Cấu hình ca làm việc và tham số hệ thống & Toàn quyền & Cấu hình ca & Không & Không \\
+\hline
+\end{tabular}
+\end{table}
+
+\newpage
+% ============================================================================
+% CHƯƠNG 2: ĐẶC TẢ YÊU CẦU CHỨC NĂNG VÀ PHI CHỨC NĂNG
+% ============================================================================
+\section{Đặc tả Yêu cầu Chức năng và Phi chức năng}
+
+\subsection{Đặc tả Yêu cầu Chức năng (Functional Requirements)}
+
+\subsubsection{Phân hệ 1: Quản lý Hồ sơ và Đăng ký Khuôn mặt}
+
+\begin{longtable}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.46\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|}
+\caption{Danh sách yêu cầu chức năng Phân hệ Quản lý Hồ sơ và Khuôn mặt}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endhead
+\textbf{FR-BIO-01} & Quản lý hồ sơ nhân viên & Cho phép thêm mới, cập nhật, khóa hồ sơ (khi nhân viên nghỉ việc) và tìm kiếm thông tin nhân viên gồm: Mã nhân viên, họ tên, phòng ban, ca làm việc và vị trí chỗ ngồi. & Nhân sự, Admin \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-BIO-02} & Thu nhận ảnh khuôn mặt mẫu & Hỗ trợ chụp ảnh trực tiếp từ camera tại quầy nhân sự hoặc tải lên từ 3 đến 5 ảnh chân dung của nhân viên ở các góc nhìn chính diện và nghiêng nhẹ. & Nhân sự \\
+\hline
+\textbf{FR-BIO-03} & Kiểm tra chất lượng ảnh đăng ký & Hệ thống tự động kiểm tra ảnh đầu vào trước khi lưu:\newline
+-- Trong ảnh chỉ có duy nhất một khuôn mặt.\newline
+-- Kích thước vùng khuôn mặt đủ lớn và rõ ràng.\newline
+-- Ảnh không bị mờ nhòe hay thiếu sáng. Nếu ảnh không đạt yêu cầu, hệ thống hiển thị thông báo để chụp lại. & Hệ thống AI \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-BIO-04} & Trích xuất dữ liệu đặc trưng khuôn mặt & Tự động căn chỉnh khuôn mặt và chuyển đổi hình ảnh khuôn mặt thành dữ liệu đặc trưng sinh trắc học để phục vụ đối chiếu nhận diện nhanh. & Hệ thống AI \\
+\hline
+\textbf{FR-BIO-05} & Kiểm tra trùng lặp khuôn mặt & Đối chiếu khuôn mặt mới đăng ký với các nhân viên đã có trong hệ thống. Nếu phát hiện khuôn mặt này đã được đăng ký dưới một mã nhân viên khác (độ giống trên 85\%), hệ thống phát cảnh báo để tránh tạo trùng hồ sơ. & Hệ thống AI, Backend \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-BIO-06} & Lưu trữ ảnh mẫu và đồng bộ dữ liệu & Tải ảnh gốc của nhân viên lên kho lưu trữ đám mây Cloudflare R2, lưu thông tin vào cơ sở dữ liệu và cập nhật ngay vào bộ nhớ nhận diện. & Backend .NET \\
+\hline
+\end{longtable}
+
+\subsubsection{Phân hệ 2: Điểm danh và Chấm công Tự động}
+
+\begin{longtable}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.46\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|}
+\caption{Danh sách yêu cầu chức năng Phân hệ Điểm danh và Chấm công}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endhead
+\textbf{FR-ATT-01} & Chống giả mạo khuôn mặt khi chấm công & Kiểm tra khuôn mặt thực tế trước camera cửa nhằm ngăn chặn hành vi dùng ảnh in trên giấy hoặc đưa màn hình điện thoại/máy tính bảng ra trước camera để chấm công hộ. Nếu phát hiện giả mạo, hệ thống từ chối chấm công và lưu lại ảnh cảnh báo. & Hệ thống AI \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-ATT-02} & Nhận diện nhân viên tự động tại cửa & Khi nhân viên đi qua khu vực cửa sảnh, hệ thống tự động nhận diện khuôn mặt không cần dừng lại chạm thiết bị. Nếu nhận diện khớp với hồ sơ nhân viên thì ghi nhận danh tính; nếu không khớp thì phân loại là khách vãng lai. & Hệ thống AI, Nhân viên \\
+\hline
+\textbf{FR-ATT-03} & Chống ghi nhận trùng lặp liên tiếp & Để tránh trường hợp nhân viên đứng nói chuyện gần cửa bị camera quét lặp lại nhiều lần, nếu cùng một nhân viên xuất hiện liên tiếp trong vòng 5 phút thì hệ thống chỉ ghi nhận một lần duy nhất. & Backend .NET \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-ATT-04} & Ghi nhận giờ vào và tính đi muộn & Lượt nhận diện đầu tiên trong ngày được tính làm Giờ vào ca. Hệ thống so sánh với giờ quy định của ca làm việc (cộng thêm 15 phút cho phép trễ) để phân loại trạng thái \textit{Đúng giờ} hoặc \textit{Đi muộn}, đồng thời tính tổng số phút đi muộn. & Backend .NET \\
+\hline
+\textbf{FR-ATT-05} & Ghi nhận giờ ra và tính về sớm & Lượt nhận diện cuối cùng khi nhân viên rời văn phòng vào buổi chiều/tối được cập nhật làm Giờ ra ca. Nếu ra về trước giờ kết thúc ca quy định, hệ thống ghi nhận trạng thái \textit{Về sớm} kèm số phút về sớm. & Backend .NET \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-ATT-06} & Tự động tổng hợp vắng mặt cuối ngày & Vào cuối mỗi ngày (23:59), hệ thống tự động rà soát danh sách nhân sự: những nhân viên không có dữ liệu chấm công và không có đơn xin nghỉ phép hợp lệ sẽ được đánh dấu là \textit{Vắng mặt không phép}. & Backend .NET \\
+\hline
+\end{longtable}
+
+\subsubsection{Phân hệ 3: Giám sát Hiện diện và Trạng thái Chỗ ngồi}
+
+\begin{longtable}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.46\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|}
+\caption{Danh sách yêu cầu chức năng Phân hệ Giám sát Hiện diện Chỗ ngồi}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endhead
+\textbf{FR-OCC-01} & Phát hiện nhân viên tại vị trí bàn làm việc & Dựa trên các vùng bàn làm việc đã được khoanh vùng trên góc nhìn camera phòng, hệ thống tự động phát hiện có người đang ngồi tại từng vị trí bàn hay không. & Hệ thống AI \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-OCC-02} & Cập nhật sơ đồ trạng thái chỗ ngồi trực tiếp & Hiển thị sơ đồ mặt bằng chỗ ngồi trực quan trên giao diện Web với 4 trạng thái màu sắc:\newline
+-- \textbf{Bàn trống (Màu xám)}: Chưa có người ngồi hoặc nhân viên nghỉ phép.\newline
+-- \textbf{Đang làm việc (Màu xanh lá)}: Nhân viên đang ngồi làm việc tại bàn, hệ thống cộng dồn thời gian hiện diện trong ngày.\newline
+-- \textbf{Tạm rời bàn (Màu vàng cam)}: Nhân viên rời khỏi vị trí dưới 15 phút.\newline
+-- \textbf{Vắng mặt quá hạn (Màu đỏ)}: Nhân viên rời bàn liên tục từ 15 phút trở lên trong giờ làm việc; hệ thống gửi thông báo cho Trưởng bộ phận. & Backend, Trưởng BP \\
+\hline
+\textbf{FR-OCC-03} & Chống nhảy trạng thái khi cử động nhẹ & Khi nhân viên cúi người nhặt đồ hoặc nghiêng người ngắn hạn, hệ thống duy trì độ trễ kiểm tra 3 giây liên tục trước khi chuyển trạng thái sang \textit{Tạm rời bàn}, giúp giao diện hiển thị ổn định. & Hệ thống AI \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-OCC-04} & Tự động tạm dừng cảnh báo giờ nghỉ trưa & Trong khung giờ nghỉ trưa (từ 12:00 đến 13:30), hệ thống tự động tạm dừng việc tính thời gian vắng mặt quá hạn để đảm bảo không gian nghỉ ngơi của nhân viên. & Backend .NET \\
+\hline
+\textbf{FR-OCC-05} & Phát hiện ngồi nhầm vị trí bàn & Khi có người ngồi vào bàn làm việc, hệ thống đối chiếu danh tính với nhân viên được phân công tại bàn đó. Nếu phát hiện nhân viên ngồi nhầm sang bàn của người khác, hệ thống hiển thị trạng thái nhắc nhở trên sơ đồ. & Hệ thống AI, Backend \\
+\hline
+\end{longtable}
+
+\subsubsection{Phân hệ 4: Kiểm soát An ninh Ngoài giờ và Cảnh báo Xâm nhập}
+
+\begin{longtable}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.46\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|}
+\caption{Danh sách yêu cầu chức năng Phân hệ Kiểm soát An ninh Ngoài giờ}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\endhead
+\textbf{FR-SEC-01} & Tự động bật chế độ trực đêm và ngày nghỉ & Hệ thống tự động chuyển sang chế độ giám sát an ninh nghiêm ngặt từ 19:00 tối đến 06:30 sáng hôm sau, và xuyên suốt các ngày Thứ Bảy, Chủ Nhật, ngày nghỉ lễ. & Backend, Hệ thống AI \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-SEC-02} & Phân loại mức độ cảnh báo khi có người xuất hiện & Khi phát hiện có người trong văn phòng ngoài giờ hành chính, hệ thống tự động đối chiếu danh sách đăng ký làm thêm giờ (OT):\newline
+-- \textbf{Mức 1 (Hợp lệ)}: Là nhân viên đã được duyệt làm thêm giờ $\rightarrow$ Chỉ ghi nhận nhật ký, không bật báo động.\newline
+-- \textbf{Mức 2 (Cảnh báo nhắc nhở)}: Là nhân viên công ty nhưng không có lịch đăng ký làm thêm giờ $\rightarrow$ Hiển thị cảnh báo vàng trên màn hình trực ban.\newline
+-- \textbf{Mức 3 (Báo động khẩn cấp)}: Không nhận diện được danh tính (người lạ đột nhập) hoặc đi vào khu vực cấm $\rightarrow$ Kích hoạt báo động đỏ khẩn cấp. & Backend, An ninh \\
+\hline
+\textbf{FR-SEC-03} & Phát tín hiệu báo động trên màn hình trực ban & Khi xảy ra báo động khẩn cấp (Mức 3), màn hình giám sát của bảo vệ tự động nhấp nháy viền đỏ, phát âm thanh cảnh báo và phóng to khung hình camera có sự cố lên giữa màn hình. & Giao diện Web, An ninh \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-SEC-04} & Tự động ghi lại ảnh và video bằng chứng 10 giây & Ngay khi phát hiện xâm nhập, hệ thống tự động chụp lại bức ảnh rõ nét nhất và trích xuất đoạn video dài 10 giây (gồm 5 giây trước và 5 giây sau thời điểm phát hiện) tải lên đám mây làm bằng chứng. & Hệ thống AI, Backend \\
+\hline
+\textbf{FR-SEC-05} & Gửi cảnh báo tức thời qua Telegram & Tự động gửi tin nhắn khẩn cấp kèm theo hình ảnh hiện trường và đường dẫn xem video sự cố đến điện thoại của đội bảo vệ thông qua ứng dụng Telegram. & Backend .NET \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-SEC-06} & Lập biên bản xác nhận xử lý sự cố & Nhân viên bảo vệ sau khi kiểm tra thực tế phải cập nhật kết quả xử lý trên phần mềm: chọn \textit{Xác nhận sự cố} (kèm ghi chú nội dung xử lý) hoặc chọn \textit{Báo động nhầm} để đóng hồ sơ vụ việc. & Nhân viên An ninh \\
+\hline
+\end{longtable}
+
+\subsubsection{Phân hệ 5: Quản trị Hệ thống, Khoanh vùng Bàn và Báo cáo}
+
+\begin{longtable}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.46\textwidth-2\tabcolsep\relax}|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|}
+\caption{Danh sách yêu cầu chức năng Phân hệ Quản trị và Báo cáo}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã YC} & \textbf{Tên chức năng} & \textbf{Mô tả chi tiết nghiệp vụ} & \textbf{Tác nhân} \\
+\hline
+\textbf{FR-ADM-01} & Công cụ vẽ vùng chỗ ngồi trực quan trên Web & Quản trị viên chụp một ảnh mẫu từ camera phòng, sau đó dùng chuột chấm các điểm trên giao diện Web để khoanh vùng từng vị trí bàn làm việc hoặc khu vực hạn chế ra vào và gán mã bàn tương ứng. & Quản trị viên \\
+\hline
+\rowcolor{rowlight}
+\textbf{FR-ADM-02} & Cấu hình thời gian ca và tham số vận hành & Cho phép thay đổi linh hoạt giờ bắt đầu/kết thúc ca làm việc, số phút cho phép đi trễ, ngưỡng thời gian cảnh báo rời bàn làm việc và khung giờ trực an ninh ban đêm. & Admin, Nhân sự \\
+\hline
+\textbf{FR-ADM-03} & Thống kê và xuất báo cáo Excel & -- \textbf{Báo cáo chấm công (HR)}: Xuất file Excel tổng hợp ngày công, số lần đi muộn, về sớm, tổng số phút muộn của từng nhân viên trong tháng.\newline
+-- \textbf{Báo cáo tỷ lệ ngồi làm việc}: Biểu đồ thống kê mật độ sử dụng chỗ ngồi của các phòng ban theo khung giờ.\newline
+-- \textbf{Báo cáo sự cố an ninh}: Thống kê lịch sử các vụ cảnh báo ngoài giờ và tình trạng xử lý. & Admin, Nhân sự, Trưởng BP \\
+\hline
+\end{longtable}
+
+\subsection{Đặc tả Yêu cầu Phi chức năng (Non-Functional Requirements)}
+
+\begin{longtable}{|C{\dimexpr0.16\textwidth-2\tabcolsep\relax}|L{\dimexpr0.26\textwidth-2\tabcolsep\relax}|L{\dimexpr0.58\textwidth-2\tabcolsep\relax}|}
+\caption{Bảng đặc tả các yêu cầu phi chức năng về chất lượng hệ thống}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã NFR} & \textbf{Tiêu chí chất lượng} & \textbf{Yêu cầu đáp ứng cụ thể} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\textbf{Mã NFR} & \textbf{Tiêu chí chất lượng} & \textbf{Yêu cầu đáp ứng cụ thể} \\
+\hline
+\endhead
+\multicolumn{3}{|l|}{\cellcolor{rowlight}\footnotesize\textbf{1. Yêu cầu về Hiệu năng và Tốc độ Phản hồi}} \\
+\hline
+\textbf{NFR-PERF-01} & Tốc độ xử lý hình ảnh & Hệ thống xử lý luồng video từ camera mượt mà với tốc độ từ 15 đến 25 khung hình/giây (FPS). Thời gian nhận diện một khuôn mặt khi đi qua cửa không quá 0.2 giây. \\
+\hline
+\textbf{NFR-PERF-02} & Độ trễ hiển thị thông tin & Kết quả chấm công, thay đổi màu sắc trên sơ đồ chỗ ngồi và báo động an ninh được đẩy lên giao diện Web trong vòng chưa đến 1 giây; tin nhắn cảnh báo gửi qua Telegram trong vòng 3 giây. \\
+\hline
+\textbf{NFR-PERF-03} & Vận hành ổn định dài hạn & Bộ nhớ đệm lưu trữ hình ảnh tạm thời để cắt video sự cố tự động xóa các khung hình cũ sau mỗi 5 giây, đảm bảo hệ thống chạy liên tục 24/7 không bị đầy bộ nhớ. \\
+\hline
+\multicolumn{3}{|l|}{\cellcolor{rowlight}\footnotesize\textbf{2. Yêu cầu về Độ chính xác Nhận diện}} \\
+\hline
+\textbf{NFR-ACC-01} & Độ chính xác nhận diện khuôn mặt & Tỷ lệ nhận diện đúng nhân viên đạt trên 95\% trong điều kiện ánh sáng văn phòng bình thường; tỷ lệ nhận diện nhầm dưới 1\% nhờ cơ chế kiểm tra ảnh rõ nét và chống giả mạo. \\
+\hline
+\textbf{NFR-ACC-02} & Tương thích nhiều độ phân giải camera & Vị trí các vùng bàn làm việc đã vẽ được lưu theo tỷ lệ khung hình, giúp hệ thống vẫn xác định đúng vị trí bàn khi thay đổi độ phân giải camera (HD, Full HD) hoặc kích thước màn hình xem. \\
+\hline
+\multicolumn{3}{|l|}{\cellcolor{rowlight}\footnotesize\textbf{3. Yêu cầu về Bảo mật và Quyền riêng tư}} \\
+\hline
+\textbf{NFR-SEC-01} & Bảo vệ dữ liệu sinh trắc học & Dữ liệu khuôn mặt được chuyển đổi một chiều thành dãy số đặc trưng để đối sánh, không thể phục hồi ngược lại thành ảnh mặt gốc từ dãy số này. \\
+\hline
+\textbf{NFR-SEC-02} & Mã hóa đường truyền Internet & Toàn bộ truy cập vào hệ thống qua tên miền \texttt{.id.vn} đều được mã hóa chuẩn HTTPS/SSL thông qua Cloudflare. \\
+\hline
+\textbf{NFR-SEC-03} & Bảo mật kho lưu trữ ảnh và video & Toàn bộ ảnh mẫu nhân viên và video bằng chứng an ninh trên đám mây Cloudflare R2 được đặt ở chế độ riêng tư, chỉ những người dùng có quyền mới xem được qua đường dẫn có thời hạn. \\
+\hline
+\textbf{NFR-SEC-04} & Phân quyền chặt chẽ theo phòng ban & Mật khẩu người dùng được mã hóa an toàn. Tài khoản của Trưởng bộ phận nào chỉ được phép xem dữ liệu chỗ ngồi và bảng công của đúng phòng ban đó. \\
+\hline
+\textbf{NFR-SEC-05} & Tôn trọng quyền riêng tư cá nhân & Hệ thống chỉ ghi nhận trạng thái có mặt tại bàn làm việc và tự động tắt cảnh báo trong giờ nghỉ trưa; tuyệt đối không ghi âm hay theo dõi màn hình máy tính cá nhân của nhân viên. \\
+\hline
+\multicolumn{3}{|l|}{\cellcolor{rowlight}\footnotesize\textbf{4. Yêu cầu về Tính Dễ sử dụng và Khả năng Triển khai}} \\
+\hline
+\textbf{NFR-USA-01} & Thao tác cấu hình đơn giản & Nhân viên chấm công tự nhiên khi bước qua cửa. Quản trị viên có thể kẻ vẽ lại vùng bàn làm việc trực tiếp bằng chuột trên trình duyệt Web trong vòng 2 phút mà không cần can thiệp mã nguồn. \\
+\hline
+\textbf{NFR-ARC-01} & Dễ dàng bảo trì và nâng cấp & Hệ thống được chia thành các phân hệ rõ ràng, đóng gói bằng Docker giúp triển khai nhanh chóng trên máy chủ VPS và dễ dàng mở rộng khi tăng số lượng camera. \\
+\hline
+\end{longtable}
+
+\newpage
+% ============================================================================
+% CHƯƠNG 3: SƠ ĐỒ PHÂN RÃ CHỨC NĂNG (FDD)
+% ============================================================================
+\section{Sơ đồ Phân rã Chức năng (Functional Decomposition Diagram)}
+
+\subsection{Sơ đồ Cây Phân rã Chức năng Phần mềm}
+Sơ đồ phân rã chức năng (FDD) dưới đây thể hiện toàn bộ các chức năng nghiệp vụ của hệ thống được tổ chức theo cấu trúc hình cây 2 cấp (5 phân hệ chính và 25 chức năng thành phần):
+
+\begin{figure}[H]
+\centering
+\fcolorbox{primaryblue!75}{white}{%
+\resizebox{0.97\textwidth}{!}{%
+\begin{tikzpicture}[
+    root/.style={rectangle, draw=primaryblue, line width=1.2pt, fill=primaryblue, text=white, font=\bfseries\normalsize, minimum height=1.2cm, text width=15.0cm, align=center},
+    level1/.style={rectangle, draw=primaryblue, line width=1.0pt, fill=headerblue, text=primaryblue, font=\bfseries\small, minimum height=1.3cm, text width=4.0cm, align=center},
+    level2/.style={rectangle, draw=primaryblue!80, line width=0.7pt, fill=white, font=\footnotesize, minimum height=1.0cm, text width=3.65cm, align=left, inner sep=5pt},
+    treeedge/.style={line width=1.0pt, draw=primaryblue},
+    branch/.style={line width=0.8pt, draw=primaryblue!85}
+]
+
+% MỨC 0: HỆ THỐNG ĐỈNH
+\node[root] (ROOT) at (0, 0) {HỆ THỐNG GIÁM SÁT VĂN PHÒNG THÔNG MINH};
+
+% MỨC 1: 5 PHÂN HỆ CHÍNH
+\node[level1] (M1) at (-10.0, -2.3) {1. Quản lý Hồ sơ\\\& Khuôn mặt};
+\node[level1] (M2) at (-5.0,  -2.3) {2. Quản lý Điểm danh\\\& Chấm công};
+\node[level1] (M3) at (0.0,   -2.3) {3. Giám sát Hiện diện\\Chỗ ngồi};
+\node[level1] (M4) at (5.0,   -2.3) {4. Kiểm soát An ninh\\Ngoài giờ};
+\node[level1] (M5) at (10.0,  -2.3) {5. Quản trị Hệ thống\\\& Báo cáo};
+
+% Đường phân nhánh từ Mức 0 xuống Mức 1
+\draw[treeedge] (ROOT.south) -- (0, -1.05);
+\draw[treeedge] (-10.0, -1.05) -- (10.0, -1.05);
+\foreach \x/\nodeName in {-10.0/M1, -5.0/M2, 0.0/M3, 5.0/M4, 10.0/M5} {
+    \draw[treeedge] (\x, -1.05) -- (\nodeName.north);
+}
+
+% MỨC 2: CÁC CHỨC NĂNG CON
+% Nhánh 1
+\node[level2] (M1-1) at (-9.8, -4.1) {1.1. Quản lý hồ sơ nhân viên};
+\node[level2] (M1-2) at (-9.8, -5.4) {1.2. Thu nhận ảnh mẫu khuôn mặt};
+\node[level2] (M1-3) at (-9.8, -6.7) {1.3. Kiểm tra chất lượng ảnh};
+\node[level2] (M1-4) at (-9.8, -8.0) {1.4. Trích xuất dữ liệu khuôn mặt};
+\node[level2] (M1-5) at (-9.8, -9.3) {1.5. Kiểm tra trùng lặp hồ sơ};
+
+% Nhánh 2
+\node[level2] (M2-1) at (-4.8, -4.1) {2.1. Kiểm tra chống giả mạo};
+\node[level2] (M2-2) at (-4.8, -5.4) {2.2. Nhận diện khuôn mặt tự động};
+\node[level2] (M2-3) at (-4.8, -6.7) {2.3. Ghi nhận chấm công vào ca};
+\node[level2] (M2-4) at (-4.8, -8.0) {2.4. Ghi nhận chấm công ra ca};
+\node[level2] (M2-5) at (-4.8, -9.3) {2.5. Quản lý nghỉ phép \& vắng mặt};
+
+% Nhánh 3
+\node[level2] (M3-1) at (0.2, -4.1) {3.1. Phát hiện người tại bàn};
+\node[level2] (M3-2) at (0.2, -5.4) {3.2. Cập nhật sơ đồ chỗ ngồi};
+\node[level2] (M3-3) at (0.2, -6.7) {3.3. Cảnh báo rời bàn quá hạn};
+\node[level2] (M3-4) at (0.2, -8.0) {3.4. Phát hiện ngồi nhầm vị trí};
+\node[level2] (M3-5) at (0.2, -9.3) {3.5. Tự động tạm dừng giờ trưa};
+
+% Nhánh 4
+\node[level2] (M4-1) at (5.2, -4.1) {4.1. Quản lý đăng ký làm thêm giờ};
+\node[level2] (M4-2) at (5.2, -5.4) {4.2. Giám sát xâm nhập ngoài giờ};
+\node[level2] (M4-3) at (5.2, -6.7) {4.3. Phát báo động trên màn hình};
+\node[level2] (M4-4) at (5.2, -8.0) {4.4. Lưu ảnh \& video bằng chứng};
+\node[level2] (M4-5) at (5.2, -9.3) {4.5. Lập biên bản xử lý sự cố};
+
+% Nhánh 5
+\node[level2] (M5-1) at (10.2, -4.1) {5.1. Quản lý tài khoản \& phân quyền};
+\node[level2] (M5-2) at (10.2, -5.4) {5.2. Khoanh vùng vị trí bàn trên Web};
+\node[level2] (M5-3) at (10.2, -6.7) {5.3. Cấu hình ca \& tham số hệ thống};
+\node[level2] (M5-4) at (10.2, -8.0) {5.4. Xuất báo cáo bảng công Excel};
+\node[level2] (M5-5) at (10.2, -9.3) {5.5. Thống kê mật độ \& an ninh};
+
+% Vẽ đường trục xương sống dọc và nhánh ngang
+\foreach \col/\xspine in {1/-11.95, 2/-6.95, 3/-1.95, 4/3.05, 5/8.05} {
+    \draw[branch] (M\col.south) -- ++(0, -0.3) -| (\xspine, -9.3);
+    \foreach \row in {1,2,3,4,5} {
+        \draw[branch] (\xspine, -2.8 - 1.3*\row) -- (M\col-\row.west);
+    }
+}
+\end{tikzpicture}%
+}}
+\caption{Sơ đồ Phân rã Chức năng tổng thể (FDD) của Hệ thống Giám sát Văn phòng Thông minh}
+\end{figure}
+
+\subsection{Bảng Ánh xạ Chức năng sang Cấu trúc Dự án}
+
+\begin{table}[H]
+\centering
+\caption{Ánh xạ từ 5 phân hệ chức năng sang các thành phần trong mã nguồn}
+\begin{tabular}{|L{\dimexpr0.25\textwidth-2\tabcolsep\relax}|L{\dimexpr0.27\textwidth-2\tabcolsep\relax}|L{\dimexpr0.26\textwidth-2\tabcolsep\relax}|L{\dimexpr0.22\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Phân hệ Nghiệp vụ} & \textbf{Module Backend (.NET)} & \textbf{Xử lý Hình ảnh (AI)} & \textbf{Giao diện Web (React)} \\
+\hline
+\textbf{1. Quản lý Hồ sơ \& Khuôn mặt} & \texttt{Modules.\allowbreak Biometrics} & Kiểm tra ảnh \& trích xuất khuôn mặt & Trang quản lý nhân sự \& đăng ký mặt \\
+\hline
+\rowcolor{rowlight}
+\textbf{2. Quản lý Điểm danh \& Chấm công} & \texttt{Modules.\allowbreak Attendance} & Chống giả mạo \& nhận diện tại cửa & Trang nhật ký chấm công trực tiếp \\
+\hline
+\textbf{3. Giám sát Hiện diện Chỗ ngồi} & \texttt{Modules.\allowbreak Occupancy} & Phát hiện người trong vùng bàn làm việc & Trang sơ đồ chỗ ngồi trực quan \\
+\hline
+\rowcolor{rowlight}
+\textbf{4. Kiểm soát An ninh Ngoài giờ} & \texttt{Modules.\allowbreak Security} & Giám sát ban đêm \& cắt video 10 giây & Màn hình cảnh báo an ninh trực ban \\
+\hline
+\textbf{5. Quản trị Hệ thống \& Báo cáo} & \texttt{Modules.\allowbreak Reporting}\newline \texttt{Infrastructure} & Trích xuất ảnh mẫu hiệu chuẩn góc quay & Công cụ vẽ vùng bàn \& Trang thống kê \\
+\hline
+\end{tabular}
+\end{table}
+
+\newpage
+% ============================================================================
+% CHƯƠNG 4: THIẾT KẾ KIẾN TRÚC HỆ THỐNG
+% ============================================================================
+\section{Thiết kế Kiến trúc Hệ thống (System Architecture Design)}
+
+\subsection{Sơ đồ Kiến trúc Tổng thể Hệ thống}
+Hệ thống được thiết kế theo mô hình phân tầng rõ ràng, trong đó **Khối Backend Trung tâm (C\# .NET)** được tổ chức theo kiến trúc \textit{Modular Monolith} đóng vai trò điều phối toàn bộ nghiệp vụ, kết nối trực tiếp với **Giao diện Quản trị (React)** ở tầng trên, và giao tiếp với **Khối Dịch vụ Nhận diện AI** cùng **Khối Lưu trữ \& Cảnh báo** ở tầng dưới:
+
+\begin{figure}[H]
+\centering
+\fcolorbox{primaryblue!75}{white}{%
+\resizebox{0.97\textwidth}{!}{%
+\begin{tikzpicture}[
+    topbox/.style={rectangle, draw=primaryblue, line width=0.9pt, fill=gray!10, rounded corners=4pt, minimum height=1.35cm, text width=4.3cm, align=center, font=\footnotesize},
+    uibox/.style={rectangle, draw=primaryblue, line width=1.0pt, fill=headerblue!70, rounded corners=4pt, minimum height=1.35cm, text width=5.2cm, align=center, font=\footnotesize},
+    hostbar/.style={rectangle, draw=primaryblue, line width=1.0pt, fill=primaryblue, text=white, rounded corners=3pt, minimum height=0.95cm, text width=20.0cm, align=center, font=\small\bfseries},
+    modbox/.style={rectangle, draw=primaryblue, line width=0.8pt, fill=headerblue, rounded corners=3pt, minimum height=1.15cm, text width=3.6cm, align=center, font=\footnotesize\bfseries, text=primaryblue},
+    infrabar/.style={rectangle, draw=primaryblue, line width=0.8pt, fill=white, rounded corners=3pt, minimum height=0.95cm, text width=20.0cm, align=center, font=\footnotesize\bfseries},
+    aihead/.style={rectangle, draw=accentgreen, line width=0.9pt, fill=accentgreen, text=white, rounded corners=3pt, minimum height=0.85cm, text width=9.6cm, align=center, font=\footnotesize\bfseries},
+    aibox/.style={rectangle, draw=accentgreen, line width=0.9pt, fill=lightgreen, rounded corners=3pt, minimum height=1.25cm, text width=2.9cm, align=center, font=\footnotesize\bfseries, text=accentgreen!90!black},
+    sthead/.style={rectangle, draw=warnorange, line width=0.9pt, fill=warnorange, text=white, rounded corners=3pt, minimum height=0.85cm, text width=9.6cm, align=center, font=\footnotesize\bfseries},
+    storebox/.style={rectangle, draw=warnorange, line width=0.9pt, fill=lightorange, rounded corners=3pt, minimum height=1.25cm, text width=2.9cm, align=center, font=\footnotesize\bfseries, text=warnorange!90!black},
+    cambox/.style={rectangle, draw=accentgreen!80!black, line width=0.9pt, fill=white, rounded corners=4pt, minimum height=1.15cm, text width=4.4cm, align=center, font=\footnotesize\bfseries},
+    arrow/.style={-Stealth, line width=1.0pt, draw=primaryblue!90!black},
+    aiarrow/.style={-Stealth, line width=1.0pt, draw=accentgreen!85!black},
+    starrow/.style={-Stealth, line width=1.0pt, draw=warnorange!90!black}
+]
+
+% ============================================================================
+% TẦNG 1: NGƯỜI DÙNG, CLOUDFLARE, NGINX & GIAO DIỆN WEB REACT (y = 7.4)
+% ============================================================================
+\node[topbox] (Browser)    at (-8.0, 7.4) {\textbf{Người dùng (Trình duyệt)}\\Admin, Nhân sự, Trưởng BP, Bảo vệ};
+\node[topbox] (Cloudflare) at (-2.7, 7.4) {\textbf{Cloudflare DNS \& SSL}\\Tên miền \texttt{*.id.vn} (HTTPS)};
+\node[topbox] (Nginx)      at (2.6,  7.4) {\textbf{Cổng Nginx Reverse Proxy}\\Điều hướng truy cập trên VPS};
+\node[uibox]  (ReactUI)    at (8.2,  7.4) {\textbf{Giao diện Web (React + TS)}\\Sơ đồ chỗ ngồi, Khoanh vùng bàn,\\Màn hình trực ban an ninh};
+
+\draw[arrow] (Browser.east) -- (Cloudflare.west);
+\draw[arrow] (Cloudflare.east) -- (Nginx.west);
+\draw[arrow] (Nginx.east) -- (ReactUI.west);
+
+% ============================================================================
+% TẦNG 2: KHỐI BACKEND TRUNG TÂM C# .NET MODULAR MONOLITH (y = 4.0 đến 1.0)
+% ============================================================================
+\node[hostbar] (WebApi) at (0.0, 4.0) {KHỐI 1: BACKEND TRUNG TÂM C\# .NET (ASP.NET Core WebAPI + SignalR Hub)};
+
+\node[modbox] (M1) at (-8.2, 2.5) {1. Module Hồ sơ\\\& Khuôn mặt};
+\node[modbox] (M2) at (-4.1, 2.5) {2. Module Điểm danh\\\& Chấm công};
+\node[modbox] (M3) at (0.0,  2.5) {3. Module Giám sát\\Chỗ ngồi};
+\node[modbox] (M4) at (4.1,  2.5) {4. Module An ninh\\Ngoài giờ};
+\node[modbox] (M5) at (8.2,  2.5) {5. Module Quản trị\\\& Báo cáo};
+
+\node[infrabar] (Infra) at (0.0, 1.0) {Tầng Hạ tầng Kết nối (Infrastructure): Truy xuất CSDL, Lưu trữ đám mây R2, Gửi cảnh báo Telegram};
+
+\begin{scope}[on background layer]
+    \node[draw=primaryblue, line width=1.1pt, dashed, fill=rowlight!60, rounded corners=6pt, inner sep=10pt, fit=(WebApi) (M1) (M5) (Infra)] (BackendContainer) {};
+\end{scope}
+
+% Kết nối giữa Tầng 1 và Tầng 2 (Đi thẳng đứng chính xác tới viền khung)
+\draw[arrow, <->] (Nginx.south) -- node[left, font=\scriptsize\bfseries]{REST API (\texttt{/api/*})} (Nginx.south |- BackendContainer.north);
+\draw[arrow, <->] (ReactUI.south) -- node[right, font=\scriptsize\bfseries]{WebSocket SignalR (\texttt{/hub/*})} (ReactUI.south |- BackendContainer.north);
+
+% ============================================================================
+% TẦNG 3 (BÊN TRÁI): KHỐI DỊCH VỤ NHẬN DIỆN AI (y = -1.8 đến -3.2)
+% ============================================================================
+\node[aihead] (AIHeader) at (-5.3, -1.8) {KHỐI 2: DỊCH VỤ XỬ LÝ HÌNH ẢNH AI (AI SERVICE)};
+\node[aibox]  (AIFace)   at (-8.6, -3.2) {Xử lý Khuôn mặt\\(Chống giả mạo \&\\Nhận diện nhân viên)};
+\node[aibox]  (AISeat)   at (-5.3, -3.2) {Giám sát Chỗ ngồi\\(Phát hiện người\\tại vị trí bàn)};
+\node[aibox]  (AIClip)   at (-2.0, -3.2) {Trực đêm An ninh\\(Chụp ảnh \& Cắt\\video sự cố 10s)};
+
+\begin{scope}[on background layer]
+    \node[draw=accentgreen, line width=1.1pt, dashed, fill=lightgreen!35, rounded corners=6pt, inner sep=9pt, fit=(AIHeader) (AIFace) (AISeat) (AIClip)] (AIContainer) {};
+\end{scope}
+
+% ============================================================================
+% TẦNG 3 (BÊN PHẢI): KHỐI LƯU TRỮ DỮ LIỆU & THÔNG BÁO (y = -1.8 đến -3.2)
+% ============================================================================
+\node[sthead]   (STHeader) at (5.3, -1.8) {KHỐI 3: LƯU TRỮ DỮ LIỆU \& KÊNH THÔNG BÁO};
+\node[storebox] (DB)       at (2.0, -3.2) {CSDL Quan hệ\\\textbf{PostgreSQL 16}\\(12 bảng dữ liệu)};
+\node[storebox] (CloudR2)  at (5.3, -3.2) {Lưu trữ Đám mây\\\textbf{Cloudflare R2}\\(Ảnh \& Video 10s)};
+\node[storebox] (TeleBot)  at (8.6, -3.2) {Kênh Cảnh báo\\\textbf{Telegram Bot}\\(Tin nhắn Bảo vệ)};
+
+\begin{scope}[on background layer]
+    \node[draw=warnorange, line width=1.1pt, dashed, fill=lightorange!40, rounded corners=6pt, inner sep=9pt, fit=(STHeader) (DB) (CloudR2) (TeleBot)] (StoreContainer) {};
+\end{scope}
+
+% Kết nối thẳng từ Tầng 2 xuống Tầng 3 bằng neo khung tự động
+\draw[aiarrow, <->] (AIContainer.north |- BackendContainer.south) -- node[left, font=\scriptsize\bfseries]{Giao tiếp nhận diện (HTTP)} (AIContainer.north);
+\draw[starrow, <->] (StoreContainer.north |- BackendContainer.south) -- node[right, font=\scriptsize\bfseries]{Lưu trữ CSDL, R2 \& Gửi cảnh báo} (StoreContainer.north);
+
+% ============================================================================
+% TẦNG 4 (DƯỚI CÙNG BÊN TRÁI): HỆ THỐNG CAMERA VĂN PHÒNG (y = -5.8)
+% ============================================================================
+\node[cambox] (CamGate) at (-7.8, -5.8) {\textbf{Camera Cửa Ra Vào}\\(Quét khuôn mặt chấm công)};
+\node[cambox] (CamRoom) at (-2.8, -5.8) {\textbf{Camera Phòng Làm Việc}\\(Quan sát bàn \& Trực ban đêm)};
+
+\draw[aiarrow] (CamGate.north) -- node[left, font=\scriptsize]{Luồng hình ảnh} (CamGate.north |- AIContainer.south);
+\draw[aiarrow] (CamRoom.north) -- node[right, font=\scriptsize]{Luồng hình ảnh} (CamRoom.north |- AIContainer.south);
+
+\end{tikzpicture}%
+}}
+\caption{Sơ đồ Kiến trúc Tổng thể Hệ thống Giám sát Văn phòng Thông minh}
+\end{figure}
+
+\subsection{Cấu trúc Bên trong mỗi Module của Backend C\# .NET}
+Mỗi phân hệ nghiệp vụ trong thư mục \texttt{backend/src/Modules/} được thiết kế thống nhất gồm 4 lớp tách biệt để dễ dàng quản lý và bảo trì mã nguồn:
+
+\begin{table}[H]
+\centering
+\caption{Cấu trúc 4 lớp chuẩn bên trong từng Module nghiệp vụ của Backend C\# .NET}
+\begin{tabular}{|L{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.32\textwidth-2\tabcolsep\relax}|L{\dimexpr0.44\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Tên lớp (Layer)} & \textbf{Thành phần chính} & \textbf{Vai trò trong phân hệ} \\
+\hline
+\textbf{1. Lớp Nghiệp vụ cốt lõi}\newline (\texttt{Domain/}) & Các đối tượng thực thể (Entities), trạng thái (Enums) và quy tắc kiểm tra dữ liệu & Định nghĩa cấu trúc dữ liệu và các quy tắc nghiệp vụ cốt lõi của từng phân hệ. \\
+\hline
+\rowcolor{rowlight}
+\textbf{2. Lớp Xử lý Ứng dụng}\newline (\texttt{Application/}) & Các dịch vụ xử lý nghiệp vụ (Services), đối tượng truyền dữ liệu (DTOs) & Thực hiện tính toán đi muộn/về sớm, kiểm tra trùng lặp chấm công và chuyển đổi trạng thái chỗ ngồi. \\
+\hline
+\textbf{3. Lớp Hạ tầng Kết nối}\newline (\texttt{Infrastructure/}) & Các lớp truy vấn cơ sở dữ liệu (Repositories) và kết nối lưu trữ R2, Telegram & Đảm nhận việc đọc/ghi dữ liệu xuống PostgreSQL, tải ảnh/video lên đám mây và gọi dịch vụ AI. \\
+\hline
+\rowcolor{rowlight}
+\textbf{4. Lớp Giao tiếp API}\newline (\texttt{Endpoints/}) & Các bộ điều khiển API (\texttt{Controllers}) và kênh truyền trực tiếp (\texttt{SignalR Hub}) & Tiếp nhận yêu cầu từ giao diện Web React, kiểm tra quyền người dùng và trả kết quả về màn hình. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Quy trình Phối hợp Xử lý các Nghiệp vụ Chính}
+
+\subsubsection{Quy trình 1: Đăng ký Hồ sơ và Khuôn mặt Nhân viên mới}
+\begin{enumerate}[nosep, leftmargin=1.8em]
+    \item Chuyên viên Nhân sự nhập thông tin nhân viên và tải lên từ 3 đến 5 ảnh khuôn mặt trên giao diện Web.
+    \item Backend C\# .NET chuyển các bức ảnh này sang Dịch vụ AI để kiểm tra chất lượng.
+    \item Dịch vụ AI kiểm tra từng ảnh: đảm bảo chỉ có 1 khuôn mặt, ảnh rõ nét và đủ kích thước, sau đó trích xuất ra dữ liệu đặc trưng khuôn mặt.
+    \item Backend đối chiếu dữ liệu khuôn mặt mới với danh sách nhân viên hiện có. Nếu phát hiện trùng với một nhân viên đã đăng ký trước đó, hệ thống thông báo lỗi trùng hồ sơ.
+    \item Nếu hợp lệ, Backend lưu ảnh gốc lên đám mây Cloudflare R2 và lưu thông tin nhân viên vào cơ sở dữ liệu PostgreSQL.
+\end{enumerate}
+
+\subsubsection{Quy trình 2: Điểm danh Chấm công Tự động tại Cửa Sảnh}
+\begin{enumerate}[nosep, leftmargin=1.8em]
+    \item Khi nhân viên bước qua cửa, camera cửa thu nhận hình ảnh và Dịch vụ AI thực hiện kiểm tra chống giả mạo (ngăn chặn dùng ảnh in hoặc màn hình điện thoại).
+    \item Nếu là người thật, Dịch vụ AI đối chiếu khuôn mặt để xác định mã nhân viên và gửi thông tin kèm ảnh chụp về Backend C\# .NET.
+    \item Backend kiểm tra thời gian: nếu nhân viên này vừa mới được chấm công cách đó chưa tới 5 phút thì bỏ qua để tránh trùng lặp.
+    \item Nếu là lượt hợp lệ đầu tiên trong ngày, hệ thống ghi nhận Giờ vào ca (phân loại Đúng giờ hoặc Đi muộn). Nếu là lượt ra về cuối buổi chiều, hệ thống cập nhật Giờ ra ca và đẩy thông tin lên màn hình theo dõi.
+\end{enumerate}
+
+\subsubsection{Quy trình 3: Giám sát Hiện diện tại Bàn làm việc}
+\begin{enumerate}[nosep, leftmargin=1.8em]
+    \item Camera phòng quan sát toàn cảnh khu vực làm việc; Dịch vụ AI kiểm tra từng vùng bàn làm việc đã được khoanh vùng xem có người đang ngồi hay không.
+    \item Khi có sự thay đổi (nhân viên ngồi vào bàn hoặc rời khỏi bàn liên tục trên 3 giây), Dịch vụ AI gửi trạng thái mới về Backend C\# .NET.
+    \item Backend cập nhật trạng thái của bàn (\textit{Đang làm việc}, \textit{Tạm rời bàn} hoặc \textit{Vắng mặt quá hạn} nếu rời bàn trên 15 phút ngoài giờ nghỉ trưa) và cập nhật màu sắc trực tiếp lên Sơ đồ chỗ ngồi của Trưởng bộ phận.
+\end{enumerate}
+
+\subsubsection{Quy trình 4: Phát hiện và Báo động Xâm nhập Ngoài giờ}
+\begin{enumerate}[nosep, leftmargin=1.8em]
+    \item Trong khung giờ trực đêm (19:00 -- 06:30) và ngày nghỉ, hệ thống camera luôn ghi nhớ tạm thời 5 giây hình ảnh gần nhất trong bộ nhớ đệm.
+    \item Khi phát hiện có người xuất hiện mà không thuộc danh sách nhân viên đã đăng ký làm thêm giờ, hệ thống lập tức kích hoạt Cảnh báo an ninh.
+    \item Dịch vụ AI chụp lại bức ảnh rõ nhất của đối tượng và ghép 5 giây trước đó với 5 giây tiếp theo thành đoạn video bằng chứng dài 10 giây.
+    \item Backend tải ảnh và video 10 giây lên đám mây Cloudflare R2, bật còi báo động đỏ trên màn hình của bảo vệ và gửi tin nhắn kèm ảnh qua Telegram.
+\end{enumerate}
+
+\newpage
+% ============================================================================
+% CHƯƠNG 5: THIẾT KẾ CƠ SỞ DỮ LIỆU VÀ SƠ ĐỒ QUAN HỆ THỰC THỂ (ERD)
+% ============================================================================
+\section{Thiết kế Cơ sở Dữ liệu và Sơ đồ Quan hệ Thực thể (ERD)}
+
+\subsection{Sơ đồ Quan hệ Thực thể Tổng thể (ERD)}
+Cơ sở dữ liệu của hệ thống trên **PostgreSQL 16** bao gồm 12 bảng dữ liệu có quan hệ chặt chẽ với nhau. Sơ đồ dưới đây thể hiện cấu trúc khóa chính (\texttt{PK}), khóa ngoại (\texttt{FK}), các thuộc tính đại diện và mối quan hệ giữa 12 bảng:
+
+\begin{figure}[H]
+\centering
+\fcolorbox{primaryblue!75}{white}{%
+\resizebox{0.97\textwidth}{!}{%
+\begin{tikzpicture}[
+    entity/.style={rectangle, draw=primaryblue, line width=1.0pt, fill=white, rounded corners=3pt, text width=5.1cm, align=left, font=\scriptsize, inner sep=6pt},
+    rel/.style={-Stealth, line width=0.95pt, draw=primaryblue!90!black},
+    lbl/.style={font=\scriptsize\bfseries, text=primaryblue, fill=white, inner sep=1.5pt}
+]
+
+% ============================================================================
+% HÀNG 1 (y = 8.4) - Khoảng cách dọc giữa các hàng là 5.6cm -> Rộng rãi, không bao giờ đè nhau
+% ============================================================================
+\node[entity] (DEPT) at (-7.8, 8.4) {
+    \textbf{\textcolor{primaryblue}{1. DEPARTMENTS (Phòng ban)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{department\_code} : \texttt{VARCHAR(20)}\\
+    \texttt{department\_name} : \texttt{VARCHAR(100)}\\
+    \texttt{created\_at} : \texttt{TIMESTAMPTZ}
+};
+
+\node[entity] (USERS) at (0.0, 8.4) {
+    \textbf{\textcolor{primaryblue}{2. USERS (Tài khoản hệ thống)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{username} : \texttt{VARCHAR(50)}\\
+    \texttt{password\_hash} : \texttt{VARCHAR(255)}\\
+    \texttt{role} : \texttt{VARCHAR(20)}\\
+    \texttt{department\_id} : \texttt{UUID (FK)}
+};
+
+\node[entity] (SHIFTS) at (7.8, 8.4) {
+    \textbf{\textcolor{primaryblue}{3. SHIFTS (Ca làm việc)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{shift\_code} : \texttt{VARCHAR(20)}\\
+    \texttt{start\_time / end\_time} : \texttt{TIME}\\
+    \texttt{grace\_minutes} : \texttt{INT}\\
+    \texttt{lunch\_start / lunch\_end} : \texttt{TIME}
+};
+
+% ============================================================================
+% HÀNG 2 (y = 2.8)
+% ============================================================================
+\node[entity] (BIO) at (-7.8, 2.8) {
+    \textbf{\textcolor{primaryblue}{5. BIOMETRIC\_VECTORS (Mẫu mặt)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{employee\_id} : \texttt{UUID (FK)}\\
+    \texttt{embedding\_vector} : \texttt{REAL[512]}\\
+    \texttt{sample\_image\_key} : \texttt{VARCHAR(255)}\\
+    \texttt{quality\_score} : \texttt{REAL}
+};
+
+\node[entity] (EMP) at (0.0, 2.8) {
+    \textbf{\textcolor{primaryblue}{4. EMPLOYEES (Hồ sơ nhân viên)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{employee\_code} : \texttt{VARCHAR(20)}\\
+    \texttt{full\_name} : \texttt{VARCHAR(100)}\\
+    \texttt{department\_id} : \texttt{UUID (FK)}\\
+    \texttt{default\_shift\_id} : \texttt{UUID (FK)}\\
+    \texttt{is\_active} : \texttt{BOOLEAN}
+};
+
+\node[entity] (CAM) at (7.8, 2.8) {
+    \textbf{\textcolor{primaryblue}{6. CAMERAS (Thiết bị Camera)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{camera\_code} : \texttt{VARCHAR(30)}\\
+    \texttt{camera\_type} : \texttt{VARCHAR(20)}\\
+    \texttt{stream\_source} : \texttt{VARCHAR(500)}\\
+    \texttt{is\_online} : \texttt{BOOLEAN}
+};
+
+% ============================================================================
+% HÀNG 3 (y = -2.8)
+% ============================================================================
+\node[entity] (LEAVE) at (-7.8, -2.8) {
+    \textbf{\textcolor{primaryblue}{8. LEAVE\_REQUESTS (Đơn nghỉ phép)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{employee\_id} : \texttt{UUID (FK)}\\
+    \texttt{start\_date / end\_date} : \texttt{DATE}\\
+    \texttt{reason} : \texttt{VARCHAR(255)}\\
+    \texttt{approval\_status} : \texttt{VARCHAR(20)}\\
+    \texttt{approved\_by\_user\_id} : \texttt{UUID (FK)}
+};
+
+\node[entity] (ATT) at (0.0, -2.8) {
+    \textbf{\textcolor{primaryblue}{7. ATTENDANCE\_LOGS (Bảng công)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{employee\_id / shift\_id} : \texttt{UUID (FK)}\\
+    \texttt{gate\_camera\_id} : \texttt{UUID (FK)}\\
+    \texttt{work\_date} : \texttt{DATE}\\
+    \texttt{check\_in\_time / check\_out\_time}\\
+    \texttt{status} : \texttt{VARCHAR(20)}
+};
+
+\node[entity] (SEATS) at (7.8, -2.8) {
+    \textbf{\textcolor{primaryblue}{9. SEATS (Vị trí bàn làm việc)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{seat\_code} : \texttt{VARCHAR(30)}\\
+    \texttt{camera\_id / department\_id} : \texttt{(FK)}\\
+    \texttt{assigned\_employee\_id} : \texttt{UUID (FK)}\\
+    \texttt{polygon\_points} : \texttt{JSONB}\\
+    \texttt{current\_state} : \texttt{VARCHAR(20)}
+};
+
+% ============================================================================
+% HÀNG 4 (y = -8.4)
+% ============================================================================
+\node[entity] (OT) at (-7.8, -8.4) {
+    \textbf{\textcolor{primaryblue}{10. OT\_REGISTRATIONS (Tăng ca)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{employee\_id} : \texttt{UUID (FK)}\\
+    \texttt{ot\_date} : \texttt{DATE}\\
+    \texttt{start\_time / end\_time} : \texttt{TIME}\\
+    \texttt{approval\_status} : \texttt{VARCHAR(20)}
+};
+
+\node[entity] (SEC) at (0.0, -8.4) {
+    \textbf{\textcolor{primaryblue}{11. SECURITY\_INCIDENTS (Sự cố)}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{camera\_id / detected\_emp\_id} : \texttt{(FK)}\\
+    \texttt{alert\_level} : \texttt{VARCHAR(30)}\\
+    \texttt{snapshot\_object\_key} : \texttt{VARCHAR(255)}\\
+    \texttt{video\_clip\_object\_key} : \texttt{VARCHAR(255)}\\
+    \texttt{ticket\_status} : \texttt{VARCHAR(20)}
+};
+
+\node[entity] (OCCLOG) at (7.8, -8.4) {
+    \textbf{\textcolor{primaryblue}{12. SEAT\_OCCUPANCY\_LOGS}}\\[2pt]\hline
+    \underline{\texttt{id}} : \texttt{UUID (PK)}\\
+    \texttt{seat\_id} : \texttt{UUID (FK)}\\
+    \texttt{detected\_employee\_id} : \texttt{UUID (FK)}\\
+    \texttt{previous\_state / new\_state}\\
+    \texttt{duration\_seconds} : \texttt{INT}\\
+    \texttt{recorded\_at} : \texttt{TIMESTAMPTZ}
+};
+
+% ============================================================================
+% ĐƯỜNG LIÊN KẾT KHÓA NGOẠI (Sử dụng neo viền bảng tự động, đi theo rãnh trống)
+% ============================================================================
+% Liên kết Hàng 1 -> Hàng 2
+\draw[rel] (DEPT.east) -- node[lbl]{1..*} (USERS.west);
+\draw[rel] (DEPT.south) -- (-7.8, 5.6) -| node[lbl, pos=0.25]{1..*} ($(EMP.north) + (-1.4cm, 0)$);
+\draw[rel] (SHIFTS.south) -- (7.8, 5.6) -| node[lbl, pos=0.25]{1..*} ($(EMP.north) + (1.4cm, 0)$);
+\draw[rel] (EMP.west) -- node[lbl]{1..*} (BIO.east);
+
+% Liên kết từ EMPLOYEES xuống Hàng 3 (Qua rãnh ngang y = 0.0)
+\draw[rel] (EMP.south) -- node[lbl]{1..*} (ATT.north);
+\draw[rel] ($(EMP.south) + (-1.6cm, 0)$) -- (-1.6, 0.0) -| node[lbl, pos=0.25]{1..*} (LEAVE.north);
+\draw[rel] ($(EMP.south) + (1.6cm, 0)$)  -- (1.6, 0.0)  -| node[lbl, pos=0.25]{1..0..1} ($(SEATS.north) + (-1.4cm, 0)$);
+
+% Liên kết từ CAMERAS xuống SEATS & ATTENDANCE_LOGS
+\draw[rel] (CAM.south) -- node[lbl]{1..*} (SEATS.north);
+\draw[rel] (CAM.west) -- (3.9, 2.8) |- node[lbl, pos=0.25]{1..*} (ATT.east);
+
+% Liên kết từ SEATS xuống SEAT_OCCUPANCY_LOGS
+\draw[rel] (SEATS.south) -- node[lbl]{1..*} (OCCLOG.north);
+
+% Liên kết theo rãnh dọc trái (x = -3.9) và rãnh dọc phải (x = 3.9) xuống Hàng 4
+\draw[rel] ($(EMP.west) + (0, -0.5cm)$) -- (-3.9, 2.3) -- (-3.9, -8.4) -- node[lbl]{1..*} (OT.east);
+\draw[rel] (-3.9, -7.8) -- ($(SEC.west) + (0, 0.6cm)$);
+\draw[rel] (3.9, 2.8) -- (3.9, -8.4) -- node[lbl]{1..*} (SEC.east);
+
+\end{tikzpicture}%
+}}
+\caption{Sơ đồ Quan hệ Thực thể (ERD) gồm 12 bảng dữ liệu trên PostgreSQL 16}
+\end{figure}
+
+\subsection{Từ điển Dữ liệu Chi tiết (Data Dictionary)}
+
+\subsubsection{Bảng employees và biometric\_vectors (Phân hệ Hồ sơ và Khuôn mặt)}
+
+\begin{longtable}{|M{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.20\textwidth-2\tabcolsep\relax}|L{\dimexpr0.18\textwidth-2\tabcolsep\relax}|L{\dimexpr0.38\textwidth-2\tabcolsep\relax}|}
+\caption{Từ điển dữ liệu bảng employees và biometric\_vectors}\\
+\hline
+\rowcolor{headerblue}
+\normalfont\footnotesize\textbf{Tên trường} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả ý nghĩa} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\normalfont\footnotesize\textbf{Tên trường} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả ý nghĩa} \\
+\hline
+\endhead
+\multicolumn{4}{|l|}{\cellcolor{rowlight}\normalfont\footnotesize\textbf{Bảng 1: \texttt{employees} (Thông tin hồ sơ nhân viên)}} \\
+\hline
+id & UUID & PK & Mã định danh duy nhất của nhân viên. \\
+\hline
+employee\_code & VARCHAR(20) & UNIQUE, NOT NULL & Mã nhân viên trong công ty (ví dụ: \texttt{NV001}). \\
+\hline
+full\_name & VARCHAR(100) & NOT NULL & Họ và tên đầy đủ của nhân viên. \\
+\hline
+department\_id & UUID & FK & Liên kết tới bảng phòng ban \texttt{departments}. \\
+\hline
+default\_shift\_id & UUID & FK & Liên kết tới bảng ca làm việc \texttt{shifts}. \\
+\hline
+avatar\_object\_key & VARCHAR(255) & NULLABLE & Đường dẫn ảnh đại diện lưu trên Cloudflare R2. \\
+\hline
+is\_active & BOOLEAN & DEFAULT TRUE & Trạng thái làm việc (\texttt{FALSE} khi đã nghỉ việc). \\
+\hline
+\multicolumn{4}{|l|}{\cellcolor{rowlight}\normalfont\footnotesize\textbf{Bảng 2: \texttt{biometric\_vectors} (Dữ liệu mẫu khuôn mặt nhân viên)}} \\
+\hline
+id & UUID & PK & Mã định danh bản ghi mẫu khuôn mặt. \\
+\hline
+employee\_id & UUID & FK, NOT NULL & Nhân viên sở hữu mẫu khuôn mặt này. \\
+\hline
+embedding\_vector & REAL[512] & NOT NULL & Dãy 512 số thực biểu diễn đặc trưng khuôn mặt. \\
+\hline
+sample\_image\_key & VARCHAR(255) & NOT NULL & Đường dẫn tệp ảnh mẫu gốc trên Cloudflare R2. \\
+\hline
+quality\_score & REAL & NOT NULL & Điểm đánh giá độ rõ nét của ảnh lúc đăng ký. \\
+\hline
+\end{longtable}
+
+\subsubsection{Bảng attendance\_logs (Phân hệ Điểm danh và Chấm công)}
+
+\begin{longtable}{|M{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.20\textwidth-2\tabcolsep\relax}|L{\dimexpr0.18\textwidth-2\tabcolsep\relax}|L{\dimexpr0.38\textwidth-2\tabcolsep\relax}|}
+\caption{Từ điển dữ liệu bảng attendance\_logs}\\
+\hline
+\rowcolor{headerblue}
+\normalfont\footnotesize\textbf{Tên trường} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả ý nghĩa} \\
+\hline
+id & UUID & PK & Khóa chính bản ghi chấm công trong ngày. \\
+\hline
+\rowcolor{rowlight}
+employee\_id & UUID & FK, NOT NULL & Nhân viên được ghi nhận chấm công. \\
+\hline
+work\_date & DATE & NOT NULL & Ngày làm việc (mỗi nhân viên có 1 dòng/ngày). \\
+\hline
+\rowcolor{rowlight}
+check\_in\_time & TIMESTAMPTZ & NULLABLE & Thời điểm chấm công vào ca đầu ngày. \\
+\hline
+check\_out\_time & TIMESTAMPTZ & NULLABLE & Thời điểm chấm công ra về cuối ngày. \\
+\hline
+\rowcolor{rowlight}
+last\_seen\_time & TIMESTAMPTZ & NULLABLE & Thời điểm quét mặt gần nhất (để lọc trùng 5 phút). \\
+\hline
+status & VARCHAR(20) & NOT NULL & Trạng thái: Đúng giờ, Đi muộn, Về sớm, Vắng mặt. \\
+\hline
+\rowcolor{rowlight}
+late\_minutes & INT & DEFAULT 0 & Số phút đi muộn so với giờ quy định của ca. \\
+\hline
+early\_leave\_minutes & INT & DEFAULT 0 & Số phút về sớm so với giờ kết thúc ca. \\
+\hline
+\rowcolor{rowlight}
+match\_confidence & REAL & NOT NULL & Độ tin cậy nhận diện khuôn mặt lúc chấm công. \\
+\hline
+checkin\_snapshot\_key & VARCHAR(255) & NULLABLE & Đường dẫn ảnh chụp lúc chấm công trên R2. \\
+\hline
+\end{longtable}
+
+\subsubsection{Bảng seats và seat\_occupancy\_logs (Phân hệ Giám sát Chỗ ngồi)}
+
+\begin{longtable}{|M{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.20\textwidth-2\tabcolsep\relax}|L{\dimexpr0.18\textwidth-2\tabcolsep\relax}|L{\dimexpr0.38\textwidth-2\tabcolsep\relax}|}
+\caption{Từ điển dữ liệu bảng seats và seat\_occupancy\_logs}\\
+\hline
+\rowcolor{headerblue}
+\normalfont\footnotesize\textbf{Tên trường} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả ý nghĩa} \\
+\hline
+\multicolumn{4}{|l|}{\cellcolor{rowlight}\normalfont\footnotesize\textbf{Bảng 3: \texttt{seats} (Cấu hình vùng bàn làm việc và trạng thái hiện tại)}} \\
+\hline
+id & UUID & PK & Khóa chính vị trí bàn làm việc. \\
+\hline
+seat\_code & VARCHAR(30) & UNIQUE, NOT NULL & Mã vị trí bàn (ví dụ: \texttt{BAN\_IT\_01}). \\
+\hline
+zone\_type & VARCHAR(30) & NOT NULL & Loại vùng: Bàn làm việc hoặc Khu vực hạn chế. \\
+\hline
+camera\_id & UUID & FK, NOT NULL & Camera phụ trách quan sát vị trí bàn này. \\
+\hline
+department\_id & UUID & FK, NOT NULL & Phòng ban quản lý vị trí chỗ ngồi. \\
+\hline
+assigned\_employee\_id & UUID & FK, NULLABLE & Nhân viên được phân công ngồi tại bàn này. \\
+\hline
+polygon\_points & JSONB & NOT NULL & Tọa độ các đỉnh đa giác khoanh vùng bàn trên ảnh. \\
+\hline
+current\_state & VARCHAR(20) & DEFAULT 'EMPTY' & Trạng thái hiện tại: Trống, Có mặt, Tạm rời, Vắng lâu. \\
+\hline
+active\_seconds\_today & INT & DEFAULT 0 & Tổng thời gian ngồi làm việc trong ngày (tính bằng giây). \\
+\hline
+state\_updated\_at & TIMESTAMPTZ & NOT NULL & Thời điểm cập nhật trạng thái gần nhất. \\
+\hline
+\multicolumn{4}{|l|}{\cellcolor{rowlight}\normalfont\footnotesize\textbf{Bảng 4: \texttt{seat\_occupancy\_logs} (Lịch sử thay đổi trạng thái chỗ ngồi)}} \\
+\hline
+id & UUID & PK & Khóa chính bản ghi lịch sử chỗ ngồi. \\
+\hline
+seat\_id & UUID & FK, NOT NULL & Liên kết tới vị trí bàn trong bảng \texttt{seats}. \\
+\hline
+previous\_state & VARCHAR(20) & NOT NULL & Trạng thái trước khi thay đổi. \\
+\hline
+new\_state & VARCHAR(20) & NOT NULL & Trạng thái mới chuyển sang. \\
+\hline
+duration\_seconds & INT & DEFAULT 0 & Khoảng thời gian duy trì trạng thái trước đó (giây). \\
+\hline
+recorded\_at & TIMESTAMPTZ & NOT NULL & Thời điểm ghi nhận sự kiện chuyển trạng thái. \\
+\hline
+\end{longtable}
+
+\subsubsection{Bảng ot\_registrations và security\_incidents (Phân hệ An ninh Ngoài giờ)}
+
+\begin{longtable}{|M{\dimexpr0.24\textwidth-2\tabcolsep\relax}|L{\dimexpr0.20\textwidth-2\tabcolsep\relax}|L{\dimexpr0.18\textwidth-2\tabcolsep\relax}|L{\dimexpr0.38\textwidth-2\tabcolsep\relax}|}
+\caption{Từ điển dữ liệu bảng ot\_registrations và security\_incidents}\\
+\hline
+\rowcolor{headerblue}
+\normalfont\footnotesize\textbf{Tên trường} & \textbf{Kiểu dữ liệu} & \textbf{Ràng buộc} & \textbf{Mô tả ý nghĩa} \\
+\hline
+\multicolumn{4}{|l|}{\cellcolor{rowlight}\normalfont\footnotesize\textbf{Bảng 5: \texttt{ot\_registrations} (Danh sách đăng ký làm thêm ngoài giờ)}} \\
+\hline
+id & UUID & PK & Khóa chính đơn đăng ký làm thêm giờ. \\
+\hline
+employee\_id & UUID & FK, NOT NULL & Nhân viên đăng ký ở lại làm thêm ngoài giờ. \\
+\hline
+ot\_date & DATE & NOT NULL & Ngày đăng ký làm thêm. \\
+\hline
+start\_time / end\_time & TIME & NOT NULL & Khung giờ bắt đầu và kết thúc làm thêm. \\
+\hline
+approval\_status & VARCHAR(20) & DEFAULT 'APPROVED' & Trạng thái duyệt đơn (\texttt{APPROVED} / \texttt{REJECTED}). \\
+\hline
+\multicolumn{4}{|l|}{\cellcolor{rowlight}\normalfont\footnotesize\textbf{Bảng 6: \texttt{security\_incidents} (Sự cố an ninh ngoài giờ và bằng chứng)}} \\
+\hline
+id & UUID & PK & Mã hồ sơ sự cố an ninh. \\
+\hline
+camera\_id & UUID & FK, NOT NULL & Camera phát hiện có người xâm nhập ngoài giờ. \\
+\hline
+detected\_employee\_id & UUID & FK, NULLABLE & Mã nhân viên (nếu nhận diện được); để trống nếu là người lạ. \\
+\hline
+alert\_level & VARCHAR(30) & NOT NULL & Mức cảnh báo: Mức 1 (Có OT), Mức 2 (Không OT), Mức 3 (Đột nhập). \\
+\hline
+snapshot\_object\_key & VARCHAR(255) & NOT NULL & Đường dẫn ảnh chụp đối tượng trên Cloudflare R2. \\
+\hline
+video\_clip\_object\_key & VARCHAR(255) & NULLABLE & Đường dẫn đoạn video bằng chứng 10 giây trên R2. \\
+\hline
+telegram\_sent & BOOLEAN & DEFAULT FALSE & Đánh dấu đã gửi tin nhắn cảnh báo qua Telegram. \\
+\hline
+ticket\_status & VARCHAR(20) & DEFAULT 'OPEN' & Trạng thái: Chờ xử lý, Đã xác nhận, Báo động nhầm. \\
+\hline
+resolution\_note & TEXT & NULLABLE & Nội dung ghi chú biên bản xử lý của nhân viên bảo vệ. \\
+\hline
+resolved\_by\_user\_id & UUID & FK, NULLABLE & Tài khoản nhân viên bảo vệ xác nhận đóng sự cố. \\
+\hline
+detected\_at / resolved\_at & TIMESTAMPTZ & -- & Thời điểm phát hiện sự cố và thời điểm xử lý xong. \\
+\hline
+\end{longtable}
+
+\subsection{Tổ chức Thư mục Lưu trữ Ảnh và Video trên Đám mây (Cloudflare R2)}
+
+\begin{table}[H]
+\centering
+\caption{Cấu trúc phân chia thư mục lưu trữ tệp đa phương tiện trên Bucket \texttt{smartoffice-media}}
+\begin{tabular}{|M{\dimexpr0.44\textwidth-2\tabcolsep\relax}|L{\dimexpr0.56\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\normalfont\footnotesize\textbf{Đường dẫn lưu trữ (\texttt{object\_key})} & \textbf{Mục đích sử dụng trong hệ thống} \\
+\hline
+biometrics/\allowbreak\{emp\_code\}/\allowbreak sample\_\{1..5\}.jpg & Lưu bộ 3--5 ảnh khuôn mặt mẫu gốc của từng nhân viên khi đăng ký hồ sơ. \\
+\hline
+\rowcolor{rowlight}
+calibration/\allowbreak\{camera\_code\}\_frame.jpg & Lưu ảnh chụp góc nhìn chuẩn của từng camera để Quản trị viên vẽ vùng bàn làm việc trên Web. \\
+\hline
+attendance/\allowbreak\{YYYY-MM-DD\}/\allowbreak\{emp\_code\}\_in.jpg & Lưu ảnh chụp thực tế lúc nhân viên chấm công tại cửa để đối chiếu khi cần thiết. \\
+\hline
+\rowcolor{rowlight}
+security/\allowbreak\{YYYY-MM-DD\}/\allowbreak\{id\}\_snapshot.jpg & Lưu ảnh chụp đối tượng xâm nhập ngoài giờ, dùng để hiển thị trên màn hình trực ban và gửi qua Telegram. \\
+\hline
+security/\allowbreak\{YYYY-MM-DD\}/\allowbreak\{id\}\_clip10s.mp4 & Lưu đoạn video bằng chứng dài 10 giây (5 giây trước và 5 giây sau khi phát hiện xâm nhập). \\
+\hline
+\end{tabular}
+\end{table}
+
+% ============================================================================
+% CHƯƠNG 6: KẾT LUẬN
+% ============================================================================
+\section{Kết luận}
+Hồ sơ phân tích và thiết kế hệ thống trên đã mô tả đầy đủ các yêu cầu chức năng, phi chức năng, sơ đồ phân rã chức năng (FDD), sơ đồ kiến trúc tổng thể cũng như thiết kế cơ sở dữ liệu (ERD) gồm 12 bảng cho đề tài \textbf{Hệ thống Thị giác Máy tính Giám sát Văn phòng Thông minh}. Đây là tài liệu cơ sở thống nhất để triển khai lập trình hệ thống Backend C\# .NET, Dịch vụ nhận diện AI và Giao diện quản trị React trong giai đoạn tiếp theo.
+
+\end{document}

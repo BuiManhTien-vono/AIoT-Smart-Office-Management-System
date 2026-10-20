@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\SmartOffice.SharedKernel\SmartOffice.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\SmartOffice.Infrastructure\SmartOffice.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Biometrics\SmartOffice.Modules.Biometrics\SmartOffice.Modules.Biometrics.csproj" />
+    <ProjectReference Include="..\..\Modules\Attendance\SmartOffice.Modules.Attendance\SmartOffice.Modules.Attendance.csproj" />
+    <ProjectReference Include="..\..\Modules\Occupancy\SmartOffice.Modules.Occupancy\SmartOffice.Modules.Occupancy.csproj" />
+    <ProjectReference Include="..\..\Modules\Security\SmartOffice.Modules.Security\SmartOffice.Modules.Security.csproj" />
+    <ProjectReference Include="..\..\Modules\Reporting\SmartOffice.Modules.Reporting\SmartOffice.Modules.Reporting.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

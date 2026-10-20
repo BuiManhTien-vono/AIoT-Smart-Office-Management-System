@@ -1,0 +1,42 @@
+# Ignored local plugin / external repos
+superpowers/
+
+# .NET / C# Build Artifacts
+**/[Bb]in/
+**/[Oo]bj/
+**/out/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Node / React / Frontend
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# Python / AI Service
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+*.pt
+*.onnx
+*.engine
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

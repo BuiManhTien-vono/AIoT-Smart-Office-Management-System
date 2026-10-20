@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/SmartOffice.WebApi/SmartOffice.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/SmartOffice.Infrastructure/SmartOffice.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Attendance/">
+    <Project Path="src/Modules/Attendance/SmartOffice.Modules.Attendance/SmartOffice.Modules.Attendance.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Biometrics/">
+    <Project Path="src/Modules/Biometrics/SmartOffice.Modules.Biometrics/SmartOffice.Modules.Biometrics.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Occupancy/">
+    <Project Path="src/Modules/Occupancy/SmartOffice.Modules.Occupancy/SmartOffice.Modules.Occupancy.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Reporting/">
+    <Project Path="src/Modules/Reporting/SmartOffice.Modules.Reporting/SmartOffice.Modules.Reporting.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Security/">
+    <Project Path="src/Modules/Security/SmartOffice.Modules.Security/SmartOffice.Modules.Security.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/SmartOffice.SharedKernel/SmartOffice.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SmartOffice.UnitTests/SmartOffice.UnitTests.csproj" />
+  </Folder>
+</Solution>

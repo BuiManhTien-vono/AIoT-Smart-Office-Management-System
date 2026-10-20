@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # C# .NET WebApi (Modular Monolith - Backend Core)
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: smartoffice_backend
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=smartoffice_db;Username=postgres;Password=postgres_password
+      - Storage__Provider=CloudflareR2 # or MinIO
+      - Storage__Endpoint=https://<account_id>.r2.cloudflarestorage.com
+      - Storage__AccessKey=${R2_ACCESS_KEY}
+      - Storage__SecretKey=${R2_SECRET_KEY}
+      - Storage__BucketName=smartoffice-media
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
+      - Telegram__ChatId=${TELEGRAM_CHAT_ID}
+      - AiService__BaseUrl=http://ai_service:8000
+    ports:
+      - "5000:8080"
+    depends_on:
+      - postgres
+
+  # Python AI Service (Computer Vision & GPU Inference)
+  ai_service:
+    build:
+      context: ../ai_service
+      dockerfile: Dockerfile
+    container_name: smartoffice_ai_service
+    restart: unless-stopped
+    environment:
+      - BACKEND_API_URL=http://backend:8080/api/v1
+      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../storage/mock_videos:/app/mock_videos
+    # Hỗ trợ GPU NVIDIA nếu có nvidia-container-toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # React Frontend (Vite + Nginx)
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: smartoffice_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # Database: PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartoffice_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartoffice_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # Nginx Gateway Reverse Proxy (Cloudflare SSL Origin CA)
+  nginx:
+    image: nginx:alpine
+    container_name: smartoffice_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
