@@ -27,3 +27,4 @@ AIoT-Smart-Office-Management-System/
 - **Frontend:** React + TypeScript (`Vite`, `HTML5 Canvas Zone Editor`)
 - **Database & Storage:** PostgreSQL 16 + Cloudflare R2 / MinIO (S3-compatible)
 - **DevOps:** Docker Compose, Nginx, Cloudflare SSL, GitHub Actions CI/CD
+
