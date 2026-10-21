@@ -12,12 +12,17 @@
 Cơ sở dữ liệu của hệ thống sử dụng **PostgreSQL 16** kết hợp với kho lưu trữ đối tượng đám mây **Cloudflare R2 (tương thích chuẩn S3)**:
 * **Dữ liệu có cấu trúc & Vector đặc trưng**: Lưu trong PostgreSQL (sử dụng kiểu `float4[]` / `jsonb` hoặc extension `pgvector` cho vector khuôn mặt 512 chiều $\vec{v} \in \mathbb{R}^{512}$ và mảng tọa độ đa giác bàn làm việc $\mathcal{P}_{\text{seat}}$).
 * **Dữ liệu phi cấu trúc (Media Files)**: Ảnh chân dung gốc, ảnh snapshot chấm công, ảnh phát hiện giả mạo và đoạn video bằng chứng 10 giây (`.mp4`) được lưu trên **Cloudflare R2**, trong CSDL chỉ lưu khóa đường dẫn định danh (`object_key`).
-* **Phân vùng theo Module (Modular Monolith Schema)**: Các bảng được nhóm rõ ràng theo 5 miền nghiệp vụ:
-  1. **Core & RBAC**: `departments`, `users`, `cameras`
-  2. **Biometrics Module**: `employees`, `biometric_vectors`
-  3. **Attendance Module**: `shifts`, `attendance_logs`, `leave_requests`
-  4. **Occupancy Module**: `seats` (*Virtual Zones*), `seat_occupancy_logs`
-  5. **Security Module**: `ot_registrations`, `security_incidents`
+* **Phân vùng Schema độc lập theo từng Module (Modular Monolith Multi-Schema)**: Theo đúng chuẩn kiến trúc Modular Monolith, mỗi Module sở hữu **01 `DbContext` độc lập** và **01 Database Schema riêng biệt** trên PostgreSQL. Giữa các bảng thuộc cùng một Schema sử dụng khóa ngoại vật lý (`FOREIGN KEY`); giữa các bảng khác Schema chỉ lưu khóa định danh tham chiếu logic (`UUID`) và đồng bộ dữ liệu qua **In-Memory Event Bus**:
+
+| STT | Module Backend (.NET) | Lớp `DbContext` độc lập | Tên Schema PostgreSQL | Các bảng dữ liệu thuộc quyền sở hữu |
+| :---: | :--- | :--- | :--- | :--- |
+| 1 | `SmartOffice.Modules.Biometrics` | `BiometricsDbContext` | `biometrics` | `biometrics.departments`, `biometrics.employees`, `biometrics.biometric_vectors` |
+| 2 | `SmartOffice.Modules.Attendance` | `AttendanceDbContext` | `attendance` | `attendance.shifts`, `attendance.attendance_logs`, `attendance.leave_requests` |
+| 3 | `SmartOffice.Modules.Occupancy` | `OccupancyDbContext` | `occupancy` | `occupancy.cameras`, `occupancy.seats`, `occupancy.seat_occupancy_logs` |
+| 4 | `SmartOffice.Modules.Security` | `SecurityDbContext` | `security` | `security.ot_registrations`, `security.security_incidents` |
+| 5 | `SmartOffice.Modules.Reporting` | `ReportingDbContext` | `reporting` | `reporting.users`, `reporting.daily_department_summaries` |
+
+> **Script khởi tạo CSDL thô**: Xem chi tiết tại [`backend/database/01_init_schemas_and_tables.sql`](../backend/database/01_init_schemas_and_tables.sql).
 
 ---
 
