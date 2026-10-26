@@ -39,3 +39,4 @@ public sealed class OccupancyDbContext(DbContextOptions<OccupancyDbContext> opti
         });
     }
 }
+

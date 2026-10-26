@@ -77,3 +77,4 @@ Cấu trúc chuẩn User Story: **"Là một `<Vai trò>`, tôi muốn `<Chức 
 - **Sprint 1 (Buổi 3 – Buổi 5):** Hoàn thiện Base Architecture, Module `Biometrics` (Hồ sơ & Khuôn mặt), Module `Attendance` (Ca làm việc & Chấm công), Xác thực phân quyền cơ bản.
 - **Sprint 2 (Buổi 6 – Buổi 7):** Triển khai In-memory Event Bus (`MediatR`) giao tiếp liên module, Tích hợp MinIO/S3 (`AWSSDK.S3` + `Presigned URL`), Module `Occupancy` (Giám sát chỗ ngồi).
 - **Sprint 3 (Buổi 8 – Buổi 10):** Hoàn thiện Module `Security` (An ninh ngoài giờ), Module `Reporting`, đóng gói Docker Compose 1 lệnh và cấu hình `Jenkinsfile` CI/CD Pipeline.
+
