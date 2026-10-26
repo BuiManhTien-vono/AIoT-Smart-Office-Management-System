@@ -315,6 +315,48 @@ Cấu hình ca làm việc và tham số hệ thống & Toàn quyền & Cấu h�
 \end{tabular}
 \end{table}
 
+\subsection{Product Backlog và Danh sách User Stories (Agile / Scrum)}
+Nhằm tổ chức phát triển phần mềm theo phương pháp Agile/Scrum, các chức năng được phân rã thành danh sách User Stories trong Product Backlog và phân bổ theo 3 Sprint:
+
+\begin{longtable}{|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|L{\dimexpr0.46\textwidth-2\tabcolsep\relax}|L{\dimexpr0.26\textwidth-2\tabcolsep\relax}|C{\dimexpr0.14\textwidth-2\tabcolsep\relax}|}
+\caption{Bảng Product Backlog và danh sách User Stories cốt lõi của dự án}\\
+\hline
+\rowcolor{headerblue}
+\textbf{Mã US} & \textbf{Nội dung User Story} & \textbf{Module \& Schema} & \textbf{Kế hoạch} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerblue}
+\textbf{Mã US} & \textbf{Nội dung User Story} & \textbf{Module \& Schema} & \textbf{Kế hoạch} \\
+\hline
+\endhead
+\textbf{US-BIO-01} & \textbf{Là một} Chuyên viên HR, \textbf{tôi muốn} thêm mới, cập nhật và khóa hồ sơ nhân viên, \textbf{để} quản lý danh sách nhân sự theo từng phòng ban. & \texttt{Biometrics}\newline (\texttt{biometrics}) & Sprint 1 \\
+\hline
+\rowcolor{rowlight}
+\textbf{US-BIO-02} & \textbf{Là một} Chuyên viên HR, \textbf{tôi muốn} tải lên 3--5 ảnh khuôn mặt mẫu lưu trên MinIO/S3, \textbf{để} trích xuất dữ liệu nhận diện cho nhân viên. & \texttt{Biometrics}\newline (\texttt{biometrics}) & Sprint 1 \\
+\hline
+\textbf{US-BIO-03} & \textbf{Là một} Chuyên viên HR, \textbf{tôi muốn} hệ thống cảnh báo nếu khuôn mặt đăng ký bị trùng với nhân viên đã có, \textbf{để} tránh tạo trùng hồ sơ. & \texttt{Biometrics}\newline (\texttt{biometrics}) & Sprint 1 \\
+\hline
+\rowcolor{rowlight}
+\textbf{US-ATT-01} & \textbf{Là một} Quản trị viên / HR, \textbf{tôi muốn} cấu hình thông tin ca làm việc và số phút cho phép đi trễ, \textbf{để} làm cơ sở tính toán chuyên cần. & \texttt{Attendance}\newline (\texttt{attendance}) & Sprint 1 \\
+\hline
+\textbf{US-ATT-02} & \textbf{Là một} Nhân viên, \textbf{tôi muốn} được tự động chấm công khi bước qua cửa sảnh, \textbf{để} không phải xếp hàng quẹt thẻ hay bấm vân tay. & \texttt{Attendance}\newline (\texttt{attendance}) & Sprint 1 \\
+\hline
+\rowcolor{rowlight}
+\textbf{US-OCC-01} & \textbf{Là một} Quản trị viên, \textbf{tôi muốn} khoanh vùng vị trí từng bàn làm việc trên ảnh camera, \textbf{để} hệ thống xác định không gian mỗi chỗ ngồi. & \texttt{Occupancy}\newline (\texttt{occupancy}) & Sprint 2 \\
+\hline
+\textbf{US-OCC-02} & \textbf{Là một} Trưởng bộ phận, \textbf{tôi muốn} xem sơ đồ chỗ ngồi đổi màu trực tiếp và nhận cảnh báo khi nhân viên vắng mặt quá 15 phút, \textbf{để} điều phối công việc. & \texttt{Occupancy}\newline (\texttt{occupancy}) & Sprint 2 \\
+\hline
+\rowcolor{rowlight}
+\textbf{US-SEC-01} & \textbf{Là một} Chuyên viên HR, \textbf{tôi muốn} đăng ký danh sách nhân viên làm thêm ngoài giờ (OT), \textbf{để} hệ thống nhận biết người được phép ở lại ban đêm. & \texttt{Security}\newline (\texttt{security}) & Sprint 2 \\
+\hline
+\textbf{US-SEC-02} & \textbf{Là một} Nhân viên An ninh, \textbf{tôi muốn} nhận báo động kèm ảnh và video 10 giây khi có người lạ đột nhập ngoài giờ, \textbf{để} kịp thời xử lý. & \texttt{Security}\newline (\texttt{security}) & Sprint 3 \\
+\hline
+\rowcolor{rowlight}
+\textbf{US-REP-01} & \textbf{Là một} Chuyên viên HR, \textbf{tôi muốn} tổng hợp và xuất báo cáo chấm công, tỷ lệ ngồi làm việc ra file Excel, \textbf{để} phục vụ tính lương cuối tháng. & \texttt{Reporting}\newline (\texttt{reporting}) & Sprint 3 \\
+\hline
+\end{longtable}
+
 \newpage
 % ============================================================================
 % CHƯƠNG 2: ĐẶC TẢ YÊU CẦU CHỨC NĂNG VÀ PHI CHỨC NĂNG
@@ -639,7 +681,7 @@ Sơ đồ phân rã chức năng (FDD) dưới đây thể hiện toàn bộ cá
 \section{Thiết kế Kiến trúc Hệ thống (System Architecture Design)}
 
 \subsection{Sơ đồ Kiến trúc Tổng thể Hệ thống}
-Hệ thống được thiết kế theo mô hình phân tầng rõ ràng, trong đó **Khối Backend Trung tâm (C\# .NET)** được tổ chức theo kiến trúc \textit{Modular Monolith} đóng vai trò điều phối toàn bộ nghiệp vụ, kết nối trực tiếp với **Giao diện Quản trị (React)** ở tầng trên, và giao tiếp với **Khối Dịch vụ Nhận diện AI** cùng **Khối Lưu trữ \& Cảnh báo** ở tầng dưới:
+Hệ thống được thiết kế theo mô hình phân tầng rõ ràng, trong đó \textbf{Khối Backend Trung tâm (C\# .NET)} được tổ chức theo kiến trúc \textit{Modular Monolith} đóng vai trò điều phối toàn bộ nghiệp vụ, kết nối trực tiếp với \textbf{Giao diện Quản trị (React)} ở tầng trên, và giao tiếp với \textbf{Khối Dịch vụ Nhận diện AI} cùng \textbf{Khối Lưu trữ \& Cảnh báo} ở tầng dưới:
 
 \begin{figure}[H]
 \centering
@@ -800,8 +842,34 @@ Mỗi phân hệ nghiệp vụ trong thư mục \texttt{backend/src/Modules/} đ
 % ============================================================================
 \section{Thiết kế Cơ sở Dữ liệu và Sơ đồ Quan hệ Thực thể (ERD)}
 
+\subsection{Thiết kế Phân rã Schema và DbContext Độc lập theo Module}
+Để đảm bảo tính cô lập dữ liệu tuyệt đối trong kiến trúc \textit{Modular Monolith}, cơ sở dữ liệu trên \textbf{PostgreSQL 16} được chia thành \textbf{5 Schema độc lập} tương ứng với \textbf{5 lớp \texttt{DbContext} riêng biệt} của từng Module. Các Module không truy cập trực tiếp vào bảng của nhau mà đồng bộ dữ liệu thông qua \textbf{In-Memory Event Bus}:
+
+\begin{table}[H]
+\centering
+\caption{Phân hoạch ranh giới Schema CSDL và DbContext độc lập cho 5 Module}
+\begin{tabular}{|C{\dimexpr0.08\textwidth-2\tabcolsep\relax}|L{\dimexpr0.26\textwidth-2\tabcolsep\relax}|M{\dimexpr0.26\textwidth-2\tabcolsep\relax}|L{\dimexpr0.40\textwidth-2\tabcolsep\relax}|}
+\hline
+\rowcolor{headerblue}
+\textbf{STT} & \textbf{Module Backend (.NET)} & \normalfont\footnotesize\textbf{DbContext \& Schema} & \textbf{Các bảng dữ liệu thuộc quyền sở hữu} \\
+\hline
+1 & \textbf{Module Hồ sơ \& Khuôn mặt} & BiometricsDbContext\newline (\texttt{schema: biometrics}) & \texttt{departments}, \texttt{employees}, \texttt{biometric\_vectors} \\
+\hline
+\rowcolor{rowlight}
+2 & \textbf{Module Điểm danh \& Chấm công} & AttendanceDbContext\newline (\texttt{schema: attendance}) & \texttt{shifts}, \texttt{attendance\_logs}, \texttt{leave\_requests} \\
+\hline
+3 & \textbf{Module Giám sát Chỗ ngồi} & OccupancyDbContext\newline (\texttt{schema: occupancy}) & \texttt{cameras}, \texttt{seats}, \texttt{seat\_occupancy\_logs} \\
+\hline
+\rowcolor{rowlight}
+4 & \textbf{Module An ninh Ngoài giờ} & SecurityDbContext\newline (\texttt{schema: security}) & \texttt{ot\_registrations}, \texttt{security\_incidents} \\
+\hline
+5 & \textbf{Module Quản trị \& Báo cáo} & ReportingDbContext\newline (\texttt{schema: reporting}) & \texttt{users}, \texttt{daily\_department\_summaries} \\
+\hline
+\end{tabular}
+\end{table}
+
 \subsection{Sơ đồ Quan hệ Thực thể Tổng thể (ERD)}
-Cơ sở dữ liệu của hệ thống trên **PostgreSQL 16** bao gồm 12 bảng dữ liệu có quan hệ chặt chẽ với nhau. Sơ đồ dưới đây thể hiện cấu trúc khóa chính (\texttt{PK}), khóa ngoại (\texttt{FK}), các thuộc tính đại diện và mối quan hệ giữa 12 bảng:
+Sơ đồ dưới đây thể hiện cấu trúc khóa chính (\texttt{PK}), khóa ngoại (\texttt{FK}), các thuộc tính đại diện và mối quan hệ giữa 12 bảng dữ liệu trên \textbf{PostgreSQL 16}:
 
 \begin{figure}[H]
 \centering

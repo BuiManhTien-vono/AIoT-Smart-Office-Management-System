@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -12,6 +12,15 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Shared\SmartOffice.SharedKernel\SmartOffice.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Biometrics\SmartOffice.Modules.Biometrics\SmartOffice.Modules.Biometrics.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Attendance\SmartOffice.Modules.Attendance\SmartOffice.Modules.Attendance.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Occupancy\SmartOffice.Modules.Occupancy\SmartOffice.Modules.Occupancy.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Security\SmartOffice.Modules.Security\SmartOffice.Modules.Security.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Reporting\SmartOffice.Modules.Reporting\SmartOffice.Modules.Reporting.csproj" />
   </ItemGroup>
 
   <ItemGroup>
