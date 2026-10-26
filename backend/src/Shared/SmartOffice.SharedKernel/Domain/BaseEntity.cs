@@ -14,3 +14,4 @@ public abstract class BaseEntity
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
+

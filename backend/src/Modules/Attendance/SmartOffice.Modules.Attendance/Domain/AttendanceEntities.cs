@@ -41,3 +41,4 @@ public sealed class LeaveRequest : BaseEntity
     public string ApprovalStatus { get; set; } = "APPROVED";
     public Guid? ApprovedByUserId { get; set; }
 }
+

@@ -24,3 +24,4 @@ public sealed class DailyDepartmentSummary : BaseEntity
     public int ProlongedAwayEvents { get; set; }
     public int SecurityAlertsCount { get; set; }
 }
+
