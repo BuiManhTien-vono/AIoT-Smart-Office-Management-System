@@ -30,4 +30,3 @@ public sealed class SecurityDbContext(DbContextOptions<SecurityDbContext> option
         });
     }
 }
-

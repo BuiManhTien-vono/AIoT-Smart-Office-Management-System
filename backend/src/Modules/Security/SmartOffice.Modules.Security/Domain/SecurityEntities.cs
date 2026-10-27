@@ -28,4 +28,3 @@ public sealed class SecurityIncident : BaseEntity
     public DateTimeOffset DetectedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ResolvedAt { get; set; }
 }
-

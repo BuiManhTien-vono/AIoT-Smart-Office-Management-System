@@ -43,4 +43,3 @@ public sealed class BiometricsDbContext(DbContextOptions<BiometricsDbContext> op
         });
     }
 }
-

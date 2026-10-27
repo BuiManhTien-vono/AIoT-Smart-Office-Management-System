@@ -31,4 +31,3 @@ public sealed class BiometricVector : BaseEntity
     public float QualityScore { get; set; }
     public string PoseLabel { get; set; } = "FRONTAL";
 }
-

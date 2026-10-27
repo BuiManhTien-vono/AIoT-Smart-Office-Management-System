@@ -21,4 +21,3 @@ public sealed class InMemoryEventBus(IServiceScopeFactory scopeFactory) : IInMem
         }
     }
 }
-

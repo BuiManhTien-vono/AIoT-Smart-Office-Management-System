@@ -36,4 +36,3 @@ public sealed class SeatOccupancyLog : BaseEntity
     public int DurationSeconds { get; set; }
     public DateTimeOffset RecordedAt { get; set; } = DateTimeOffset.UtcNow;
 }
-

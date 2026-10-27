@@ -57,4 +57,3 @@ public class ArchitectureIsolationTests
         Assert.Contains("reporting", schemas);
     }
 }
-

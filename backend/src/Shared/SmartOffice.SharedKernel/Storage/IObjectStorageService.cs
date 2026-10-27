@@ -17,4 +17,3 @@ public interface IObjectStorageService
         int expiryMinutes = 15,
         CancellationToken cancellationToken = default);
 }
-

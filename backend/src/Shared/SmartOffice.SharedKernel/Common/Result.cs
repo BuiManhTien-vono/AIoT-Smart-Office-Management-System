@@ -43,4 +43,3 @@ public sealed class Result<TValue> : Result
         ? _value!
         : throw new InvalidOperationException("Không thể truy cập giá trị của một kết quả thất bại.");
 }
-
