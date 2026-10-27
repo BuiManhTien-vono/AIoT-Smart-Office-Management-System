@@ -1,6 +1,59 @@
-@SmartOffice.WebApi_HostAddress = http://localhost:5081
+@HostAddress = http://localhost:5155
 
-GET {{SmartOffice.WebApi_HostAddress}}/weatherforecast/
+### 1. Kiểm tra trạng thái hệ thống & 5 Schema độc lập
+GET {{HostAddress}}/api/health
 Accept: application/json
 
-###
+### 2. [Module 1 - Biometrics] Tạo Phòng ban mới
+POST {{HostAddress}}/api/v1/biometrics/departments
+Content-Type: application/json
+
+{
+  "departmentCode": "DEPT_IT",
+  "departmentName": "Phòng Kỹ thuật Phần mềm & AI",
+  "description": "Phát triển hệ thống Backend & Computer Vision"
+}
+
+### 3. [Module 1 - Biometrics] Lấy danh sách Phòng ban
+GET {{HostAddress}}/api/v1/biometrics/departments
+Accept: application/json
+
+### 4. [Module 2 - Attendance] Tạo Ca làm việc Hành chính (08:00 - 17:30, ân hạn 15 phút)
+POST {{HostAddress}}/api/v1/attendance/shifts
+Content-Type: application/json
+
+{
+  "shiftCode": "SHIFT_HC",
+  "shiftName": "Ca Hành chính Tiêu chuẩn",
+  "startTime": "08:00:00",
+  "endTime": "17:30:00",
+  "graceMinutes": 15,
+  "isDefault": true
+}
+
+### 5. [Module 1 - Biometrics] Tạo Hồ sơ Nhân viên mới (Sẽ tự động bắn Event sang Module Reporting!)
+POST {{HostAddress}}/api/v1/biometrics/employees
+Content-Type: application/json
+
+{
+  "employeeCode": "NV001",
+  "fullName": "Nguyễn Văn An",
+  "email": "annv@smartoffice.id.vn",
+  "phoneNumber": "0901234567",
+  "departmentId": "11111111-1111-1111-1111-111111111101",
+  "defaultShiftId": "22222222-2222-2222-2222-222222222201"
+}
+
+### 6. [Module 2 - Attendance] Điểm danh Chấm công tự động (Tự động hỏi Biometrics qua Contract & bắn Event sang Reporting)
+POST {{HostAddress}}/api/v1/attendance/check
+Content-Type: application/json
+
+{
+  "employeeId": "00000000-0000-0000-0000-000000000001",
+  "matchConfidence": 0.94,
+  "snapshotObjectKey": "attendance/2026-10-26/NV001_in.jpg"
+}
+
+### 7. [Module 5 - Reporting] Xem bảng tổng hợp tự động đồng bộ qua In-Memory Event Bus
+GET {{HostAddress}}/api/v1/reporting/daily-summaries
+Accept: application/json
