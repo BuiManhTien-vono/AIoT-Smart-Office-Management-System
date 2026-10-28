@@ -1238,9 +1238,317 @@ security/\allowbreak\{YYYY-MM-DD\}/\allowbreak\{id\}\_clip10s.mp4 & Lưu đoạn
 \end{table}
 
 % ============================================================================
-% CHƯƠNG 6: KẾT LUẬN
+% CHƯƠNG 6: KHỞI TẠO BASE CODE .NET VÀ CẤU HÌNH QUY TRÌNH GIT WORKFLOW
 % ============================================================================
-\section{Kết luận}
-Hồ sơ phân tích và thiết kế hệ thống trên đã mô tả đầy đủ các yêu cầu chức năng, phi chức năng, sơ đồ phân rã chức năng (FDD), sơ đồ kiến trúc tổng thể cũng như thiết kế cơ sở dữ liệu (ERD) gồm 12 bảng cho đề tài \textbf{Hệ thống Thị giác Máy tính Giám sát Văn phòng Thông minh}. Đây là tài liệu cơ sở thống nhất để triển khai lập trình hệ thống Backend C\# .NET, Dịch vụ nhận diện AI và Giao diện quản trị React trong giai đoạn tiếp theo.
+\section{Khởi tạo Base Code .NET và Cấu hình Quy trình Git Workflow (Tuần 3)}
+
+\subsection{Mục tiêu Kỹ thuật và Chuẩn Đầu ra Học phần}
+Trong khuôn khổ Đồ án môn học \textit{Phát triển ứng dụng phía máy chủ nâng cao} (Mã học phần: 608819), giai đoạn Tuần 3 đóng vai trò then chốt trong việc thiết lập nền móng kiến trúc cho toàn bộ dự án. Mục tiêu trọng tâm của giai đoạn này là hiện thực hóa chuẩn đầu ra \textbf{CLO1} (Xây dựng hoàn chỉnh hệ thống backend theo kiến trúc Modular Monolith trên nền tảng .NET 10) và \textbf{CLO2} (Quy trình quản lý mã nguồn chuyên nghiệp theo chuẩn doanh nghiệp).
+
+Thay vì áp dụng kiến trúc Monolith truyền thống dễ dẫn tới tình trạng ``Spaghetti Code'' (các thành phần phụ thuộc chéo lẫn nhau), đồ án lựa chọn mô hình \textbf{Modular Monolith kết hợp Clean Architecture}. Mô hình này vừa đảm bảo sự tinh gọn trong triển khai (toàn bộ ứng dụng chạy trong một tiến trình máy chủ duy nhất, tối ưu tài nguyên phần cứng), vừa đạt được mức độ phân tách ranh giới nghiệp vụ (Bounded Context) độc lập nghiêm ngặt tương đương vi dịch vụ (Microservices).
+
+\subsection{Cấu trúc Tổ chức Thư mục và Solution .NET 10}
+Dự án được khởi tạo dưới dạng Solution tệp mới của .NET 10 (\texttt{SmartOffice.slnx}), phân chia không gian logic thành 4 phân vùng rõ rệt nhằm cô lập trách nhiệm:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Phân vùng Hạt nhân và Hạ tầng dùng chung (\texttt{src/Shared/})}: Chứa các thành phần cốt lõi không phụ thuộc vào bất kỳ nghiệp vụ cụ thể nào, bao gồm \texttt{SmartOffice.SharedKernel} và \texttt{SmartOffice.Infrastructure}.
+    \item \textbf{Phân vùng Các Module Nghiệp vụ (\texttt{src/Modules/})}: Chứa 5 module chức năng nghiệp vụ biệt lập hoàn toàn: \texttt{Biometrics}, \texttt{Attendance}, \texttt{Occupancy}, \texttt{Security}, và \texttt{Reporting}.
+    \item \textbf{Phân vùng Tiến trình Máy chủ (\texttt{src/Host/})}: Dự án khởi chạy ứng dụng (\texttt{SmartOffice.Api}), đóng vai trò cấu hình DI Container, Middleware Pipeline, và ánh xạ các Endpoint.
+    \item \textbf{Phân vùng Kiểm thử Tự động (\texttt{tests/})}: Dự án kiểm thử tự động (\texttt{SmartOffice.UnitTests}) sử dụng xUnit để xác thực tính cô lập kiến trúc và kiểm tra logic nghiệp vụ.
+\end{itemize}
+
+Bảng~\ref{tab:cautruc_thumuc_solution} mô tả chi tiết tổ chức tệp tin và cấu trúc dự án trong hệ thống backend.
+
+\begin{table}[H]
+\centering
+\caption{Cấu trúc tổ chức Solution Modular Monolith trong Backend C\# .NET}
+\label{tab:cautruc_thumuc_solution}
+\begin{tabular}{|M{5.8cm}|L{4.2cm}|L{5.0cm}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Đường dẫn Thư mục / Dự án} & \textbf{Kiểu Dự án / Tầng} & \textbf{Trách nhiệm Kỹ thuật} \\
+\hline
+src/Shared/\allowbreak SmartOffice.SharedKernel & Class Library (.NET 10) & Chứa BaseEntity, Result Pattern, Integration Events, Contracts giao tiếp liên module. \\
+\hline
+\rowcolor{rowlight}
+src/Shared/\allowbreak SmartOffice.Infrastructure & Class Library (.NET 10) & Chứa triển khai InMemoryEventBus, Global Exception Handler, và tiện ích hệ thống. \\
+\hline
+src/Modules/\allowbreak SmartOffice.Modules.Biometrics & Class Library (Module 1) & Quản lý Phòng ban, Hồ sơ nhân viên, và Vector sinh trắc học khuôn mặt 512 chiều. \\
+\hline
+\rowcolor{rowlight}
+src/Modules/\allowbreak SmartOffice.Modules.Attendance & Class Library (Module 2) & Quản lý Ca làm việc, Lịch chấm công, và Xử lý sự kiện Check-in/Check-out. \\
+\hline
+src/Modules/\allowbreak SmartOffice.Modules.Occupancy & Class Library (Module 3) & Quản lý Bàn làm việc, Tọa độ camera, và Cập nhật trạng thái chỗ ngồi thời gian thực. \\
+\hline
+\rowcolor{rowlight}
+src/Modules/\allowbreak SmartOffice.Modules.Security & Class Library (Module 4) & Giám sát an ninh ngoài giờ, Lưu trữ vết xâm nhập và Tích hợp cảnh báo Telegram. \\
+\hline
+src/Modules/\allowbreak SmartOffice.Modules.Reporting & Class Library (Module 5) & Tổng hợp dữ liệu chấm công, Thống kê hiệu suất sử dụng văn phòng theo ngày/tháng. \\
+\hline
+\rowcolor{rowlight}
+src/Host/\allowbreak SmartOffice.Api & ASP.NET Core WebAPI & Entry point của ứng dụng, nạp DI cho toàn bộ module, cấu hình Middleware và Swagger. \\
+\hline
+tests/\allowbreak SmartOffice.UnitTests & xUnit Test Project & Chứa Architecture Isolation Tests và Module Integration/Unit Tests. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Cơ chế Rào chắn Ranh giới Module (Module Boundary Guard)}
+Một trong những lỗi nghiêm trọng nhất trong kiến trúc Modular Monolith là sự ``rò rỉ tham chiếu'' giữa các module (Direct Coupling), khiến các module gọi trực tiếp DbContext hoặc Entity của nhau. Để ngăn chặn triệt để điều này, hệ thống áp dụng nguyên tắc thiết kế ranh giới nghiêm ngặt:
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Cấm Tham chiếu Ngang (Zero Module-to-Module Reference)}: Không một module nghiệp vụ nào trong thư mục \texttt{src/Modules/} được phép thêm \texttt{<ProjectReference>} đến bất kỳ module nghiệp vụ nào khác. Mọi nỗ lực gọi trực tiếp mã nguồn giữa hai module đều bị trình biên dịch (Roslyn Compiler) hoặc bài kiểm tra kiến trúc tự động từ chối.
+    \item \textbf{Quy tắc Phụ thuộc Hướng tâm (Inward Dependency Rule)}: Tất cả các module chỉ được phép phụ thuộc vào \texttt{SmartOffice.SharedKernel}. Tầng Host (\texttt{SmartOffice.Api}) là dự án duy nhất được phép tham chiếu tới tất cả các module để làm nhiệm vụ đăng ký dịch vụ (Dependency Injection Bootstrap).
+\end{enumerate}
+
+Sơ đồ ma trận phụ thuộc được mô tả trực quan trong Hình~\ref{fig:module_dependency_matrix}.
+
+\begin{figure}[H]
+\centering
+\fcolorbox{primaryblue!75}{white}{%
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[
+    hostnode/.style={rectangle, draw=primaryblue, line width=1.1pt, fill=primaryblue, text=white, rounded corners=4pt, minimum height=1.1cm, text width=12cm, align=center, font=\small\bfseries},
+    modnode/.style={rectangle, draw=primaryblue, line width=0.9pt, fill=headerblue, rounded corners=3pt, minimum height=1.2cm, text width=2.4cm, align=center, font=\footnotesize\bfseries, text=primaryblue!90!black},
+    sharednode/.style={rectangle, draw=accentgreen, line width=1.1pt, fill=lightgreen, rounded corners=4pt, minimum height=1.1cm, text width=12cm, align=center, font=\small\bfseries, text=accentgreen!90!black},
+    forbidline/.style={dashed, line width=1.2pt, draw=red!80!black, -{Stealth[length=3mm]}},
+    validline/.style={line width=1.0pt, draw=primaryblue!80!black, -{Stealth[length=2.5mm]}}
+]
+
+\node[hostnode] (Host) at (0, 4.0) {Host Layer: SmartOffice.Api (Điểm khởi chạy duy nhất)};
+
+\node[modnode] (M1) at (-4.8, 2.0) {Module 1\\Biometrics};
+\node[modnode] (M2) at (-2.4, 2.0) {Module 2\\Attendance};
+\node[modnode] (M3) at (0.0, 2.0) {Module 3\\Occupancy};
+\node[modnode] (M4) at (2.4, 2.0) {Module 4\\Security};
+\node[modnode] (M5) at (4.8, 2.0) {Module 5\\Reporting};
+
+\node[sharednode] (Kernel) at (0, 0.0) {Shared Layer: SmartOffice.SharedKernel \& Infrastructure (Khế ước dùng chung)};
+
+% Host references all modules
+\draw[validline] (Host.south) -- (M1.north);
+\draw[validline] (Host.south) -- (M2.north);
+\draw[validline] (Host.south) -- (M3.north);
+\draw[validline] (Host.south) -- (M4.north);
+\draw[validline] (Host.south) -- (M5.north);
+
+% Modules reference Kernel
+\draw[validline] (M1.south) -- (Kernel.north -| M1.south);
+\draw[validline] (M2.south) -- (Kernel.north -| M2.south);
+\draw[validline] (M3.south) -- (Kernel.north);
+\draw[validline] (M4.south) -- (Kernel.north -| M4.south);
+\draw[validline] (M5.south) -- (Kernel.north -| M5.south);
+
+% Forbidden cross-reference line
+\draw[forbidline] (M1.east) -- node[above, font=\scriptsize\bfseries\color{red!80!black}] {CẤM THAM CHIẾU} (M2.west);
+\draw[forbidline] (M2.east) -- node[above, font=\scriptsize\bfseries\color{red!80!black}] {CẤM THAM CHIẾU} (M3.west);
+
+\end{tikzpicture}
+}}
+\caption{Sơ đồ ma trận phụ thuộc và cơ chế rào chắn ranh giới giữa các Module}
+\label{fig:module_dependency_matrix}
+\end{figure}
+
+\subsection{Hiện thực Tầng Hạt nhân Dùng chung (SmartOffice.SharedKernel)}
+Dự án \texttt{SmartOffice.SharedKernel} cung cấp các khối xây dựng nền tảng (Building Blocks) sau:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Lớp Thực thể Cơ sở (\texttt{BaseEntity})}: Cung cấp thuộc tính định danh duy nhất toàn cầu \texttt{Guid Id}, dấu thời gian khởi tạo \texttt{CreatedAt}, thời điểm chỉnh sửa cuối \texttt{UpdatedAt}, cùng cờ xóa mềm \texttt{IsDeleted}. Toàn bộ thực thể trong 5 module đều kế thừa lớp này để đảm bảo tính nhất quán về kiểm toán dữ liệu (Audit Trail).
+    \item \textbf{Mẫu Thiết kế Kết quả (\texttt{Result} \& \texttt{Result<T>})}: Thay thế hoàn toàn cơ chế ném ngoại lệ vô tội vạ (\texttt{throw Exception}) khi xử lý các tình huống thất bại dự đoán được trong luồng nghiệp vụ. Kết quả trả về chứa các trường: \texttt{IsSuccess}, \texttt{Value}, và cấu trúc lỗi \texttt{Error(string Code, string Message)}. Điều này giúp mã nguồn tường minh, dễ dự đoán và tăng hiệu năng vận hành.
+    \item \textbf{Giao diện Sự kiện Tích hợp (\texttt{IIntegrationEvent})}: Định nghĩa khế ước cho các thông điệp nghiệp vụ phát sinh khi trạng thái của một module thay đổi (gồm \texttt{EventId} và \texttt{OccurredOn}).
+    \item \textbf{Khế ước Tra cứu Liên Module (\texttt{IEmployeeLookupContract})}: Cung cấp phương thức tra cứu dữ liệu nhân sự cơ bản (\texttt{GetEmployeeSummaryAsync}) cho các module khác sử dụng dưới dạng Dependency Inversion, loại bỏ hoàn toàn việc truy vấn trực tiếp vào schema dữ liệu của module Biometrics.
+\end{itemize}
+
+\subsection{Cơ chế Giao tiếp Liên Module Bất đồng bộ (In-Memory Event Bus)}
+Để đảm bảo tính độc lập tối đa giữa các module, hệ sinh thái sử dụng kiến trúc giao tiếp bất đồng bộ qua Sự kiện Tích hợp (Integration Events) thông qua thành phần \texttt{InMemoryEventBus}. 
+
+Khi một hành động nghiệp vụ tại Module A hoàn tất, một sự kiện được xuất bản (\texttt{PublishAsync}). Hệ thống \texttt{InMemoryEventBus} sẽ định tuyến thông điệp tới tất cả các lớp xử lý sự kiện (\texttt{IIntegrationEventHandler<TEvent>}) đã được đăng ký tại Module B, C hoặc D. Đặc biệt, mỗi lần phân phối sự kiện, \texttt{InMemoryEventBus} tự động tạo một Service Scope mới (\texttt{IServiceProvider.CreateScope()}) nhằm đảm bảo tính cô lập hoàn toàn về vòng đời của các \texttt{DbContext} độc lập giữa các module.
+
+\subsection{Cơ chế Xử lý Ngoại lệ Tập trung và Chuẩn hóa Phản hồi HTTP (RFC 7807)}
+Nhằm đảm bảo an toàn hệ thống và bảo mật thông tin nội bộ, lớp trung gian \texttt{GlobalExceptionMiddleware} được thiết lập tại điểm đầu của HTTP Pipeline trong \texttt{SmartOffice.Api}. Middleware này đánh chặn mọi lỗi chưa được xử lý (Unhandled Exceptions), ghi log chi tiết và định dạng lại thông báo lỗi phản hồi về cho máy trạm tuân thủ nghiêm ngặt tiêu chuẩn \textbf{RFC 7807 (Problem Details for HTTP APIs)}:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Mã 400 Bad Request}: Trả về khi người dùng gửi dữ liệu vi phạm quy tắc định dạng hoặc logic kiểm định (Validation Failure).
+    \item \textbf{Mã 404 Not Found}: Trả về khi tài nguyên định danh không tồn tại trong hệ thống.
+    \item \textbf{Mã 409 Conflict}: Trả về khi xảy ra xung đột dữ liệu (ví dụ: đăng ký mã nhân viên đã tồn tại, hoặc trùng lặp vector sinh trắc học khuôn mặt).
+    \item \textbf{Mã 500 Internal Server Error}: Trả về khi phát sinh sự cố hệ thống không mong muốn, ẩn giấu chi tiết StackTrace để bảo đảm an toàn thông tin máy chủ.
+\end{itemize}
+
+\subsection{Quy trình Quản lý Mã nguồn GitFlow và Chuẩn Conventional Commits}
+Tuân thủ chuẩn đầu ra \textbf{CLO2}, nhóm phát triển thiết lập quy trình quản lý mã nguồn chuyên nghiệp trên nền tảng GitHub:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Chiến lược Phân nhánh (GitFlow Branching Model)}:
+    \begin{itemize}
+        \item \texttt{main}: Nhánh ổn định tuyệt đối, chỉ chứa mã nguồn đã qua kiểm thử và sẵn sàng triển khai môi trường Production.
+        \item \texttt{develop}: Nhánh tích hợp trung tâm của toàn bộ nhóm phát triển cho giai đoạn Sprint hiện tại.
+        \item \texttt{feature/<tên-tính-năng>}: Nhánh làm việc riêng biệt cho từng thành viên (ví dụ: \texttt{feature/core-modular-architecture}, \texttt{feature/module-biometrics-attendance}). Khi hoàn thành, tạo Pull Request để merge vào nhánh \texttt{develop} sau khi đã trải qua Code Review.
+    \end{itemize}
+    \item \textbf{Quy chuẩn Thông điệp Commit (Conventional Commits)}: Toàn bộ lịch sử commit phải tuân thủ cú pháp \texttt{<type>(<scope>): <mô-tả-ngắn>}, ví dụ: \texttt{feat(biometrics): implement cosine similarity face identification}, \texttt{test(arch): verify module isolation boundaries}. Bảng~\ref{tab:conventional_commits} trình bày các tiền tố bắt buộc sử dụng.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Quy chuẩn thông điệp Conventional Commits trong dự án}
+\label{tab:conventional_commits}
+\begin{tabular}{|C{2.5cm}|L{4.2cm}|L{8.3cm}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Tiền tố (Type)} & \textbf{Ý nghĩa Kỹ thuật} & \textbf{Ví dụ Thực tế trong Dự án} \\
+\hline
+\texttt{feat} & Bổ sung tính năng mới & \texttt{feat(attendance): add 5-minute debounce check-in rule} \\
+\hline
+\rowcolor{rowlight}
+\texttt{fix} & Sửa lỗi phần mềm & \texttt{fix(biometrics): resolve vector quality validation boundary} \\
+\hline
+\texttt{refactor} & Tối ưu hóa cấu trúc mã nguồn & \texttt{refactor(core): decouple event publishing into background bus} \\
+\hline
+\rowcolor{rowlight}
+\texttt{test} & Bổ sung/chỉnh sửa kiểm thử & \texttt{test(isolation): add reflection test for module dependencies} \\
+\hline
+\texttt{docs} & Cập nhật tài liệu kỹ thuật & \texttt{docs(latex): integrate session 3 and 4 architecture chapters} \\
+\hline
+\rowcolor{rowlight}
+\texttt{chore} & Cấu hình công cụ, phụ thuộc & \texttt{chore(deps): update npgsql and ef core to version 10.0} \\
+\hline
+\end{tabular}
+\end{table}
+
+% ============================================================================
+% CHƯƠNG 7: HIỆN THỰC HÓA MODULE 1: QUẢN TRỊ HỒ SƠ VÀ SINH TRẮC HỌC
+% ============================================================================
+\section{Hiện thực Hóa Module 1: Quản trị Hồ sơ và Sinh trắc học (Tuần 4)}
+
+\subsection{Mục tiêu và Phạm vi Nghiệp vụ của Module 1}
+Module 1 (\texttt{SmartOffice.Modules.Biometrics}) là phân hệ nền tảng đầu tiên được xây dựng trong Sprint 1 của dự án. Module này nắm giữ trách nhiệm cốt lõi:
+\begin{itemize}[leftmargin=1.5em]
+    \item Quản lý danh mục cơ cấu tổ chức phòng ban trong doanh nghiệp.
+    \item Quản trị hồ sơ toàn diện của nhân viên (mã nhân viên, họ tên, email chuẩn hóa, ảnh chân dung, ca làm việc mặc định).
+    \item Quản lý kho mẫu sinh trắc học: lưu trữ, kiểm định chất lượng và thực hiện thuật toán so khớp vector đặc trưng khuôn mặt 512 chiều được trích xuất từ mô hình mạng nơ-ron nhận diện khuôn mặt (Deep Learning Embeddings).
+\end{itemize}
+
+\subsection{Cấu trúc 4 Tầng Clean Architecture Nội bộ Module Biometrics}
+Mỗi module nghiệp vụ được cấu trúc nội bộ theo 4 phân tầng độc lập nhằm bảo đảm tính trong sáng và dễ bảo trì:
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Tầng Domain (\texttt{Domain/})}: Trái tim của module, định nghĩa các thực thể nghiệp vụ cốt lõi (\texttt{Department}, \texttt{Employee}, \texttt{BiometricVector}) và các quy tắc toán học sinh trắc học thuần túy (\texttt{BiometricMath}). Tầng này hoàn toàn độc lập, không phụ thuộc vào EF Core hay bất kỳ thư viện ngoài nào.
+    \item \textbf{Tầng Application (\texttt{Application/})}: Điều phối luồng xử lý nghiệp vụ, định nghĩa các DTOs yêu cầu/phản hồi, giao diện dịch vụ (\texttt{IBiometricsService}), lớp triển khai (\texttt{BiometricsService}), và dịch vụ cung cấp dữ liệu liên module (\texttt{BiometricsEmployeeLookupService}).
+    \item \textbf{Tầng Infrastructure (\texttt{Infrastructure/})}: Quản trị kết nối cơ sở dữ liệu riêng biệt thông qua \texttt{BiometricsDbContext}, ánh xạ các bảng vào schema độc lập \texttt{biometrics} trong PostgreSQL.
+    \item \textbf{Tầng Endpoints (\texttt{Endpoints/})}: Hiện thực bộ điều khiển giao tiếp \texttt{BiometricsController} tuân thủ phong cách kiến trúc RESTful APIs.
+\end{enumerate}
+
+Sơ đồ phân tầng Clean Architecture nội bộ được minh họa chi tiết trong Hình~\ref{fig:biometrics_clean_architecture}.
+
+\begin{figure}[H]
+\centering
+\fcolorbox{primaryblue!75}{white}{%
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[
+    layerbox/.style={rectangle, draw=primaryblue, line width=1.0pt, rounded corners=4pt, align=center, font=\footnotesize},
+    inarrow/.style={-{Stealth[length=2.5mm]}, line width=1.1pt, draw=primaryblue!90!black}
+]
+
+\node[layerbox, fill=primaryblue!10, minimum width=15cm, minimum height=1.1cm] (Endpoints) at (0, 3.9) {\textbf{Tầng Endpoints (API Controller)}: \texttt{BiometricsController} (8 RESTful APIs, Swagger Docs)};
+\node[layerbox, fill=headerblue!60, minimum width=15cm, minimum height=1.1cm] (App) at (0, 2.6) {\textbf{Tầng Application}: \texttt{BiometricsService}, \texttt{BiometricsEmployeeLookupService}, DTOs, Event Publishing};
+\node[layerbox, fill=lightgreen!60, minimum width=15cm, minimum height=1.1cm] (Domain) at (0, 1.3) {\textbf{Tầng Domain (Cốt lõi nghiệp vụ)}: \texttt{Department}, \texttt{Employee}, \texttt{BiometricVector}, \texttt{BiometricMath}};
+\node[layerbox, fill=lightorange!60, minimum width=15cm, minimum height=1.1cm] (Infra) at (0, 0.0) {\textbf{Tầng Infrastructure}: \texttt{BiometricsDbContext} (Schema: \texttt{biometrics}, PostgreSQL EF Core)};
+
+\draw[inarrow] (Endpoints.south) -- (App.north);
+\draw[inarrow] (App.south) -- (Domain.north);
+\draw[inarrow] (Infra.north) -- (Domain.south);
+
+\end{tikzpicture}
+}}
+\caption{Mô hình 4 phân tầng Clean Architecture nội bộ trong Module Biometrics}
+\label{fig:biometrics_clean_architecture}
+\end{figure}
+
+\subsection{Giải thuật Toán học và Các Ngưỡng Sinh trắc học (BiometricMath)}
+Mỗi khuôn mặt đăng ký vào hệ thống được biểu diễn dưới dạng một vector thực 512 chiều $V = [v_1, v_2, \dots, v_{512}] \in \mathbb{R}^{512}$. Để đo lường mức độ tương đồng giữa hai vector đặc trưng khuôn mặt $A$ và $B$, hệ thống áp dụng giải thuật \textbf{Độ tương đồng Cosine (Cosine Similarity)}:
+
+\begin{equation}
+S_C(A, B) = \cos(\theta) = \frac{A \cdot B}{\|A\|_2 \, \|B\|_2} = \frac{\sum_{i=1}^{512} A_i \, B_i}{\sqrt{\sum_{i=1}^{512} A_i^2} \cdot \sqrt{\sum_{i=1}^{512} B_i^2}}
+\end{equation}
+
+Trong đó:
+\begin{itemize}[leftmargin=1.5em]
+    \item $A \cdot B$: Tích vô hướng (Dot Product) của hai vector đặc trưng.
+    \item $\|A\|_2, \|B\|_2$: Độ chuẩn Euclidean (L2 Norm) của từng vector.
+    \item $S_C(A, B) \in [-1, 1]$: Giá trị càng tiệm cận 1.0 thể hiện mức độ tương đồng khuôn mặt càng cao.
+\end{itemize}
+
+Dựa trên các nghiên cứu thực nghiệm và tiêu chuẩn an toàn sinh trắc học, lớp \texttt{BiometricMath} thiết lập 3 ngưỡng định lượng nghiêm ngặt:
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Ngưỡng Chất lượng Khuôn mặt (\texttt{Quality Score} $\ge 100.0$)}: Ảnh chụp đăng ký ban đầu phải đạt điểm chất lượng tối thiểu là 100.0 (do mô hình AI trích xuất đánh giá dựa trên độ sáng, góc nghiêng khuôn mặt và độ sắc nét). Mọi vector có chất lượng dưới ngưỡng này đều bị từ chối ngay lập tức để tránh làm ô nhiễm cơ sở dữ liệu mẫu.
+    \item \textbf{Ngưỡng Kiểm tra Trùng lặp Sinh trắc học (\texttt{Duplicate Threshold} $= 0.85$)}: Trước khi lưu một mẫu vector mới cho nhân viên B, hệ thống tiến hành đối soát với toàn bộ vector đang hoạt động của tất cả nhân viên khác trong hệ thống. Nếu tồn tại bất kỳ vector nào có độ tương đồng $S_C \ge 0.85$, hệ thống lập tức chặn lại và trả về lỗi xung đột \texttt{DUPLICATE\_BIOMETRIC} (Mã HTTP 409 Conflict). Cơ chế này ngăn chặn tuyệt đối gian lận giả mạo danh tính hoặc một nhân viên đăng ký nhầm ảnh người khác.
+    \item \textbf{Ngưỡng Nhận diện Danh tính (\texttt{Match Threshold} $= 0.70$)}: Trong bài toán nhận diện khuôn mặt $1:N$ tại cửa ra vào, một vector khuôn mặt mới từ camera sẽ được khớp thành công với nhân viên nếu độ tương đồng lớn nhất $S_C \ge 0.70$.
+\end{enumerate}
+
+\subsection{Cung cấp Dữ liệu Liên Module qua Contract Interface}
+Nhằm tuân thủ nguyên tắc không được truy cập trực tiếp chéo cơ sở dữ liệu, Module Biometrics triển khai lớp \texttt{BiometricsEmployeeLookupService} hiện thực hóa giao diện khế ước \texttt{IEmployeeLookupContract} được định nghĩa trong \texttt{SharedKernel}. Khi Module Điểm danh (Attendance) hoặc Module Báo cáo (Reporting) cần hiển thị tên nhân viên, mã phòng ban hoặc kiểm tra trạng thái hoạt động của nhân sự, các module này chỉ việc tiêm (\texttt{inject}) \texttt{IEmployeeLookupContract}. Điều này đảm bảo:
+\begin{itemize}[leftmargin=1.5em]
+    \item Module Biometrics toàn quyền quản lý schema \texttt{biometrics} và logic dữ liệu của mình.
+    \item Nếu cấu trúc bảng nhân viên trong Module Biometrics có thay đổi thì các module khác hoàn toàn không bị ảnh hưởng, loại bỏ hoàn toàn hiện tượng lan truyền lỗi (Cascading Failure).
+\end{itemize}
+
+\subsection{Đặc tả Giao diện Lập trình RESTful Endpoints của Module Biometrics}
+Module Biometrics công bố 8 điểm cuối API chuẩn RESTful phục vụ giao tiếp với hệ thống Web Quản trị React và Dịch vụ Nhận diện AI, được liệt kê đầy đủ trong Bảng~\ref{tab:biometrics_api_spec}.
+
+\begin{table}[H]
+\centering
+\caption{Danh mục các Endpoints RESTful của Module Biometrics}
+\label{tab:biometrics_api_spec}
+\begin{tabular}{|C{1.8cm}|M{5.6cm}|L{4.2cm}|L{3.4cm}|}
+\hline
+\rowcolor{headerblue}
+\textbf{Phương thức} & \textbf{Đường dẫn (Route)} & \textbf{Ý nghĩa Nghiệp vụ} & \textbf{Mã HTTP Trả về} \\
+\hline
+\texttt{GET} & /api/biometrics/departments & Lấy danh sách toàn bộ phòng ban kèm số lượng nhân sự. & 200 OK \\
+\hline
+\rowcolor{rowlight}
+\texttt{POST} & /api/biometrics/departments & Tạo mới phòng ban trong cơ cấu tổ chức doanh nghiệp. & 201 Created, 400 Bad Request \\
+\hline
+\texttt{GET} & /api/biometrics/employees & Lấy danh sách nhân viên có phân trang và lọc theo phòng ban. & 200 OK \\
+\hline
+\rowcolor{rowlight}
+\texttt{POST} & /api/biometrics/employees & Tạo mới hồ sơ nhân viên và phát sự kiện tích hợp. & 201 Created, 409 Conflict \\
+\hline
+\texttt{GET} & /api/biometrics/employees/\{id\} & Xem chi tiết hồ sơ nhân viên và danh sách mẫu khuôn mặt. & 200 OK, 404 Not Found \\
+\hline
+\rowcolor{rowlight}
+\texttt{DELETE} & /api/biometrics/employees/\{id\} & Xóa mềm hồ sơ nhân viên và vô hiệu hóa quyền truy cập. & 204 No Content, 404 Not Found \\
+\hline
+\texttt{POST} & /api/biometrics/employees/\{id\}/\allowbreak vectors & Đăng ký vector mẫu khuôn mặt mới (Kiểm tra chất lượng và trùng lặp). & 201 Created, 400, 409 Conflict \\
+\hline
+\rowcolor{rowlight}
+\texttt{POST} & /api/biometrics/identify & Nhận diện danh tính $1:N$ từ vector khuôn mặt do camera gửi lên. & 200 OK \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Kiểm thử Đơn vị và Đánh giá Mức độ Hoàn thiện Kiến trúc}
+Để kiểm chứng chất lượng mã nguồn đáp ứng yêu cầu của buổi đánh giá đồ án, dự án xây dựng bộ kiểm thử tự động toàn diện trong \texttt{SmartOffice.UnitTests}:
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Kiểm thử Cô lập Ranh giới Kiến trúc (\texttt{ArchitectureIsolationTests})}:
+    \begin{itemize}
+        \item \texttt{Modules\_Should\_Not\_Reference\_Each\_Other\_Directly}: Sử dụng Reflection quét qua toàn bộ Assembly của cả 5 module nghiệp vụ, kiểm tra danh sách phụ thuộc và khẳng định không có bất kỳ module nào tham chiếu trực tiếp đến module khác.
+        \item \texttt{Each\_Module\_DbContext\_Should\_Have\_Unique\_Isolated\_Database\_Schema}: Khẳng định 5 lớp DbContext cấu hình 5 schema hoàn toàn tách biệt: \texttt{biometrics}, \texttt{attendance}, \texttt{occupancy}, \texttt{security}, và \texttt{reporting}.
+    \end{itemize}
+    \item \textbf{Kiểm thử Nghiệp vụ và Giao tiếp Sự kiện (\texttt{ModulesAndEventBusTests})}:
+    \begin{itemize}
+        \item \texttt{Biometrics\_Should\_Detect\_Duplicate\_Face\_And\_Identify\_1ToN}: Khởi tạo hai nhân viên, nạp vector mẫu cho nhân viên 1, sau đó thử đăng ký vector gần trùng lặp ($S_C > 0.85$) cho nhân viên 2. Kết quả kiểm thử xác nhận hệ thống từ chối đăng ký với mã lỗi \texttt{DUPLICATE\_BIOMETRIC}, và thuật toán $1:N$ nhận diện chính xác danh tính nhân viên 1.
+        \item \texttt{InterModule\_Communication\_Should\_Sync\_Biometrics\_Attendance\_And\_Reporting}: Xác nhận luồng đồng bộ sự kiện qua \texttt{InMemoryEventBus}: khi nhân viên được tạo tại Module Biometrics và chấm công tại Module Attendance, Module Reporting tự động nhận sự kiện và cập nhật bảng thống kê chính xác 100\%.
+    \end{itemize}
+\end{enumerate}
+
+Toàn bộ các ca kiểm thử đều vượt qua thành công với kết quả \textbf{Passed 4/4 (100\%)} khi thực thi lệnh \texttt{dotnet test}, khẳng định độ tin cậy và sự tuân thủ kiến trúc nghiêm ngặt của hệ sinh thái backend.
+
+% ============================================================================
+% CHƯƠNG 8: KẾT LUẬN VÀ KẾ HOẠCH PHÁT TRIỂN TIẾP THEO
+% ============================================================================
+\section{Kết luận và Kế hoạch Phát triển Tiếp theo}
+Hồ sơ thiết kế và tài liệu kỹ thuật trên đã mô tả toàn diện từ kiến trúc tổng thể, đặc tả yêu cầu, thiết kế cơ sở dữ liệu phân rã 5 schema độc lập, đến việc hiện thực hóa mã nguồn mẫu trong Tuần 3 (Khởi tạo Base Code .NET và Quy trình GitFlow) và Tuần 4 (Hoàn thành Module 1: Quản trị Hồ sơ và Sinh trắc học theo mô hình Clean Architecture 4 phân tầng). Hệ sinh thái mã nguồn backend đã được kiểm chứng tính cô lập kiến trúc và độ chính xác nghiệp vụ thông qua các bài kiểm thử tự động đạt tỷ lệ thành công 100\%.
+
+Trong các giai đoạn tiếp theo của đồ án, nhóm phát triển sẽ bám sát kế hoạch đào tạo:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Tuần 5 \& Tuần 6}: Hoàn thiện trọn vẹn Module 2 (Điểm danh \& Chấm công), tích hợp bộ lọc Debounce 5 phút chống spam check-in, cấu hình hoàn chỉnh các luồng xử lý sự kiện liên module giữa Biometrics, Attendance và Reporting.
+    \item \textbf{Tuần 7}: Tích hợp dịch vụ lưu trữ đối tượng Cloudflare R2 / MinIO chuẩn giao thức AWS S3, hiện thực hóa cơ chế sinh đường dẫn truy cập bảo mật có thời hạn (Presigned URLs) cho ảnh bằng chứng chấm công và clip an ninh.
+    \item \textbf{Tuần 8 \& Tuần 9}: Đóng gói toàn bộ hệ thống đa dịch vụ bằng Docker Compose với kỹ thuật Multi-stage build tối ưu dung lượng; Thiết lập Pipeline tự động hóa CI/CD với Jenkins để kiểm thử và build tự động khi có Pull Request mới.
+    \item \textbf{Tuần 10}: Hoàn thiện hồ sơ nghiệm thu kỹ thuật, rà soát mã nguồn toàn diện và chuẩn bị bảo vệ chính thức trước hội đồng chấm thi đồ án.
+\end{itemize}
 
 \end{document}
