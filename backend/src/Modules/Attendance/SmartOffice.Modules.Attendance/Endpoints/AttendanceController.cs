@@ -64,4 +64,16 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
 
         return Created($"/api/v1/attendance/leaves/{result.Value.Id}", result.Value);
     }
+
+    [HttpPost("mark-absent")]
+    public async Task<IActionResult> MarkDailyAbsent([FromQuery] DateOnly? date, CancellationToken ct)
+    {
+        var result = await attendanceService.MarkDailyAbsentEmployeesAsync(date, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
 }

@@ -10,12 +10,12 @@ services:
     restart: unless-stopped
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=smartoffice_db;Username=postgres;Password=postgres_password
-      - Storage__Provider=CloudflareR2 # or MinIO
-      - Storage__Endpoint=https://<account_id>.r2.cloudflarestorage.com
-      - Storage__AccessKey=${R2_ACCESS_KEY}
-      - Storage__SecretKey=${R2_SECRET_KEY}
-      - Storage__BucketName=smartoffice-media
+      - ConnectionStrings__Database=Host=postgres;Port=5432;Database=smartoffice_db;Username=postgres;Password=postgres_password
+      - ObjectStorage__Provider=CloudflareR2 # or MinIO
+      - ObjectStorage__Endpoint=https://<account_id>.r2.cloudflarestorage.com
+      - ObjectStorage__AccessKey=${R2_ACCESS_KEY}
+      - ObjectStorage__SecretKey=${R2_SECRET_KEY}
+      - ObjectStorage__BucketName=smartoffice-media
       - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
       - Telegram__ChatId=${TELEGRAM_CHAT_ID}
       - AiService__BaseUrl=http://ai_service:8000

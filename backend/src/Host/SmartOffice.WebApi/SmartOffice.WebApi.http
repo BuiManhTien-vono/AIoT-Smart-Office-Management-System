@@ -1,34 +1,29 @@
 @HostAddress = http://localhost:5155
 
-### 1. Kiểm tra trạng thái hệ thống & 5 Schema độc lập
+### 1. Kiểm tra trạng thái hệ thống, Swagger & 5 Schema độc lập
 GET {{HostAddress}}/api/health
 Accept: application/json
 
-### 2. [Module 1 - Biometrics] Tạo Phòng ban mới
+### 2. Kiểm tra OpenAPI / Swagger JSON Spec
+GET {{HostAddress}}/swagger/v1/swagger.json
+Accept: application/json
+
+### =========================================================================
+### MODULE 1: BIOMETRICS (Schema: biometrics)
+### =========================================================================
+
+### 3. [Module 1 - Biometrics] Lấy danh sách Phòng ban (Đã có sẵn DEPT_IT & DEPT_HR từ Seed)
+GET {{HostAddress}}/api/v1/biometrics/departments
+Accept: application/json
+
+### 4. [Module 1 - Biometrics] Tạo Phòng ban mới
 POST {{HostAddress}}/api/v1/biometrics/departments
 Content-Type: application/json
 
 {
-  "departmentCode": "DEPT_IT",
-  "departmentName": "Phòng Kỹ thuật Phần mềm & AI",
-  "description": "Phát triển hệ thống Backend & Computer Vision"
-}
-
-### 3. [Module 1 - Biometrics] Lấy danh sách Phòng ban
-GET {{HostAddress}}/api/v1/biometrics/departments
-Accept: application/json
-
-### 4. [Module 2 - Attendance] Tạo Ca làm việc Hành chính (08:00 - 17:30, ân hạn 15 phút)
-POST {{HostAddress}}/api/v1/attendance/shifts
-Content-Type: application/json
-
-{
-  "shiftCode": "SHIFT_HC",
-  "shiftName": "Ca Hành chính Tiêu chuẩn",
-  "startTime": "08:00:00",
-  "endTime": "17:30:00",
-  "graceMinutes": 15,
-  "isDefault": true
+  "departmentCode": "DEPT_AI_OPS",
+  "departmentName": "Phòng Vận hành AI & Camera",
+  "description": "Giám sát hạ tầng Camera RTSP và mô hình thị giác máy tính"
 }
 
 ### 5. [Module 1 - Biometrics] Tạo Hồ sơ Nhân viên mới (Sẽ tự động bắn Event sang Module Reporting!)
@@ -44,16 +39,153 @@ Content-Type: application/json
   "defaultShiftId": "22222222-2222-2222-2222-222222222201"
 }
 
-### 6. [Module 2 - Attendance] Điểm danh Chấm công tự động (Tự động hỏi Biometrics qua Contract & bắn Event sang Reporting)
+### 6. [Module 1 - Biometrics] Lấy danh sách Nhân viên
+GET {{HostAddress}}/api/v1/biometrics/employees
+Accept: application/json
+
+### =========================================================================
+### MODULE 2: ATTENDANCE (Schema: attendance)
+### =========================================================================
+
+### 7. [Module 2 - Attendance] Lấy danh sách Ca làm việc (Đã có sẵn SHIFT_HC 08:00-17:30 từ Seed)
+GET {{HostAddress}}/api/v1/attendance/shifts
+Accept: application/json
+
+### 8. [Module 2 - Attendance] Điểm danh Chấm công tự động (First-In / Last-Out + Anti-Spam 60s)
+# Lưu ý: Thay employeeId bằng ID thực tế trả về từ Bước 5 hoặc Bước 6
 POST {{HostAddress}}/api/v1/attendance/check
 Content-Type: application/json
 
 {
   "employeeId": "00000000-0000-0000-0000-000000000001",
   "matchConfidence": 0.94,
-  "snapshotObjectKey": "attendance/2026-10-26/NV001_in.jpg"
+  "snapshotObjectKey": "attendance/2026-11-03/NV001_in.jpg"
 }
 
-### 7. [Module 5 - Reporting] Xem bảng tổng hợp tự động đồng bộ qua In-Memory Event Bus
+### 9. [Module 2 - Attendance] Xem bảng chấm công hàng ngày
+GET {{HostAddress}}/api/v1/attendance/daily
+Accept: application/json
+
+### 10. [Module 2 - Attendance] Chốt vắng mặt tự động cuối ngày cho nhân sự không phát sinh Check-in (FR-ATT-06)
+POST {{HostAddress}}/api/v1/attendance/mark-absent?workDate=2026-11-03
+Accept: application/json
+
+### =========================================================================
+### MODULE 3: OCCUPANCY (Schema: occupancy + SignalR /hubs/occupancy)
+### =========================================================================
+
+### 11. [Module 3 - Occupancy] Lấy danh sách Camera (Đã có sẵn CAM_GATE_01 & CAM_DESK_IT từ Seed)
+GET {{HostAddress}}/api/v1/occupancy/cameras
+Accept: application/json
+
+### 12. [Module 3 - Occupancy] Tạo Vị trí Bàn làm việc & Đa giác chuẩn hóa [0.0, 1.0] (W2-2)
+POST {{HostAddress}}/api/v1/occupancy/seats
+Content-Type: application/json
+
+{
+  "seatCode": "SEAT_IT_01",
+  "seatName": "Bàn làm việc Kỹ thuật 01",
+  "cameraId": "33333333-3333-3333-3333-333333333302",
+  "departmentId": "11111111-1111-1111-1111-111111111101",
+  "assignedEmployeeId": null,
+  "zoneType": "WORK_DESK",
+  "polygonPoints": [
+    { "x": 0.12, "y": 0.40 },
+    { "x": 0.28, "y": 0.40 },
+    { "x": 0.28, "y": 0.65 },
+    { "x": 0.12, "y": 0.65 }
+  ]
+}
+
+### 13. [Module 3 - Occupancy] Lấy cấu hình vùng ảo (Zone Config) cho AI Service (W2-1)
+GET {{HostAddress}}/api/v1/occupancy/cameras/CAM_DESK_IT/zones
+Accept: application/json
+
+### 14. [Module 3 - Occupancy] Đồng bộ trạng thái chỗ ngồi từ AI Service (W2-3 & W2-4: FSM 4 trạng thái + SignalR)
+POST {{HostAddress}}/api/v1/occupancy/state-sync
+Content-Type: application/json
+
+{
+  "cameraCode": "CAM_DESK_IT",
+  "capturedAtUtc": "2026-11-03T09:15:00Z",
+  "frameSequence": 150,
+  "observations": [
+    {
+      "seatCode": "SEAT_IT_01",
+      "isOccupied": true,
+      "unoccupiedContinuousFrames": 0,
+      "unoccupiedContinuousSeconds": 0,
+      "detectedEmployeeId": null,
+      "detectionConfidence": 0.92
+    }
+  ]
+}
+
+### 15. [Module 3 - Occupancy] Xem danh sách trạng thái Bàn làm việc & Xem lịch sử phiên ngồi
+GET {{HostAddress}}/api/v1/occupancy/seats
+Accept: application/json
+
+### =========================================================================
+### MODULE 4: SECURITY (Schema: security - OT Registration & Night Guard)
+### =========================================================================
+
+### 16. [Module 4 - Security] Đăng ký lịch làm thêm ngoài giờ - OT Registration (W2-6)
+POST {{HostAddress}}/api/v1/security/ot-registrations
+Content-Type: application/json
+
+{
+  "employeeId": "00000000-0000-0000-0000-000000000001",
+  "otDate": "2026-11-03",
+  "startTime": "19:00:00",
+  "endTime": "22:00:00",
+  "reason": "Triển khai hệ thống Smart Office Sprint 2",
+  "approvalStatus": "APPROVED"
+}
+
+### 17. [Module 4 - Security] Kiểm tra trạng thái Chế độ Trực đêm (Night Guard: 19:00-06:30 & T7/CN)
+GET {{HostAddress}}/api/v1/security/incidents/night-guard-status?checkTimeUtc=2026-11-03T21:00:00Z
+Accept: application/json
+
+### 18. [Module 4 - Security] Đánh giá & Ghi nhận phát hiện người ngoài giờ (Cây quyết định 3 Mức Cảnh báo)
+# Nếu detectedEmployeeId = null -> Kích hoạt Cảnh báo Khẩn cấp Mức 3 (LEVEL_3_BREACH)
+POST {{HostAddress}}/api/v1/security/incidents
+Content-Type: application/json
+
+{
+  "cameraId": "33333333-3333-3333-3333-333333333301",
+  "departmentId": "11111111-1111-1111-1111-111111111101",
+  "detectedEmployeeId": null,
+  "isSpoofingAttempt": false,
+  "snapshotObjectKey": "security_evidence/2026-11-03/stranger_gate01.jpg",
+  "videoClipObjectKey": "security_evidence/2026-11-03/stranger_gate01_10s.mp4",
+  "detectedAtUtc": "2026-11-03T22:15:00Z"
+}
+
+### 19. [Module 4 - Security] Lấy danh sách Sự cố An ninh kèm Presigned URL bằng chứng
+GET {{HostAddress}}/api/v1/security/incidents
+Accept: application/json
+
+### =========================================================================
+### MODULE 5: REPORTING (Schema: reporting - Dashboard, RBAC & Xuất CSV)
+### =========================================================================
+
+### 20. [Module 5 - Reporting] Đăng nhập tài khoản Quản trị (Đã seed sẵn admin_smartoffice / Admin@123)
+POST {{HostAddress}}/api/v1/reporting/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin_smartoffice",
+  "password": "Admin@123"
+}
+
+### 21. [Module 5 - Reporting] Xem bảng tổng hợp hàng ngày tự động đồng bộ qua In-Memory Event Bus
 GET {{HostAddress}}/api/v1/reporting/daily-summaries
 Accept: application/json
+
+### 22. [Module 5 - Reporting] Xem báo cáo tổng hợp theo Tháng & Phòng ban (US-REP-01)
+GET {{HostAddress}}/api/v1/reporting/monthly-report?year=2026&month=11
+Accept: application/json
+
+### 23. [Module 5 - Reporting] Xuất tệp báo cáo CSV chuẩn UTF-8 BOM mở trực tiếp trên Excel (US-REP-02)
+GET {{HostAddress}}/api/v1/reporting/export-csv?year=2026&month=11
+Accept: text/csv

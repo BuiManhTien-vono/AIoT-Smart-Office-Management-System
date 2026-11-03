@@ -90,3 +90,125 @@ public sealed class AttendanceCheckedEventHandler(ReportingDbContext dbContext)
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }
+
+/// <summary>
+/// Bộ lắng nghe sự kiện tích hợp tại Module Reporting:
+/// Tự động tăng AbsentCount khi tiến trình cuối ngày của Module Attendance chốt vắng mặt không phép.
+/// </summary>
+public sealed class AttendanceAbsentMarkedEventHandler(ReportingDbContext dbContext)
+    : IIntegrationEventHandler<AttendanceAbsentMarkedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceAbsentMarkedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        var summary = await dbContext.DailyDepartmentSummaries
+            .FirstOrDefaultAsync(
+                x => x.SummaryDate == integrationEvent.WorkDate && x.DepartmentId == integrationEvent.DepartmentId,
+                cancellationToken);
+
+        if (summary is null)
+        {
+            summary = new DailyDepartmentSummary
+            {
+                SummaryDate = integrationEvent.WorkDate,
+                DepartmentId = integrationEvent.DepartmentId,
+                DepartmentCode = "DEPT",
+                TotalEmployees = 1,
+                AbsentCount = 1
+            };
+            dbContext.DailyDepartmentSummaries.Add(summary);
+        }
+        else
+        {
+            summary.AbsentCount += 1;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Bộ lắng nghe sự kiện tích hợp tại Module Reporting (W2-4):
+/// Tự động cộng dồn số lần nhân viên rời bàn quá hạn 15 phút (ProlongedAwayEvents)
+/// khi Module Occupancy phát sự kiện ProlongedAbsenceDetectedIntegrationEvent.
+/// </summary>
+public sealed class ProlongedAbsenceDetectedEventHandler(ReportingDbContext dbContext)
+    : IIntegrationEventHandler<ProlongedAbsenceDetectedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        ProlongedAbsenceDetectedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        var summaryDate = DateOnly.FromDateTime(integrationEvent.OccurredOnUtc.DateTime);
+
+        var summary = await dbContext.DailyDepartmentSummaries
+            .FirstOrDefaultAsync(
+                x => x.SummaryDate == summaryDate && x.DepartmentId == integrationEvent.DepartmentId,
+                cancellationToken);
+
+        if (summary is null)
+        {
+            summary = new DailyDepartmentSummary
+            {
+                SummaryDate = summaryDate,
+                DepartmentId = integrationEvent.DepartmentId,
+                DepartmentCode = "DEPT",
+                TotalEmployees = 1,
+                ProlongedAwayEvents = 1
+            };
+            dbContext.DailyDepartmentSummaries.Add(summary);
+        }
+        else
+        {
+            summary.ProlongedAwayEvents += 1;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Bộ lắng nghe sự kiện tích hợp tại Module Reporting:
+/// Tự động tăng SecurityAlertsCount khi Module Security phát hiện sự cố ngoài giờ hoặc giả mạo khuôn mặt.
+/// </summary>
+public sealed class SecurityIncidentDetectedEventHandler(ReportingDbContext dbContext)
+    : IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        SecurityIncidentDetectedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (!integrationEvent.DepartmentId.HasValue)
+        {
+            return;
+        }
+
+        var summaryDate = DateOnly.FromDateTime(integrationEvent.OccurredOnUtc.DateTime);
+        var deptId = integrationEvent.DepartmentId.Value;
+
+        var summary = await dbContext.DailyDepartmentSummaries
+            .FirstOrDefaultAsync(
+                x => x.SummaryDate == summaryDate && x.DepartmentId == deptId,
+                cancellationToken);
+
+        if (summary is null)
+        {
+            summary = new DailyDepartmentSummary
+            {
+                SummaryDate = summaryDate,
+                DepartmentId = deptId,
+                DepartmentCode = "DEPT",
+                TotalEmployees = 1,
+                SecurityAlertsCount = 1
+            };
+            dbContext.DailyDepartmentSummaries.Add(summary);
+        }
+        else
+        {
+            summary.SecurityAlertsCount += 1;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+}

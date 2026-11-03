@@ -12,11 +12,21 @@ public static class AttendanceModuleExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var useInMemory = string.Equals(configuration["Database:UseInMemory"], "true", StringComparison.OrdinalIgnoreCase);
         var connectionString = configuration.GetConnectionString("Database");
 
         services.AddDbContext<AttendanceDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", AttendanceDbContext.SchemaName)));
+        {
+            if (useInMemory || string.IsNullOrWhiteSpace(connectionString))
+            {
+                options.UseInMemoryDatabase($"SmartOffice_{AttendanceDbContext.SchemaName}");
+            }
+            else
+            {
+                options.UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", AttendanceDbContext.SchemaName));
+            }
+        });
 
         services.AddScoped<IAttendanceService, AttendanceService>();
 

@@ -12,8 +12,8 @@ namespace SmartOffice.Modules.Attendance.Application.Services;
 /// Dịch vụ xử lý nghiệp vụ của Module 2 (Attendance):
 /// - Dùng IEmployeeLookupContract (Phương thức 2) để hỏi thông tin nhân viên từ Module Biometrics.
 /// - Áp dụng bộ lọc chống trùng lặp 5 phút (Debounce 300s).
-/// - Tính toán trạng thái Đúng giờ (ON_TIME), Đi muộn (LATE), Về sớm (EARLY_LEAVE).
-/// - Phát sự kiện AttendanceCheckedIntegrationEvent qua InMemoryEventBus (Phương thức 1).
+/// - Tính toán trạng thái Đúng giờ (ON_TIME), Đi muộn (LATE), Về sớm (EARLY_LEAVE) và Chốt vắng mặt cuối ngày (ABSENT).
+/// - Phát sự kiện AttendanceCheckedIntegrationEvent & AttendanceAbsentMarkedIntegrationEvent qua InMemoryEventBus (Phương thức 1).
 /// </summary>
 public sealed class AttendanceService(
     AttendanceDbContext dbContext,
@@ -331,5 +331,98 @@ public sealed class AttendanceService(
                 l.ApprovalStatus,
                 l.CreatedAt))
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Tiến trình tự động chốt vắng mặt cuối ngày (FR-ATT-06 / US-ATT-03):
+    /// Đối chiếu toàn bộ nhân sự đang hoạt động với danh sách đã check-in và đơn nghỉ phép APPROVED.
+    /// </summary>
+    public async Task<Result<DailyAbsentProcessResponse>> MarkDailyAbsentEmployeesAsync(
+        DateOnly? workDate = null,
+        CancellationToken ct = default)
+    {
+        var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var defaultShift = await dbContext.Shifts
+            .OrderByDescending(s => s.IsDefault)
+            .FirstOrDefaultAsync(ct);
+
+        if (defaultShift is null)
+        {
+            return Result.Failure<DailyAbsentProcessResponse>(
+                new Error("SHIFT_NOT_CONFIGURED", "Hệ thống chưa cấu hình ca làm việc để chốt vắng mặt."));
+        }
+
+        var activeEmployees = await employeeLookup.GetAllActiveAsync(ct);
+        var existingLogEmpIds = (await dbContext.AttendanceLogs
+            .Where(x => x.WorkDate == targetDate)
+            .Select(x => x.EmployeeId)
+            .ToListAsync(ct)).ToHashSet();
+
+        var approvedLeaveEmpIds = (await dbContext.LeaveRequests
+            .Where(l => l.ApprovalStatus == "APPROVED" &&
+                        l.StartDate <= targetDate &&
+                        l.EndDate >= targetDate)
+            .Select(l => l.EmployeeId)
+            .ToListAsync(ct)).ToHashSet();
+
+        var absentCodes = new List<string>();
+        var pendingAbsentEvents = new List<AttendanceAbsentMarkedIntegrationEvent>();
+        int onLeaveCount = 0;
+
+        foreach (var emp in activeEmployees)
+        {
+            if (existingLogEmpIds.Contains(emp.EmployeeId))
+            {
+                continue;
+            }
+
+            if (approvedLeaveEmpIds.Contains(emp.EmployeeId))
+            {
+                onLeaveCount++;
+                continue;
+            }
+
+            var absentLog = new AttendanceLog
+            {
+                EmployeeId = emp.EmployeeId,
+                EmployeeCode = emp.EmployeeCode,
+                ShiftId = emp.DefaultShiftId ?? defaultShift.Id,
+                WorkDate = targetDate,
+                Status = "ABSENT",
+                LateMinutes = 0,
+                EarlyLeaveMinutes = 0,
+                MatchConfidence = 0f
+            };
+
+            dbContext.AttendanceLogs.Add(absentLog);
+            absentCodes.Add(emp.EmployeeCode);
+
+            pendingAbsentEvents.Add(new AttendanceAbsentMarkedIntegrationEvent(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                absentLog.Id,
+                emp.EmployeeId,
+                emp.EmployeeCode,
+                emp.DepartmentId,
+                targetDate));
+        }
+
+        if (pendingAbsentEvents.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(ct);
+
+            foreach (var evt in pendingAbsentEvents)
+            {
+                await eventBus.PublishAsync(evt, ct);
+            }
+        }
+
+        return Result.Success(new DailyAbsentProcessResponse(
+            targetDate,
+            activeEmployees.Count,
+            existingLogEmpIds.Count,
+            onLeaveCount,
+            absentCodes.Count,
+            absentCodes));
     }
 }

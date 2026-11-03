@@ -13,16 +13,23 @@ public static class BiometricsModuleExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var useInMemory = string.Equals(configuration["Database:UseInMemory"], "true", StringComparison.OrdinalIgnoreCase);
         var connectionString = configuration.GetConnectionString("Database");
 
         services.AddDbContext<BiometricsDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", BiometricsDbContext.SchemaName)));
+        {
+            if (useInMemory || string.IsNullOrWhiteSpace(connectionString))
+            {
+                options.UseInMemoryDatabase($"SmartOffice_{BiometricsDbContext.SchemaName}");
+            }
+            else
+            {
+                options.UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", BiometricsDbContext.SchemaName));
+            }
+        });
 
-        // Đăng ký dịch vụ nghiệp vụ nội bộ của Module 1 (Biometrics)
         services.AddScoped<IBiometricsService, BiometricsService>();
-
-        // Đăng ký Contract Interface (Phương thức 2) để các Module khác tra cứu thông tin nhân viên
         services.AddScoped<IEmployeeLookupContract, BiometricsEmployeeLookupService>();
 
         return services;
