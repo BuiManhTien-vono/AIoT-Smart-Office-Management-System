@@ -13,6 +13,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 import argparse
 from typing import Optional
+from contextlib import asynccontextmanager
 
 # Thêm thư mục hiện tại vào sys.path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,33 +29,14 @@ from modules.occupancy.video_stream import VideoStreamProcessor, select_roi_poly
 try:
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import RedirectResponse
     from api.routes_occupancy import router as occupancy_router
     from api.routes_face import router as face_router
 
-    app = FastAPI(
-        title="Smart Office AI Computer Vision Service",
-        description="Dịch vụ AI phân tích thị giác máy tính: Giám sát chỗ ngồi & Nhận diện sinh trắc học",
-        version="1.0.0"
-    )
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Gắn các routes nghiệp vụ
-    if occupancy_router is not None:
-        app.include_router(occupancy_router)
-    if face_router is not None:
-        app.include_router(face_router)
-
     global_detector: Optional[RTDETRHeadDetector] = None
 
-    @app.on_event("startup")
-    def startup_event():
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
         global global_detector
         try:
             model_file = settings.occupancy.ensure_model_exists()
@@ -75,6 +57,34 @@ try:
                 print(f"    - {k}: {v}")
         except Exception as e:
             print(f"[!] Lỗi khi nạp mô hình khuôn mặt: {e}")
+
+        yield
+
+    app = FastAPI(
+        title="Smart Office AI Computer Vision Service",
+        description="Dịch vụ AI phân tích thị giác máy tính: Giám sát chỗ ngồi & Nhận diện sinh trắc học",
+        version="1.0.0",
+        lifespan=lifespan
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Gắn các routes nghiệp vụ
+    if occupancy_router is not None:
+        app.include_router(occupancy_router)
+    if face_router is not None:
+        app.include_router(face_router)
+
+    @app.get("/", include_in_schema=False)
+    def index():
+        """Tự động chuyển hướng về giao diện Swagger UI tài liệu API."""
+        return RedirectResponse(url="/docs")
 
     @app.get("/health")
     def health_check():
