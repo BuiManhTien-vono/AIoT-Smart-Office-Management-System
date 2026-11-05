@@ -4,6 +4,11 @@ Quản lý tham số cho cả 2 module: Occupancy và Face Recognition.
 """
 
 import os
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -59,6 +64,7 @@ class OccupancySettings(BaseModel):
     def _download_with_progress(url: str, output_path: Path):
         import urllib.request
         import sys
+
 
         temp_path = output_path.with_suffix(".downloading")
 

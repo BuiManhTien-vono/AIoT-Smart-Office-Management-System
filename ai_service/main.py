@@ -6,6 +6,11 @@ Entrypoint khởi động AI Service:
 
 import os
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 import argparse
 from typing import Optional
 
