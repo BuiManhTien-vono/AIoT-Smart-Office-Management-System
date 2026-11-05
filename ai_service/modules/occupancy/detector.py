@@ -32,7 +32,7 @@ class RTDETRHeadDetector:
 
     def __init__(
         self,
-        model_path: str = "rtdetr_head.onnx",
+        model_path: Optional[str] = None,
         use_cpu: bool = False,
         conf_threshold: float = 0.35,
         imgsz: int = 960,
@@ -40,6 +40,11 @@ class RTDETRHeadDetector:
     ):
         self.conf_threshold = conf_threshold
         self.imgsz = imgsz
+
+        # Tự động kiểm tra và tải nếu chưa có file model trên máy
+        from shared.config import settings
+        if not model_path or not os.path.exists(model_path):
+            model_path = settings.occupancy.ensure_model_exists()
 
         # Khởi tạo ONNX Engine
         self.engine = OnnxEngine(

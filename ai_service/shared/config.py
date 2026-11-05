@@ -27,11 +27,62 @@ class OccupancySettings(BaseModel):
     primary_weight_path: Path = BASE_DIR / "modules" / "occupancy" / "weights" / "rtdetr_head.onnx"
     legacy_weight_path: Path = BASE_DIR / "models" / "best.onnx"
 
+    # Link tải tự động từ GitHub Releases chính thức
+    model_download_url: str = "https://github.com/BuiManhTien-vono/AIoT-Smart-Office-Management-System/releases/download/v1.0/rt_detr_L-v1.0.0.onnx"
+
     @property
     def model_path(self) -> str:
         if self.primary_weight_path.exists():
             return str(self.primary_weight_path)
-        return str(self.legacy_weight_path)
+        if self.legacy_weight_path.exists():
+            return str(self.legacy_weight_path)
+        return str(self.primary_weight_path)
+
+    def ensure_model_exists(self) -> str:
+        """Kiểm tra và tự động tải mô hình từ GitHub Release nếu máy mới chưa có file."""
+        target_path = self.primary_weight_path
+        if target_path.exists() and target_path.stat().st_size > 10_000_000:
+            return str(target_path)
+
+        if self.legacy_weight_path.exists() and self.legacy_weight_path.stat().st_size > 10_000_000:
+            return str(self.legacy_weight_path)
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\n[!] Chưa tìm thấy file trọng số RT-DETR-L tại: {target_path}")
+        print(f"[*] Đang tự động tải mô hình từ GitHub Releases:")
+        print(f"    URL: {self.model_download_url}")
+        self._download_with_progress(self.model_download_url, target_path)
+        print(f"\n[+] Tải thành công! Mô hình đã sẵn sàng tại: {target_path}\n")
+        return str(target_path)
+
+    @staticmethod
+    def _download_with_progress(url: str, output_path: Path):
+        import urllib.request
+        import sys
+
+        temp_path = output_path.with_suffix(".downloading")
+
+        def reporthook(block_num, block_size, total_size):
+            downloaded = block_num * block_size
+            if total_size > 0:
+                percent = min(100.0, (downloaded / total_size) * 100)
+                mb_down = downloaded / (1024 * 1024)
+                mb_total = total_size / (1024 * 1024)
+                sys.stdout.write(f"\r    [Tải xuống] {percent:5.1f}% [{mb_down:6.1f}MB / {mb_total:6.1f}MB]")
+                sys.stdout.flush()
+
+        try:
+            opener = urllib.request.build_opener()
+            opener.addheaders = [("User-Agent", "Mozilla/5.0 (AIoT-Service)")]
+            urllib.request.install_opener(opener)
+
+            urllib.request.urlretrieve(url, temp_path, reporthook)
+            if temp_path.exists():
+                temp_path.replace(output_path)
+        except Exception as e:
+            if temp_path.exists():
+                temp_path.unlink()
+            raise RuntimeError(f"Lỗi khi tải mô hình từ {url}: {e}")
 
     confidence_threshold: float = 0.35
     imgsz: int = 960

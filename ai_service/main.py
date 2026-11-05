@@ -61,18 +61,17 @@ try:
     @app.on_event("startup")
     def startup_event():
         global global_detector
-        model_file = settings.occupancy.model_path
-        if os.path.exists(model_file):
+        try:
+            model_file = settings.occupancy.ensure_model_exists()
             print(f"[*] Nạp mô hình ONNX RT-DETR-L từ: {model_file}")
-            try:
-                global_detector = RTDETRHeadDetector(
-                    model_path=model_file,
-                    conf_threshold=settings.confidence_threshold,
-                    imgsz=settings.imgsz
-                )
-                print(f"[+] Nạp thành công. Execution Provider: {global_detector.active_provider}")
-            except Exception as e:
-                print(f"[!] Lỗi khi nạp mô hình: {e}")
+            global_detector = RTDETRHeadDetector(
+                model_path=model_file,
+                conf_threshold=settings.confidence_threshold,
+                imgsz=settings.imgsz
+            )
+            print(f"[+] Nạp thành công. Execution Provider: {global_detector.active_provider}")
+        except Exception as e:
+            print(f"[!] Lỗi khi nạp mô hình: {e}")
 
     @app.get("/health")
     def health_check():
