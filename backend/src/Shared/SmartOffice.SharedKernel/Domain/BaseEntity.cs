@@ -5,13 +5,12 @@ namespace SmartOffice.SharedKernel.Domain;
 /// </summary>
 public abstract class BaseEntity
 {
-    public Guid Id { get; protected set; } = Guid.NewGuid();
-    public DateTimeOffset CreatedAt { get; protected set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset? UpdatedAt { get; protected set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? UpdatedAt { get; set; }
 
-    protected void MarkUpdated()
+    public void MarkUpdated()
     {
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
-

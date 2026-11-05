@@ -20,4 +20,5 @@ public interface IEmployeeLookupContract
 {
     Task<EmployeeContractDto?> GetByIdAsync(Guid employeeId, CancellationToken cancellationToken = default);
     Task<EmployeeContractDto?> GetByCodeAsync(string employeeCode, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EmployeeContractDto>> GetAllActiveAsync(CancellationToken cancellationToken = default);
 }

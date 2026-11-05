@@ -60,3 +60,11 @@ public sealed record LeaveRequestResponse(
     string? Reason,
     string ApprovalStatus,
     DateTimeOffset CreatedAt);
+
+public sealed record DailyAbsentProcessResponse(
+    DateOnly WorkDate,
+    int TotalActiveEmployees,
+    int PresentOrCheckedInCount,
+    int OnApprovedLeaveCount,
+    int NewlyMarkedAbsentCount,
+    IReadOnlyList<string> AbsentEmployeeCodes);
