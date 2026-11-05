@@ -1,6 +1,6 @@
 """
 Bộ phát hiện khuôn mặt & 5 điểm mốc giải phẫu (Face Detection & Landmarks).
-Hỗ trợ mô hình SCRFD định dạng ONNX (Offline 100%).
+Hỗ trợ mô hình SCRFD định dạng ONNX (Offline 100%, tự động tải nếu thiếu).
 """
 
 import os
@@ -47,7 +47,14 @@ class SCRFDFaceDetector:
         conf_threshold: float = 0.5,
         use_cpu: bool = False
     ):
-        target_path = model_path or str(settings.face.detector_path)
+        target_path = model_path
+        if not target_path or not os.path.exists(target_path):
+            try:
+                target_path = settings.face.ensure_detector_exists()
+            except Exception as e:
+                print(f"[SCRFDFaceDetector] Warning: Không thể nạp detector: {e}")
+                target_path = str(settings.face.detector_path)
+
         self.model_path = target_path if os.path.exists(target_path) else None
         self.conf_threshold = conf_threshold
         self.use_cpu = use_cpu
@@ -122,7 +129,6 @@ class SCRFDFaceDetector:
 
             input_name = self.engine.input_names[0]
             outputs = self.engine.run({input_name: input_tensor})
-            # Nếu chạy mock hoặc custom post-process
             return results
 
         return results

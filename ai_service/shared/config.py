@@ -119,11 +119,16 @@ class FaceRecognitionSettings(BaseModel):
     recognizer_model: str = "arcface_res50.onnx"
     anti_spoofing_model: str = "anti_spoofing.onnx"
 
+    # Link tải tự động từ GitHub Releases chính thức
+    detector_download_url: str = "https://github.com/BuiManhTien-vono/AIoT-Smart-Office-Management-System/releases/download/v1.0/det_500m.onnx"
+    recognizer_download_url: str = "https://github.com/BuiManhTien-vono/AIoT-Smart-Office-Management-System/releases/download/v1.0/iresnet50.onnx"
+    anti_spoofing_download_url: str = "https://github.com/BuiManhTien-vono/AIoT-Smart-Office-Management-System/releases/download/v1.0/minifasnet_v2.onnx"
+
     @property
     def detector_path(self) -> Path:
         for fname in [self.detector_model, "det_500m.onnx", "det_500m-v1.0.0.onnx"]:
             candidate = self.weights_dir / fname
-            if candidate.exists():
+            if candidate.exists() and candidate.stat().st_size > 2_000_000:
                 return candidate
         return self.weights_dir / self.detector_model
 
@@ -131,7 +136,7 @@ class FaceRecognitionSettings(BaseModel):
     def recognizer_path(self) -> Path:
         for fname in [self.recognizer_model, "iresnet50.onnx"]:
             candidate = self.weights_dir / fname
-            if candidate.exists():
+            if candidate.exists() and candidate.stat().st_size > 100_000_000:
                 return candidate
         return self.weights_dir / self.recognizer_model
 
@@ -139,9 +144,62 @@ class FaceRecognitionSettings(BaseModel):
     def anti_spoofing_path(self) -> Path:
         for fname in [self.anti_spoofing_model, "minifasnet_v2.onnx"]:
             candidate = self.weights_dir / fname
-            if candidate.exists():
+            if candidate.exists() and candidate.stat().st_size > 1_000_000:
                 return candidate
         return self.weights_dir / self.anti_spoofing_model
+
+    def ensure_detector_exists(self) -> str:
+        """Kiểm tra và tự động tải mô hình SCRFD nếu máy chưa có."""
+        target_path = self.detector_path
+        if target_path.exists() and target_path.stat().st_size > 2_000_000:
+            return str(target_path)
+
+        out_path = self.weights_dir / self.detector_model
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\n[!] Chưa tìm thấy file trọng số SCRFD Face Detector tại: {out_path}")
+        print(f"[*] Đang tự động tải mô hình từ GitHub Releases:")
+        print(f"    URL: {self.detector_download_url}")
+        OccupancySettings._download_with_progress(self.detector_download_url, out_path)
+        print(f"\n[+] Tải thành công SCRFD Detector tại: {out_path}\n")
+        return str(out_path)
+
+    def ensure_recognizer_exists(self) -> str:
+        """Kiểm tra và tự động tải mô hình ArcFace iResNet-50 (~174MB) nếu máy chưa có."""
+        target_path = self.recognizer_path
+        if target_path.exists() and target_path.stat().st_size > 100_000_000:
+            return str(target_path)
+
+        out_path = self.weights_dir / self.recognizer_model
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\n[!] Chưa tìm thấy file trọng số ArcFace iResNet-50 (~174MB) tại: {out_path}")
+        print(f"[*] Đang tự động tải mô hình từ GitHub Releases:")
+        print(f"    URL: {self.recognizer_download_url}")
+        OccupancySettings._download_with_progress(self.recognizer_download_url, out_path)
+        print(f"\n[+] Tải thành công ArcFace Recognizer tại: {out_path}\n")
+        return str(out_path)
+
+    def ensure_anti_spoofing_exists(self) -> str:
+        """Kiểm tra và tự động tải mô hình MiniFASNet-V2 Anti-Spoofing nếu máy chưa có."""
+        target_path = self.anti_spoofing_path
+        if target_path.exists() and target_path.stat().st_size > 1_000_000:
+            return str(target_path)
+
+        out_path = self.weights_dir / self.anti_spoofing_model
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\n[!] Chưa tìm thấy file trọng số MiniFASNet-V2 Anti-Spoofing tại: {out_path}")
+        print(f"[*] Đang tự động tải mô hình từ GitHub Releases:")
+        print(f"    URL: {self.anti_spoofing_download_url}")
+        OccupancySettings._download_with_progress(self.anti_spoofing_download_url, out_path)
+        print(f"\n[+] Tải thành công MiniFASNet-V2 tại: {out_path}\n")
+        return str(out_path)
+
+    def ensure_all_models_exist(self) -> Dict[str, str]:
+        """Tự động kiểm tra và đảm bảo cả 3 mô hình khuôn mặt đều đã sẵn sàng."""
+        return {
+            "detector": self.ensure_detector_exists(),
+            "recognizer": self.ensure_recognizer_exists(),
+            "anti_spoofing": self.ensure_anti_spoofing_exists()
+        }
 
     # Ngưỡng cosine similarity cho nhận diện khuôn mặt trùng khớp (FR-BIO-05: 0.85)
     similarity_threshold: float = 0.85

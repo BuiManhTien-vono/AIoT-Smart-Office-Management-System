@@ -1,6 +1,7 @@
 """
 Trích xuất vector đặc trưng khuôn mặt (ArcFace Feature Extraction - 512D).
 Chuẩn hóa L2 vector đặc trưng và so khớp độ tương đồng Cosine (FR-BIO-04, FR-BIO-05).
+Tự động tải mô hình từ GitHub Release nếu máy chưa có file trọng số.
 """
 
 import os
@@ -34,7 +35,14 @@ class ArcFaceRecognizer:
         model_path: Optional[str] = None,
         use_cpu: bool = False
     ):
-        target_path = model_path or str(settings.face.recognizer_path)
+        target_path = model_path
+        if not target_path or not os.path.exists(target_path):
+            try:
+                target_path = settings.face.ensure_recognizer_exists()
+            except Exception as e:
+                print(f"[ArcFaceRecognizer] Warning: Không thể nạp recognizer: {e}")
+                target_path = str(settings.face.recognizer_path)
+
         self.model_path = target_path if os.path.exists(target_path) else None
         self.use_cpu = use_cpu
         self.engine: Optional[OnnxEngine] = None

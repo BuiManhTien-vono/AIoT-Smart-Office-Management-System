@@ -1,6 +1,7 @@
 """
 Kiểm tra thực thể sống & chống giả mạo khuôn mặt (Anti-Spoofing & Liveness).
 Tích hợp mô hình học sâu MiniFASNet-V2 (FR-ATT-01) và kiểm tra độ nét Laplace (FR-BIO-03).
+Tự động tải mô hình từ GitHub Release nếu máy chưa có file trọng số.
 """
 
 import os
@@ -26,7 +27,14 @@ class AntiSpoofingChecker:
         min_face_size: int = 112,
         use_cpu: bool = True
     ):
-        target_path = model_path or str(settings.face.anti_spoofing_path)
+        target_path = model_path
+        if not target_path or not os.path.exists(target_path):
+            try:
+                target_path = settings.face.ensure_anti_spoofing_exists()
+            except Exception as e:
+                print(f"[AntiSpoofingChecker] Warning: Không thể nạp anti-spoofing: {e}")
+                target_path = str(settings.face.anti_spoofing_path)
+
         self.model_path = target_path if os.path.exists(target_path) else None
         self.blur_threshold = blur_threshold
         self.min_face_size = min_face_size

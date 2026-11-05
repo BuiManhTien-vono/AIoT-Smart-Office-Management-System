@@ -29,6 +29,7 @@ env/
 *.pt
 *.onnx
 *.engine
+*.downloading
 
 # Environment & Secrets
 .env
@@ -40,4 +41,3 @@ env/
 Thumbs.db
 .idea/
 *.swp
-

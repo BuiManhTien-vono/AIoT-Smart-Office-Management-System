@@ -1,45 +1,35 @@
 """
-Entrypoint chính cho Dịch vụ AI (AI Service - Modular Multi-Model Architecture).
-Hỗ trợ cả 2 module:
-1. Occupancy: Giám sát chỗ ngồi thời gian thực với RT-DETR-L.
-2. Face Recognition: Sinh trắc học & nhận diện khuôn mặt qua REST API.
+Entrypoint khởi động AI Service:
+- Chế độ CLI: Chạy thử nghiệm phát hiện người & giám sát bàn làm việc trên Video / Webcam.
+- Chế độ API: Khởi chạy FastAPI Server phục vụ toàn bộ các endpoints cho Backend .NET.
 """
 
-import sys
 import os
+import sys
 import argparse
-from typing import Optional, List
-from pathlib import Path
+from typing import Optional
 
-# Đảm bảo UTF-8 an toàn trên Windows Console
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+# Thêm thư mục hiện tại vào sys.path
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
 
-CURRENT_DIR = Path(__file__).resolve().parent
-if str(CURRENT_DIR) not in sys.path:
-    sys.path.insert(0, str(CURRENT_DIR))
+from shared.config import settings
+from modules.occupancy.detector import RTDETRHeadDetector
+from modules.occupancy.pipeline import OccupancyPipeline
+from modules.occupancy.video_stream import VideoStreamProcessor, select_roi_polygons
 
-from shared.config import settings, SeatBox
-from modules.occupancy import (
-    RTDETRHeadDetector,
-    OccupancyPipeline,
-    VideoStreamProcessor
-)
-from shared.utils.ring_buffer import CircularRingBuffer
-
-# Khởi tạo FastAPI App
+# Nạp routers API
 try:
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
-    import uvicorn
-    from api import occupancy_router, face_router
+    from api.routes_occupancy import router as occupancy_router
+    from api.routes_face import router as face_router
 
     app = FastAPI(
-        title="AIoT Smart Office - AI Service",
-        description="Dịch vụ AI đa mô hình: Giám sát chỗ ngồi (RT-DETR-L) & Sinh trắc khuôn mặt (ArcFace)",
-        version="2.0.0"
+        title="Smart Office AI Computer Vision Service",
+        description="Dịch vụ AI phân tích thị giác máy tính: Giám sát chỗ ngồi & Nhận diện sinh trắc học",
+        version="1.0.0"
     )
 
     app.add_middleware(
@@ -69,9 +59,17 @@ try:
                 conf_threshold=settings.confidence_threshold,
                 imgsz=settings.imgsz
             )
-            print(f"[+] Nạp thành công. Execution Provider: {global_detector.active_provider}")
+            print(f"[+] Nạp thành công RT-DETR-L. Execution Provider: {global_detector.active_provider}")
         except Exception as e:
-            print(f"[!] Lỗi khi nạp mô hình: {e}")
+            print(f"[!] Lỗi khi nạp mô hình RT-DETR-L: {e}")
+
+        try:
+            face_models = settings.face.ensure_all_models_exist()
+            print(f"[+] Toàn bộ 3 mô hình khuôn mặt đã sẵn sàng:")
+            for k, v in face_models.items():
+                print(f"    - {k}: {v}")
+        except Exception as e:
+            print(f"[!] Lỗi khi nạp mô hình khuôn mặt: {e}")
 
     @app.get("/health")
     def health_check():
@@ -93,26 +91,13 @@ except ImportError:
     app = None
 
 
-def resolve_video_source(source_arg: Optional[str]) -> str:
-    """Tự động phát hiện nguồn video thông minh (từ D:\\code\\lmao\\018.avi hoặc webcam)."""
-    if source_arg:
-        return source_arg
-
-    lmao_video = "D:\\code\\lmao\\018.avi"
-    if os.path.exists(lmao_video):
-        print(f"[INFO] Tự động chọn video test thực tế: {lmao_video}")
-        return lmao_video
-
-    return "0"
-
-
-def main():
+def run_cli():
     parser = argparse.ArgumentParser(description="Chạy thử nghiệm AI Service (Occupancy & Face Recognition)")
     parser.add_argument("source_pos", nargs="?", default=None, help="Nguồn video: 0 (Webcam) hoặc đường dẫn file .mp4/.avi")
     parser.add_argument("--source", type=str, default=None, help="Nguồn video")
-    parser.add_argument("--model", type=str, default=settings.occupancy.model_path, help="Đường dẫn file trọng số RT-DETR-L")
-    parser.add_argument("--conf", type=float, default=settings.confidence_threshold, help="Ngưỡng tự tin (mặc định 0.35)")
-    parser.add_argument("--skip", type=int, default=settings.frame_skip, help="Mức frame skip nếu không dùng async")
+    parser.add_argument("--model", type=str, default=None, help="Đường dẫn file trọng số RT-DETR-L")
+    parser.add_argument("--conf", type=float, default=0.35, help="Ngưỡng tự tin (mặc định 0.35)")
+    parser.add_argument("--skip", type=int, default=5, help="Mức frame skip nếu không dùng async")
     parser.add_argument("--cpu", action="store_true", help="Chạy trên CPU thay vì GPU")
     parser.add_argument("--sync", action="store_true", help="Chạy chế độ đồng bộ (mặc định là ASYNC mượt 30 FPS)")
     parser.add_argument("--select-roi", action="store_true", default=True, help="Bật giao diện dùng chuột vẽ trực tiếp các bàn làm việc (Mặc định: BẬT)")
@@ -125,58 +110,77 @@ def main():
 
     args = parser.parse_args()
 
-    # 1. Chế độ FastAPI
     if args.api:
         if app is None:
-            print("[!] Thiếu thư viện fastapi/uvicorn. Chạy: pip install fastapi uvicorn")
+            print("[!] Lỗi: Chưa cài đặt FastAPI hoặc Uvicorn. Vui lòng cài: pip install fastapi uvicorn")
             sys.exit(1)
+        import uvicorn
         print(f"[*] Khởi động FastAPI server tại http://{args.host}:{args.port}")
         uvicorn.run(app, host=args.host, port=args.port)
         return
 
-    # 2. Chế độ Stream CLI trực quan (Occupancy)
-    selected_source = resolve_video_source(args.source or args.source_pos)
-    use_async = not args.sync
+    # Lựa chọn nguồn video
+    source = args.source_pos or args.source
+    if source is None:
+        if settings.occupancy.fallback_video_path and os.path.exists(settings.occupancy.fallback_video_path):
+            source = settings.occupancy.fallback_video_path
+        else:
+            source = 0  # Mặc định webcam
 
-    print("=" * 75)
-    print("AIoT SMART OFFICE - RT-DETR-L HEAD DETECTION & OCCUPANCY MONITOR")
-    print("=" * 75)
-    print(f"  • Nguồn Video:         {selected_source}")
-    print(f"  • File Trọng số:       {args.model}")
-    print(f"  • Ngưỡng Tin cậy:      {args.conf}")
-    print(f"  • Chế độ luồng:        {'ASYNC THREADING (30+ FPS Mượt mà 100%)' if use_async else f'FRAME SKIP (1/{args.skip})'}")
-    print(f"  • Vẽ bàn bằng chuột:   {args.select_roi}")
-    print(f"  • Hiển thị GUI:        {args.show}")
-    print("=" * 75)
+    # Chuyển kiểu webcam index nếu là chuỗi số
+    if isinstance(source, str) and source.isdigit():
+        source = int(source)
 
-    # Nạp Detector
+    model_path = args.model or settings.occupancy.model_path
+
+    print("=" * 70)
+    print(" HỆ THỐNG THỊ GIÁC MÁY TÍNH VĂN PHÒNG THÔNG MINH (SMART OFFICE AI)")
+    print("=" * 70)
+    print(f"  - Nguồn Video      : {source}")
+    print(f"  - Mô hình RT-DETR  : {model_path}")
+    print(f"  - Chế độ suy luận  : {'CPU' if args.cpu else 'GPU (Ưu tiên CUDA)'}")
+    print(f"  - Luồng xử lý      : {'ĐỒNG BỘ (Sync)' if args.sync else 'BẤT ĐỒNG BỘ ĐA LUỒNG (Async 30 FPS)'}")
+    print(f"  - Vẽ bàn trực quan : {'BẬT (Dùng chuột vẽ)' if args.select_roi else 'TẮT (Dùng mặc định)'}")
+    print("=" * 70)
+
+    # 1. Khởi tạo Head Detector
     try:
         detector = RTDETRHeadDetector(
-            model_path=args.model,
+            model_path=model_path,
             use_cpu=args.cpu,
             conf_threshold=args.conf,
             imgsz=settings.imgsz
         )
-        print(f"[+] Nạp thành công mô hình ONNX: {detector.device_name} ({detector.active_provider})")
+        print(f"[+] Khởi tạo detector thành công. Provider: {detector.active_provider}")
     except Exception as e:
-        print(f"[!] Lỗi khi nạp mô hình: {e}")
-        detector = None
+        print(f"[!] Không thể khởi tạo detector: {e}")
+        sys.exit(1)
 
-    # Khởi tạo Pipeline
-    pipeline = OccupancyPipeline(seats=settings.default_seats, away_alert_sec=settings.away_alert_seconds)
-
-    # Khởi chạy Processor
-    processor = VideoStreamProcessor(
-        source=selected_source,
-        detector=detector,
-        occupancy_pipeline=pipeline,
-        async_mode=use_async,
-        frame_skip=args.skip,
-        loop=True
+    # 2. Khởi tạo Pipeline & Video Stream Processor
+    pipeline = OccupancyPipeline(
+        seats=settings.occupancy.default_seats,
+        away_alert_sec=settings.occupancy.away_alert_seconds,
+        anti_flicker_frames=settings.occupancy.anti_flicker_frames,
+        prolonged_away_sec=settings.occupancy.prolonged_away_sec
     )
 
-    processor.run(show_window=args.show, select_roi=args.select_roi)
+    processor = VideoStreamProcessor(
+        source=source,
+        detector=detector,
+        pipeline=pipeline,
+        async_mode=not args.sync,
+        frame_skip=args.skip,
+        show_window=args.show,
+        select_roi=args.select_roi
+    )
+
+    try:
+        processor.run()
+    except KeyboardInterrupt:
+        print("\n[*] Đã dừng chương trình theo yêu cầu người dùng.")
+    finally:
+        processor.stop()
 
 
 if __name__ == "__main__":
-    main()
+    run_cli()
