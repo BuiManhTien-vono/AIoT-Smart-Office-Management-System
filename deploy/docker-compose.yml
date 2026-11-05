@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # C# .NET WebApi (Modular Monolith - Backend Core)
+  # C# .NET 10 WebApi (Modular Monolith - Backend Core)
   backend:
     build:
       context: ../backend
@@ -59,9 +59,9 @@ services:
     depends_on:
       - backend
 
-  # Database: PostgreSQL
+  # Database: PostgreSQL 16 + pgvector (Tự động khởi tạo 5 Schema độc lập)
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: smartoffice_postgres
     restart: unless-stopped
     environment:
@@ -70,6 +70,7 @@ services:
       POSTGRES_PASSWORD: postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../backend/database/01_init_schemas_and_tables.sql:/docker-entrypoint-initdb.d/01_init_schemas_and_tables.sql:ro
     ports:
       - "5432:5432"
 

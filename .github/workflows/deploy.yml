@@ -3,6 +3,8 @@ name: CI/CD Pipeline - Smart Office
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main", "develop" ]
 
 jobs:
   build-and-test:
@@ -10,18 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x' # hoặc 10.0.x
+          dotnet-version: '10.0.x'
 
       - name: Restore dependencies
         run: dotnet restore backend/SmartOffice.slnx
 
-      - name: Build Backend
+      - name: Build Backend (5 Modules + Host)
         run: dotnet build backend/SmartOffice.slnx --no-restore
 
-      - name: Run Unit Tests
+      - name: Run Architecture Isolation & Unit Tests
         run: dotnet test backend/SmartOffice.slnx --no-build --verbosity normal
 
       - name: Setup Node.js
@@ -38,7 +40,7 @@ jobs:
   deploy-to-vps:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: SSH and Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -50,6 +52,5 @@ jobs:
             cd /opt/smartoffice
             git pull origin main
             cd deploy
-            docker compose -f docker-compose.prod.yml down
-            docker compose -f docker-compose.prod.yml up -d --build
-
+            docker compose -f docker-compose.yml down
+            docker compose -f docker-compose.yml up -d --build
