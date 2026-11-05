@@ -1,6 +1,6 @@
 """
 REST API Endpoints cho Module Face Recognition (Nhận diện Khuôn mặt).
-Cung cấp API đăng ký mẫu ảnh, trích xuất vector 512D và đối soát trùng lặp.
+Cung cấp API đăng ký mẫu ảnh, trích xuất vector 512D, đối soát trùng lặp và nhận diện điểm danh 1:N.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -22,6 +22,7 @@ class DuplicateCheckRequest(BaseModel):
     existing_records: List[Dict[str, Any]] # [{"employee_id": "EMP-01", "embedding": [...]}]
     threshold: Optional[float] = None
 
+
 @router.post("/extract-features")
 async def extract_face_features(file: UploadFile = File(...)):
     """
@@ -40,6 +41,7 @@ async def extract_face_features(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=result)
 
     return result
+
 
 @router.post("/verify-duplicate")
 def verify_duplicate_biometrics(payload: DuplicateCheckRequest):
@@ -66,4 +68,29 @@ def verify_duplicate_biometrics(payload: DuplicateCheckRequest):
         "similarity_score": round(max_sim, 4),
         "threshold": threshold,
         "warning": "Phát hiện nguy cơ trùng lặp hồ sơ" if is_duplicate else None
+    }
+
+
+@router.post("/liveness-check")
+async def check_face_liveness(file: UploadFile = File(...)):
+    """
+    Kiểm tra thực thể sống chống giả mạo bằng MiniFASNet-V2 (FR-ATT-01).
+    """
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if image is None:
+        raise HTTPException(status_code=400, detail="Không thể giải mã file ảnh.")
+
+    faces = pipeline.detector.detect(image)
+    if len(faces) == 0:
+        raise HTTPException(status_code=422, detail="Không tìm thấy khuôn mặt trong ảnh.")
+
+    bbox = faces[0].bbox_pixel
+    is_real, score, details = pipeline.anti_spoofing.check_liveness(image, bbox=bbox)
+    return {
+        "is_real": is_real,
+        "real_score": round(score, 4),
+        "details": details
     }

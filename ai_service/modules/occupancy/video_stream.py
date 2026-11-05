@@ -9,7 +9,7 @@ import cv2
 import time
 import threading
 import numpy as np
-from typing import Union, Optional, List, Tuple, Callable
+from typing import Union, Optional, List, Tuple, Callable, Dict, Any
 
 from shared.utils.ring_buffer import CircularRingBuffer
 from .geometry import denormalize_box

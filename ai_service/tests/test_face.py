@@ -4,6 +4,7 @@ Kiểm thử tự động cho Module Face Recognition:
 - Kiểm tra trùng lặp sinh trắc học (Duplicate check FR-BIO-05).
 - Đánh giá chất lượng khuôn mặt (Blur score Laplace FR-BIO-03).
 - Căn chỉnh Affine 5 điểm landmarks (Face Alignment FR-BIO-04).
+- Kiểm tra mô hình chống giả mạo MiniFASNet-V2 (FR-ATT-01).
 """
 
 import sys
@@ -68,6 +69,18 @@ class TestFaceRecognitionModule(unittest.TestCase):
         is_pass, msg, score = checker.assess_quality(flat_img)
         self.assertFalse(is_pass)
         self.assertIn("mờ nhòe", msg)
+
+    def test_minifasnet_liveness_inference(self):
+        # Kiểm tra suy luận thực tế với mô hình MiniFASNet-V2 ONNX
+        checker = AntiSpoofingChecker()
+        self.assertIsNotNone(checker.engine, "Mô hình MiniFASNet-V2 chưa được nạp.")
+        dummy_face = np.full((120, 120, 3), 128, dtype=np.uint8)
+        is_real, score, details = checker.check_liveness(dummy_face)
+        self.assertIsInstance(is_real, (bool, np.bool_))
+        self.assertGreaterEqual(score, 0.0)
+        self.assertLessEqual(score, 1.0)
+        self.assertIn("spoof_print_score", details)
+        self.assertIn("spoof_screen_score", details)
 
 if __name__ == "__main__":
     unittest.main()

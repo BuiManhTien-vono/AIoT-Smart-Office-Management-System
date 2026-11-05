@@ -68,6 +68,30 @@ class FaceRecognitionSettings(BaseModel):
     recognizer_model: str = "arcface_res50.onnx"
     anti_spoofing_model: str = "anti_spoofing.onnx"
 
+    @property
+    def detector_path(self) -> Path:
+        for fname in [self.detector_model, "det_500m.onnx", "det_500m-v1.0.0.onnx"]:
+            candidate = self.weights_dir / fname
+            if candidate.exists():
+                return candidate
+        return self.weights_dir / self.detector_model
+
+    @property
+    def recognizer_path(self) -> Path:
+        for fname in [self.recognizer_model, "iresnet50.onnx"]:
+            candidate = self.weights_dir / fname
+            if candidate.exists():
+                return candidate
+        return self.weights_dir / self.recognizer_model
+
+    @property
+    def anti_spoofing_path(self) -> Path:
+        for fname in [self.anti_spoofing_model, "minifasnet_v2.onnx"]:
+            candidate = self.weights_dir / fname
+            if candidate.exists():
+                return candidate
+        return self.weights_dir / self.anti_spoofing_model
+
     # Ngưỡng cosine similarity cho nhận diện khuôn mặt trùng khớp (FR-BIO-05: 0.85)
     similarity_threshold: float = 0.85
 

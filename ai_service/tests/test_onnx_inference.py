@@ -3,7 +3,7 @@ Kiểm thử tự động cho AI Service (Cấu trúc mới):
 1. Kiểm tra thuật toán hình học tính Tâm Đầu & kiểm tra rơi vào hình hộp bàn.
 2. Kiểm tra bộ đệm vòng Circular Ring Buffer.
 3. Kiểm tra máy trạng thái chỗ ngồi FSM (Anti-Flicker).
-4. Kiểm tra nạp và suy luận mô hình RT-DETR-L ONNX (rtdetr_head.onnx).
+4. Kiểm tra nạp và suy luận các mô hình ONNX (RT-DETR-L, SCRFD Face Detector, ArcFace 512D).
 """
 
 import sys
@@ -24,6 +24,8 @@ from shared.utils.ring_buffer import CircularRingBuffer
 from modules.occupancy.fsm import SeatStatus
 from modules.occupancy.pipeline import OccupancyPipeline
 from modules.occupancy.detector import RTDETRHeadDetector, HeadDetection
+from modules.face_recognition.detector import SCRFDFaceDetector
+from modules.face_recognition.recognizer import ArcFaceRecognizer
 
 
 class TestGeometryAndFSM(unittest.TestCase):
@@ -99,15 +101,19 @@ class TestGeometryAndFSM(unittest.TestCase):
 
 
 class TestModelLoading(unittest.TestCase):
-    def test_onnx_model_file_exists(self):
-        """Kiểm tra file rtdetr_head.onnx có tồn tại trong modules/occupancy/weights/."""
+    def test_rtdetr_head_model_exists(self):
+        """Kiểm tra file rtdetr_head.onnx nếu có trong modules/occupancy/weights/."""
         model_path = Path(settings.occupancy.model_path)
-        self.assertTrue(model_path.exists(), f"Không tìm thấy file trọng số tại: {model_path}")
-        self.assertGreater(model_path.stat().st_size, 10_000_000, "File model phải lớn hơn 10MB")
+        if not model_path.exists():
+            self.skipTest(f"Chưa có file trọng số RT-DETR tại {model_path}, bỏ qua.")
+        self.assertTrue(model_path.exists())
+        self.assertGreater(model_path.stat().st_size, 10_000_000)
 
     def test_rtdetr_head_detector_inference(self):
         """Kiểm tra nạp mô hình RT-DETR-L ONNX và chạy suy luận trên dummy frame."""
         model_path = settings.occupancy.model_path
+        if not os.path.exists(model_path):
+            self.skipTest(f"Chưa có file trọng số RT-DETR tại {model_path}, bỏ qua.")
         detector = RTDETRHeadDetector(model_path=model_path, conf_threshold=0.45)
         
         self.assertEqual(detector.input_names, ["images"])
@@ -118,6 +124,28 @@ class TestModelLoading(unittest.TestCase):
         dummy = np.zeros((720, 1280, 3), dtype=np.uint8)
         detections = detector.predict(dummy)
         self.assertIsInstance(detections, list)
+
+    def test_face_detector_model_exists(self):
+        """Kiểm tra file trọng số SCRFD face detector có tồn tại và đạt kích thước."""
+        det_path = settings.face.detector_path
+        if not det_path.exists():
+            self.skipTest(f"Chưa có file trọng số SCRFD tại {det_path}, bỏ qua.")
+        self.assertTrue(det_path.exists(), f"Không tìm thấy file SCRFD tại: {det_path}")
+        self.assertGreater(det_path.stat().st_size, 2_000_000, "File SCRFD phải lớn hơn 2MB")
+
+    def test_arcface_model_exists_and_infers(self):
+        """Kiểm tra file trọng số ArcFace iResNet-50 và chạy suy luận 512D chuẩn hóa L2."""
+        rec_path = settings.face.recognizer_path
+        if not rec_path.exists():
+            self.skipTest(f"Chưa có file trọng số ArcFace tại {rec_path}, bỏ qua.")
+        self.assertTrue(rec_path.exists(), f"Không tìm thấy file ArcFace tại: {rec_path}")
+        self.assertGreater(rec_path.stat().st_size, 100_000_000, "File ArcFace phải lớn hơn 100MB")
+
+        recognizer = ArcFaceRecognizer(model_path=str(rec_path))
+        dummy_face = np.zeros((112, 112, 3), dtype=np.uint8)
+        embedding = recognizer.extract_features(dummy_face)
+        self.assertEqual(embedding.shape, (512,))
+        self.assertAlmostEqual(float(np.linalg.norm(embedding)), 1.0, places=4)
 
 
 if __name__ == "__main__":

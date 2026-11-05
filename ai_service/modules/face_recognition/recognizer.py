@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from typing import List, Tuple, Optional
 
+from shared.config import settings
 from shared.engines.onnx_engine import OnnxEngine
 
 def compute_cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
@@ -33,12 +34,13 @@ class ArcFaceRecognizer:
         model_path: Optional[str] = None,
         use_cpu: bool = False
     ):
-        self.model_path = model_path
+        target_path = model_path or str(settings.face.recognizer_path)
+        self.model_path = target_path if os.path.exists(target_path) else None
         self.use_cpu = use_cpu
         self.engine: Optional[OnnxEngine] = None
 
-        if model_path and os.path.exists(model_path):
-            self.engine = OnnxEngine(model_path=model_path, use_cpu=use_cpu)
+        if self.model_path and os.path.exists(self.model_path):
+            self.engine = OnnxEngine(model_path=self.model_path, use_cpu=use_cpu)
 
     def extract_features(self, aligned_face: np.ndarray) -> np.ndarray:
         """
@@ -46,7 +48,6 @@ class ArcFaceRecognizer:
         Nếu chưa nạp model thực tế, tạo một vector giả lập ngẫu nhiên phục vụ kiểm thử.
         """
         if self.engine is None:
-            # Vector ngẫu nhiên chuẩn hóa L2 (phục vụ test)
             dummy = np.random.randn(512).astype(np.float32)
             return dummy / np.linalg.norm(dummy)
 
@@ -57,7 +58,8 @@ class ArcFaceRecognizer:
         face = np.transpose(face, (2, 0, 1))[np.newaxis, ...]  # (1, 3, 112, 112)
 
         input_name = self.engine.input_names[0]
-        embedding = self.engine.run({input_name: face})[0][0]  # (512,)
+        outputs = self.engine.run({input_name: face})
+        embedding = outputs[0][0]  # (512,)
 
         # Chuẩn hóa L2
         norm = np.linalg.norm(embedding)

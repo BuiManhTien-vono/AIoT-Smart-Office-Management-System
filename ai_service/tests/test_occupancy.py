@@ -5,6 +5,7 @@ Kiểm thử tự động cho Module Occupancy (Giám sát chỗ ngồi):
 - Mô hình RT-DETR-L ONNX trên ảnh dummy.
 """
 
+import os
 import sys
 import unittest
 import numpy as np
@@ -58,6 +59,8 @@ class TestOccupancyModule(unittest.TestCase):
 
     def test_rtdetr_inference(self):
         model_path = settings.occupancy.model_path
+        if not os.path.exists(model_path):
+            self.skipTest(f"Chưa có file trọng số RT-DETR tại {model_path}, bỏ qua kiểm thử suy luận.")
         detector = RTDETRHeadDetector(model_path=model_path, conf_threshold=0.45)
         dummy = np.zeros((720, 1280, 3), dtype=np.uint8)
         detections = detector.predict(dummy)

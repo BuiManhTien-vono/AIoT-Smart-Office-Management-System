@@ -1,19 +1,22 @@
 """
 Kiểm tra thực thể sống & chống giả mạo khuôn mặt (Anti-Spoofing & Liveness).
-Tích hợp kiểm tra độ nét Laplace (FR-BIO-03) và Deep Liveness Model.
+Tích hợp mô hình học sâu MiniFASNet-V2 (FR-ATT-01) và kiểm tra độ nét Laplace (FR-BIO-03).
 """
 
 import os
 import cv2
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any
 
+from shared.config import settings
 from shared.engines.onnx_engine import OnnxEngine
 from shared.utils.image_processing import calculate_laplacian_blur
 
+
 class AntiSpoofingChecker:
     """
-    Kiểm tra thực thể sống. Khuyến nghị chạy trên CPU để tiết kiệm VRAM GPU cho RT-DETR.
+    Bộ kiểm tra thực thể sống & chống giả mạo khuôn mặt (MiniFASNet-V2).
+    Chạy suy luận trên CPU hoặc GPU.
     """
 
     def __init__(
@@ -23,14 +26,15 @@ class AntiSpoofingChecker:
         min_face_size: int = 112,
         use_cpu: bool = True
     ):
-        self.model_path = model_path
+        target_path = model_path or str(settings.face.anti_spoofing_path)
+        self.model_path = target_path if os.path.exists(target_path) else None
         self.blur_threshold = blur_threshold
         self.min_face_size = min_face_size
         self.use_cpu = use_cpu
         self.engine: Optional[OnnxEngine] = None
 
-        if model_path and os.path.exists(model_path):
-            self.engine = OnnxEngine(model_path=model_path, use_cpu=True)
+        if self.model_path and os.path.exists(self.model_path):
+            self.engine = OnnxEngine(model_path=self.model_path, use_cpu=use_cpu)
 
     def assess_quality(self, face_crop: np.ndarray) -> Tuple[bool, str, float]:
         """
@@ -38,6 +42,9 @@ class AntiSpoofingChecker:
         1. Kích thước tối thiểu >= 112x112 px.
         2. Độ sắc nét Laplace > 100.0.
         """
+        if face_crop is None or face_crop.size == 0:
+            return False, "Khuôn mặt rỗng.", 0.0
+
         h, w = face_crop.shape[:2]
         if h < self.min_face_size or w < self.min_face_size:
             return False, f"Khuôn mặt quá nhỏ ({w}x{h} px < {self.min_face_size}x{self.min_face_size} px)", 0.0
@@ -48,16 +55,78 @@ class AntiSpoofingChecker:
 
         return True, "Chất lượng đạt yêu cầu", blur_score
 
-    def check_liveness(self, face_crop: np.ndarray) -> Tuple[bool, float]:
-        """
-        Kiểm tra ảnh thật hay giả mạo (màn hình điện thoại / ảnh in giấy).
-        Trả về: (is_real, confidence_score)
-        """
-        # Nếu chưa nạp model liveness deep learning: dựa trên đánh giá chất lượng
-        if self.engine is None:
-            is_good, _, score = self.assess_quality(face_crop)
-            return is_good, 1.0 if is_good else 0.0
+    def crop_fas_patch(self, img_bgr: np.ndarray, bbox: Tuple[int, int, int, int], scale: float = 2.7, out_size: int = 80) -> np.ndarray:
+        """Cắt patch mở rộng theo tỷ lệ scale 2.7 cho MiniFASNet-V2."""
+        src_h, src_w = img_bgr.shape[:2]
+        x1, y1, x2, y2 = bbox
+        x1 = max(0, min(src_w - 1, int(x1)))
+        y1 = max(0, min(src_h - 1, int(y1)))
+        x2 = max(x1 + 1, min(src_w, int(x2)))
+        y2 = max(y1 + 1, min(src_h, int(y2)))
 
-        # Nếu có model ONNX MiniFASNet:
-        # Preprocessing và suy luận trên CPU
-        return True, 0.95
+        w = max(1, x2 - x1)
+        h = max(1, y2 - y1)
+        cx = x1 + w / 2.0
+        cy = y1 + h / 2.0
+
+        new_w = w * scale
+        new_h = h * scale
+
+        left_top_x = max(0, int(cx - new_w / 2.0))
+        left_top_y = max(0, int(cy - new_h / 2.0))
+        right_bottom_x = min(src_w, int(cx + new_w / 2.0))
+        right_bottom_y = min(src_h, int(cy + new_h / 2.0))
+
+        if right_bottom_x <= left_top_x or right_bottom_y <= left_top_y:
+            crop = img_bgr[y1:y2, x1:x2]
+        else:
+            crop = img_bgr[left_top_y:right_bottom_y, left_top_x:right_bottom_x]
+
+        if crop.size == 0 or crop.shape[0] == 0 or crop.shape[1] == 0:
+            crop = img_bgr
+
+        return cv2.resize(crop, (out_size, out_size))
+
+    def check_liveness(
+        self,
+        img_bgr: np.ndarray,
+        bbox: Optional[Tuple[int, int, int, int]] = None,
+        threshold: float = 0.60
+    ) -> Tuple[bool, float, Dict[str, Any]]:
+        """
+        Kiểm tra người thật (Anti-Spoofing / Liveness Check) bằng MiniFASNet-V2.
+        - img_bgr: Khung hình thô camera hoặc ảnh crop khuôn mặt
+        - bbox: (x1, y1, x2, y2) từ detector
+        - threshold: Ngưỡng xác suất người thật (mặc định 0.60)
+        Trả về: (is_real: bool, real_score: float, details: dict)
+        """
+        if self.engine is None:
+            # Fallback nếu chưa có model MiniFASNet: đánh giá dựa trên chất lượng
+            is_good, _, score = self.assess_quality(img_bgr)
+            return is_good, 1.0 if is_good else 0.0, {"warning": "Mô hình MiniFASNet chưa được nạp."}
+
+        if bbox is not None:
+            patch = self.crop_fas_patch(img_bgr, bbox, scale=2.7, out_size=80)
+        else:
+            patch = cv2.resize(img_bgr, (80, 80))
+
+        # MiniFASNet-V2 yêu cầu dải giá trị pixel gốc [0.0, 255.0] (BGR), định dạng NCHW float32
+        blob = patch.astype(np.float32).transpose(2, 0, 1)
+        blob = np.expand_dims(blob, axis=0)
+
+        input_name = self.engine.input_names[0]
+        logits = self.engine.run({input_name: blob})[0]
+
+        # Softmax tính phân phối xác suất
+        exp_l = np.exp(logits - np.max(logits))
+        probs = exp_l / np.sum(exp_l)
+        real_score = float(probs[0][1])
+        is_real = real_score >= threshold
+
+        return is_real, real_score, {
+            "real_score": real_score,
+            "spoof_print_score": float(probs[0][0]),
+            "spoof_screen_score": float(probs[0][2]),
+            "is_real": is_real,
+            "threshold": threshold
+        }
