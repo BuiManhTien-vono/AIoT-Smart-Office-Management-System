@@ -1,0 +1,4 @@
+# Đặt các file trọng số ONNX của Face Recognition tại đây:
+# - scrfd_face_det.onnx (Phát hiện khuôn mặt & 5 điểm landmarks)
+# - arcface_res50.onnx (Trích xuất vector 512D)
+# - anti_spoofing.onnx (Kiểm tra thực thể sống Liveness)
