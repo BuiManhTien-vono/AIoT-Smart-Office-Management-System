@@ -9,7 +9,7 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional
 
 from shared.config import SeatBox, settings
-from .geometry import is_point_in_box
+from .geometry import is_point_in_box, is_point_in_polygon
 from .fsm import SeatStatus, SeatState, STATUS_COLORS_BGR
 from .detector import HeadDetection
 
@@ -28,7 +28,7 @@ class OccupancyPipeline:
 
         if custom_polygons:
             for idx, poly in enumerate(custom_polygons):
-                s_id = f"SEAT-{idx + 1:02d}"
+                s_id = f"SEAT_IT_{idx + 1:02d}"
                 self.seats_state[s_id] = SeatState(
                     seat_id=s_id,
                     seat_name=f"Bàn {idx + 1}",
@@ -36,12 +36,26 @@ class OccupancyPipeline:
                 )
         else:
             configured_seats = seats or settings.default_seats
-            for seat in configured_seats:
-                self.seats_state[seat.seat_id] = SeatState(
-                    seat_id=seat.seat_id,
-                    seat_name=seat.seat_name,
-                    normalized_box=seat.normalized_box
-                )
+            self.update_seats(configured_seats)
+
+    def update_seats(self, configured_seats: List[SeatBox]):
+        """Cập nhật danh sách vùng bàn ảo (ví dụ sau khi đồng bộ từ Backend .NET)."""
+        new_states: Dict[str, SeatState] = {}
+        for seat in configured_seats:
+            existing = self.seats_state.get(seat.seat_id)
+            new_states[seat.seat_id] = SeatState(
+                seat_id=seat.seat_id,
+                seat_name=seat.seat_name,
+                normalized_polygon=seat.polygon_points,
+                normalized_box=seat.normalized_box,
+                assigned_employee_id=seat.assigned_employee_id,
+                status=existing.status if existing else SeatStatus.EMPTY,
+                consecutive_absent_frames=existing.consecutive_absent_frames if existing else 0,
+                consecutive_present_frames=existing.consecutive_present_frames if existing else 0,
+                away_start_time=existing.away_start_time if existing else None,
+                away_duration_sec=existing.away_duration_sec if existing else 0.0
+            )
+        self.seats_state = new_states
 
     def process_frame(
         self,
@@ -55,12 +69,16 @@ class OccupancyPipeline:
         for seat_id, state in self.seats_state.items():
             matched_head: Optional[HeadDetection] = None
 
-            # 1. Kiểm tra tâm đầu bằng cv2.pointPolygonTest hoặc is_point_in_box
+            # 1. Kiểm tra tâm đầu bằng cv2.pointPolygonTest, Ray-Casting chuẩn hóa hoặc is_point_in_box
             for det in detections:
                 cx_px, cy_px = det.center_pixel
 
                 if state.polygon_pixel is not None:
                     if cv2.pointPolygonTest(state.polygon_pixel, (float(cx_px), float(cy_px)), False) >= 0:
+                        matched_head = det
+                        break
+                elif state.normalized_polygon is not None and len(state.normalized_polygon) >= 3:
+                    if is_point_in_polygon(det.center_normalized, state.normalized_polygon):
                         matched_head = det
                         break
                 elif state.normalized_box is not None:
@@ -103,8 +121,12 @@ class OccupancyPipeline:
                 "status": state.status.value,
                 "color_bgr": STATUS_COLORS_BGR[state.status],
                 "polygon_pixel": state.polygon_pixel,
+                "normalized_polygon": state.normalized_polygon,
                 "normalized_box": state.normalized_box,
+                "assigned_employee_id": state.assigned_employee_id,
                 "has_occupant": (state.status == SeatStatus.PRESENT),
+                "consecutive_absent_frames": state.consecutive_absent_frames,
+                "consecutive_present_frames": state.consecutive_present_frames,
                 "away_duration_sec": round(state.away_duration_sec, 1),
                 "is_alert": state.is_alert,
                 "occupant_head": state.occupant_head

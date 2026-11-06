@@ -1,6 +1,7 @@
 """
 Entrypoint khởi động AI Service:
-- Chế độ CLI: Chạy thử nghiệm phát hiện người & giám sát bàn làm việc trên Video / Webcam.
+- Chế độ CLI: Chạy thử nghiệm phát hiện người & giám sát bàn làm việc trên Video / Webcam,
+  tự động đồng bộ State-Sync sang Backend .NET 10.
 - Chế độ API: Khởi chạy FastAPI Server phục vụ toàn bộ các endpoints cho Backend .NET.
 """
 
@@ -21,6 +22,7 @@ if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
 from shared.config import settings
+from shared.backend_client import BackendSyncClient
 from modules.occupancy.detector import RTDETRHeadDetector
 from modules.occupancy.pipeline import OccupancyPipeline
 from modules.occupancy.video_stream import VideoStreamProcessor, select_roi_polygons
@@ -62,8 +64,8 @@ try:
 
     app = FastAPI(
         title="Smart Office AI Computer Vision Service",
-        description="Dịch vụ AI phân tích thị giác máy tính: Giám sát chỗ ngồi & Nhận diện sinh trắc học",
-        version="1.0.0",
+        description="Dịch vụ AI phân tích thị giác máy tính: Giám sát chỗ ngồi & Nhận diện sinh trắc học (Đồng bộ Backend .NET 10)",
+        version="1.1.0",
         lifespan=lifespan
     )
 
@@ -98,9 +100,15 @@ try:
                 "input_names": global_detector.input_names,
                 "input_shapes": [list(s) if s else [] for s in global_detector.input_shapes],
                 "confidence_threshold": global_detector.conf_threshold,
+                "backend_api_url": settings.backend_api_url,
                 "modules": ["occupancy", "face_recognition"]
             }
-        return {"status": "warning", "model_loaded": False, "modules": ["occupancy", "face_recognition"]}
+        return {
+            "status": "warning",
+            "model_loaded": False,
+            "backend_api_url": settings.backend_api_url,
+            "modules": ["occupancy", "face_recognition"]
+        }
 
 except ImportError:
     app = None
@@ -116,9 +124,12 @@ def run_cli():
     parser.add_argument("--cpu", action="store_true", help="Chạy trên CPU thay vì GPU")
     parser.add_argument("--sync", action="store_true", help="Chạy chế độ đồng bộ (mặc định là ASYNC mượt 30 FPS)")
     parser.add_argument("--select-roi", action="store_true", default=True, help="Bật giao diện dùng chuột vẽ trực tiếp các bàn làm việc (Mặc định: BẬT)")
-    parser.add_argument("--no-select-roi", dest="select_roi", action="store_false", help="Bỏ qua bước vẽ bằng chuột, sử dụng các vùng bàn mặc định")
+    parser.add_argument("--no-select-roi", dest="select_roi", action="store_false", help="Bỏ qua bước vẽ bằng chuột, sử dụng các vùng bàn mặc định / từ Backend")
     parser.add_argument("--show", action="store_true", default=True, help="Hiển thị cửa sổ trực quan OpenCV")
     parser.add_argument("--no-show", dest="show", action="store_false", help="Tắt hiển thị cửa sổ trực quan")
+    parser.add_argument("--camera-code", type=str, default=settings.occupancy.default_camera_code, help="Mã camera đồng bộ với Backend .NET")
+    parser.add_argument("--backend-url", type=str, default=settings.backend_api_url, help="URL gốc của Backend .NET API")
+    parser.add_argument("--no-sync-backend", dest="sync_backend", action="store_false", default=True, help="Tắt tự động đẩy state-sync về Backend .NET")
     parser.add_argument("--api", action="store_true", help="Chạy ở chế độ FastAPI Web Server")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host cho FastAPI")
     parser.add_argument("--port", type=int, default=8000, help="Port cho FastAPI")
@@ -155,7 +166,8 @@ def run_cli():
     print(f"  - Mô hình RT-DETR  : {model_path}")
     print(f"  - Chế độ suy luận  : {'CPU' if args.cpu else 'GPU (Ưu tiên CUDA)'}")
     print(f"  - Luồng xử lý      : {'ĐỒNG BỘ (Sync)' if args.sync else 'BẤT ĐỒNG BỘ ĐA LUỒNG (Async 30 FPS)'}")
-    print(f"  - Vẽ bàn trực quan : {'BẬT (Dùng chuột vẽ)' if args.select_roi else 'TẮT (Dùng mặc định)'}")
+    print(f"  - Vẽ bàn trực quan : {'BẬT (Dùng chuột vẽ)' if args.select_roi else 'TẮT (Dùng mặc định / Backend)'}")
+    print(f"  - Đồng bộ Backend  : {args.backend_url if args.sync_backend else 'TẮT'} (Camera: {args.camera_code})")
     print("=" * 70)
 
     # 1. Khởi tạo Head Detector
@@ -179,6 +191,8 @@ def run_cli():
         prolonged_away_sec=settings.occupancy.prolonged_away_sec
     )
 
+    backend_client = BackendSyncClient(base_api_url=args.backend_url) if args.sync_backend else None
+
     processor = VideoStreamProcessor(
         source=source,
         detector=detector,
@@ -186,7 +200,10 @@ def run_cli():
         async_mode=not args.sync,
         frame_skip=args.skip,
         show_window=args.show,
-        select_roi=args.select_roi
+        select_roi=args.select_roi,
+        sync_backend=args.sync_backend,
+        camera_code=args.camera_code,
+        backend_client=backend_client
     )
 
     try:

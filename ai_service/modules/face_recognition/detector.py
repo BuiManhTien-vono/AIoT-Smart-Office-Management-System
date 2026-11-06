@@ -45,14 +45,18 @@ class SCRFDFaceDetector:
         self,
         model_path: Optional[str] = None,
         conf_threshold: float = 0.5,
-        use_cpu: bool = False
+        use_cpu: bool = False,
+        auto_download: bool = True
     ):
         target_path = model_path
         if not target_path or not os.path.exists(target_path):
-            try:
-                target_path = settings.face.ensure_detector_exists()
-            except Exception as e:
-                print(f"[SCRFDFaceDetector] Warning: Không thể nạp detector: {e}")
+            if auto_download:
+                try:
+                    target_path = settings.face.ensure_detector_exists()
+                except Exception as e:
+                    print(f"[SCRFDFaceDetector] Warning: Không thể nạp detector: {e}")
+                    target_path = str(settings.face.detector_path)
+            else:
                 target_path = str(settings.face.detector_path)
 
         self.model_path = target_path if os.path.exists(target_path) else None
@@ -128,7 +132,7 @@ class SCRFDFaceDetector:
             input_tensor = np.transpose(input_tensor, (2, 0, 1))[np.newaxis, ...]
 
             input_name = self.engine.input_names[0]
-            outputs = self.engine.run({input_name: input_tensor})
+            _ = self.engine.run({input_name: input_tensor})
             return results
 
         return results
