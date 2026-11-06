@@ -1,6 +1,7 @@
 """
 Cấu hình tập trung cho AI Service (Smart Office Vision).
-Quản lý tham số cho cả 2 module: Occupancy và Face Recognition.
+Quản lý tham số cho cả 2 module: Occupancy và Face Recognition,
+đồng thời cấu hình kết nối tới Backend .NET 10 (Modular Monolith).
 """
 
 import os
@@ -10,7 +11,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 
 # Thư mục gốc của ai_service
@@ -22,9 +23,12 @@ class SeatBox(BaseModel):
     seat_name: str
     # Hỗ trợ dạng hình hộp [xmin, ymin, xmax, ymax] tỷ lệ [0.0, 1.0]
     normalized_box: List[float] = Field(
-        ...,
+        default_factory=lambda: [0.1, 0.1, 0.5, 0.5],
         description="[xmin, ymin, xmax, ymax] với giá trị từ 0.0 đến 1.0"
     )
+    # Hỗ trợ thêm đa giác chuẩn hóa [(x1, y1), (x2, y2), ...] đồng bộ từ Backend .NET
+    polygon_points: Optional[List[Tuple[float, float]]] = None
+    assigned_employee_id: Optional[str] = None
 
 class OccupancySettings(BaseModel):
     """Cấu hình riêng cho Module Occupancy (Giám sát bàn làm việc)."""
@@ -65,7 +69,6 @@ class OccupancySettings(BaseModel):
         import urllib.request
         import sys
 
-
         temp_path = output_path.with_suffix(".downloading")
 
         def reporthook(block_num, block_size, total_size):
@@ -98,21 +101,23 @@ class OccupancySettings(BaseModel):
     away_alert_seconds: float = 10.0
     anti_flicker_frames: int = 15
     prolonged_away_sec: float = 900.0
+    default_camera_code: str = os.environ.get("DEFAULT_CAMERA_CODE", "CAM_DESK_IT")
+    state_sync_interval_sec: float = 2.0
     fallback_video_path: Optional[str] = "D:\\code\\lmao\\018.avi"
 
     default_seats: List[SeatBox] = [
         SeatBox(
-            seat_id="SEAT-01",
+            seat_id="SEAT_IT_01",
             seat_name="Bàn làm việc 01",
             normalized_box=[0.25, 0.20, 0.75, 0.80]
         ),
         SeatBox(
-            seat_id="SEAT-02",
+            seat_id="SEAT_IT_02",
             seat_name="Bàn làm việc 02",
             normalized_box=[0.05, 0.20, 0.24, 0.80]
         ),
         SeatBox(
-            seat_id="SEAT-03",
+            seat_id="SEAT_IT_03",
             seat_name="Bàn làm việc 03",
             normalized_box=[0.76, 0.20, 0.95, 0.80]
         ),
@@ -216,9 +221,14 @@ class FaceRecognitionSettings(BaseModel):
 
     # Kích thước ảnh chuẩn sau khi căn chỉnh 5 điểm mốc đưa vào ArcFace
     arcface_input_size: int = 112
+    default_gate_camera_id: str = os.environ.get("DEFAULT_GATE_CAMERA_ID", "33333333-3333-3333-3333-333333333301")
+    default_department_id: str = os.environ.get("DEFAULT_DEPARTMENT_ID", "11111111-1111-1111-1111-111111111101")
 
 class Settings(BaseModel):
     """Cấu hình tổng thể của AI Service."""
+    backend_api_url: str = Field(
+        default_factory=lambda: os.environ.get("BACKEND_API_URL", "http://localhost:5155/api/v1")
+    )
     occupancy: OccupancySettings = Field(default_factory=OccupancySettings)
     face: FaceRecognitionSettings = Field(default_factory=FaceRecognitionSettings)
 

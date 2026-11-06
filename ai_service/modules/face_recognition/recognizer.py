@@ -33,14 +33,18 @@ class ArcFaceRecognizer:
     def __init__(
         self,
         model_path: Optional[str] = None,
-        use_cpu: bool = False
+        use_cpu: bool = False,
+        auto_download: bool = True
     ):
         target_path = model_path
         if not target_path or not os.path.exists(target_path):
-            try:
-                target_path = settings.face.ensure_recognizer_exists()
-            except Exception as e:
-                print(f"[ArcFaceRecognizer] Warning: Không thể nạp recognizer: {e}")
+            if auto_download:
+                try:
+                    target_path = settings.face.ensure_recognizer_exists()
+                except Exception as e:
+                    print(f"[ArcFaceRecognizer] Warning: Không thể nạp recognizer: {e}")
+                    target_path = str(settings.face.recognizer_path)
+            else:
                 target_path = str(settings.face.recognizer_path)
 
         self.model_path = target_path if os.path.exists(target_path) else None

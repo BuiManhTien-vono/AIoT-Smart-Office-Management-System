@@ -25,14 +25,18 @@ class AntiSpoofingChecker:
         model_path: Optional[str] = None,
         blur_threshold: float = 100.0,
         min_face_size: int = 112,
-        use_cpu: bool = True
+        use_cpu: bool = True,
+        auto_download: bool = True
     ):
         target_path = model_path
         if not target_path or not os.path.exists(target_path):
-            try:
-                target_path = settings.face.ensure_anti_spoofing_exists()
-            except Exception as e:
-                print(f"[AntiSpoofingChecker] Warning: Không thể nạp anti-spoofing: {e}")
+            if auto_download:
+                try:
+                    target_path = settings.face.ensure_anti_spoofing_exists()
+                except Exception as e:
+                    print(f"[AntiSpoofingChecker] Warning: Không thể nạp anti-spoofing: {e}")
+                    target_path = str(settings.face.anti_spoofing_path)
+            else:
                 target_path = str(settings.face.anti_spoofing_path)
 
         self.model_path = target_path if os.path.exists(target_path) else None
@@ -103,13 +107,8 @@ class AntiSpoofingChecker:
     ) -> Tuple[bool, float, Dict[str, Any]]:
         """
         Kiểm tra người thật (Anti-Spoofing / Liveness Check) bằng MiniFASNet-V2.
-        - img_bgr: Khung hình thô camera hoặc ảnh crop khuôn mặt
-        - bbox: (x1, y1, x2, y2) từ detector
-        - threshold: Ngưỡng xác suất người thật (mặc định 0.60)
-        Trả về: (is_real: bool, real_score: float, details: dict)
         """
         if self.engine is None:
-            # Fallback nếu chưa có model MiniFASNet: đánh giá dựa trên chất lượng
             is_good, _, score = self.assess_quality(img_bgr)
             return is_good, 1.0 if is_good else 0.0, {"warning": "Mô hình MiniFASNet chưa được nạp."}
 
@@ -118,14 +117,12 @@ class AntiSpoofingChecker:
         else:
             patch = cv2.resize(img_bgr, (80, 80))
 
-        # MiniFASNet-V2 yêu cầu dải giá trị pixel gốc [0.0, 255.0] (BGR), định dạng NCHW float32
         blob = patch.astype(np.float32).transpose(2, 0, 1)
         blob = np.expand_dims(blob, axis=0)
 
         input_name = self.engine.input_names[0]
         logits = self.engine.run({input_name: blob})[0]
 
-        # Softmax tính phân phối xác suất
         exp_l = np.exp(logits - np.max(logits))
         probs = exp_l / np.sum(exp_l)
         real_score = float(probs[0][1])

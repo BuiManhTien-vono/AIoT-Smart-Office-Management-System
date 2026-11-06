@@ -25,8 +25,10 @@ STATUS_COLORS_BGR = {
 class SeatState:
     seat_id: str
     seat_name: str
-    polygon_pixel: Optional[np.ndarray] = None   # Đa giác pixel [N, 2] nếu vẽ bằng chuột
-    normalized_box: Optional[List[float]] = None  # [xmin, ymin, xmax, ymax] tỷ lệ [0.0, 1.0]
+    polygon_pixel: Optional[np.ndarray] = None                 # Đa giác pixel [N, 2] nếu vẽ bằng chuột
+    normalized_polygon: Optional[List[Tuple[float, float]]] = None  # Đa giác chuẩn hóa [(x, y), ...] từ Backend .NET
+    normalized_box: Optional[List[float]] = None               # [xmin, ymin, xmax, ymax] tỷ lệ [0.0, 1.0]
+    assigned_employee_id: Optional[str] = None                 # Nhân viên cố định của bàn (từ Backend)
     status: SeatStatus = SeatStatus.EMPTY
     consecutive_absent_frames: int = 0
     consecutive_present_frames: int = 0

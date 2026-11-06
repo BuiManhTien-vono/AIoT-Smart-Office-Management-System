@@ -2,6 +2,7 @@
 Universal Video Stream Handler: Xử lý luồng Video đa năng cho Occupancy.
 - Chạy ngầm đa luồng AsyncHeadDetector (30 FPS mượt mà).
 - Công cụ vẽ bàn làm việc bằng chuột select_roi_polygons.
+- Tự động đẩy State-Sync sang Backend .NET 10 (POST /api/v1/occupancy/state-sync) trong luồng ngầm.
 - Dashboard trực quan thời gian thực với Alpha Blending.
 """
 
@@ -11,10 +12,13 @@ import threading
 import numpy as np
 from typing import Union, Optional, List, Tuple, Callable, Dict, Any
 
+from shared.config import settings
+from shared.backend_client import BackendSyncClient
 from shared.utils.ring_buffer import CircularRingBuffer
-from .geometry import denormalize_box
+from .geometry import denormalize_box, denormalize_point
 from .detector import RTDETRHeadDetector, HeadDetection, AsyncHeadDetector
 from .pipeline import OccupancyPipeline
+
 
 def select_roi_polygons(frame: np.ndarray) -> List[np.ndarray]:
     """
@@ -107,16 +111,28 @@ class VideoStreamProcessor:
         source: Union[int, str] = 0,
         detector: Optional[RTDETRHeadDetector] = None,
         occupancy_pipeline: Optional[OccupancyPipeline] = None,
+        pipeline: Optional[OccupancyPipeline] = None,
         async_mode: bool = True,
         frame_skip: int = 5,
-        loop: bool = True
+        loop: bool = True,
+        show_window: bool = True,
+        select_roi: bool = False,
+        sync_backend: bool = True,
+        camera_code: Optional[str] = None,
+        backend_client: Optional[BackendSyncClient] = None
     ):
         self.source = int(source) if isinstance(source, str) and source.isdigit() else source
         self.detector = detector
-        self.pipeline = occupancy_pipeline or OccupancyPipeline()
+        self.pipeline = pipeline or occupancy_pipeline or OccupancyPipeline()
         self.async_mode = async_mode
         self.frame_skip = frame_skip
         self.loop = loop
+        self.default_show_window = show_window
+        self.default_select_roi = select_roi
+        self.sync_backend = sync_backend
+        self.camera_code = camera_code or settings.occupancy.default_camera_code
+        self.backend_client = backend_client or (BackendSyncClient() if sync_backend else None)
+        self.ring_buffer = CircularRingBuffer(capacity=settings.occupancy.ring_buffer_capacity)
 
         self.cap = None
         self.async_worker: Optional[AsyncHeadDetector] = None
@@ -131,7 +147,25 @@ class VideoStreamProcessor:
             raise RuntimeError(f"Không thể mở nguồn video: {self.source}")
         return cap
 
-    def run(self, show_window: bool = True, select_roi: bool = False, on_frame_callback: Optional[Callable] = None):
+    def run(
+        self,
+        show_window: Optional[bool] = None,
+        select_roi: Optional[bool] = None,
+        on_frame_callback: Optional[Callable] = None
+    ):
+        display_window = self.default_show_window if show_window is None else show_window
+        use_roi_selector = self.default_select_roi if select_roi is None else select_roi
+
+        # Tự động thử kéo cấu hình vùng bàn từ Backend .NET nếu bật sync_backend
+        if self.sync_backend and self.backend_client and not use_roi_selector:
+            try:
+                remote_seats = self.backend_client.fetch_camera_zones(self.camera_code)
+                if remote_seats:
+                    self.pipeline.update_seats(remote_seats)
+                    print(f"[+] Đã đồng bộ {len(remote_seats)} vùng bàn từ Backend .NET cho camera '{self.camera_code}'.")
+            except Exception as exc:
+                print(f"[*] Không kéo được cấu hình bàn từ Backend ({exc}), sử dụng cấu hình cục bộ.")
+
         self.cap = self._open_capture()
         self.running = True
 
@@ -140,14 +174,14 @@ class VideoStreamProcessor:
             print("[!] Lỗi: Không đọc được frame đầu tiên từ video!")
             return
 
-        if select_roi and show_window:
+        if use_roi_selector and display_window:
             user_polygons = select_roi_polygons(initial_frame)
             if user_polygons:
                 self.pipeline = OccupancyPipeline(custom_polygons=user_polygons)
                 print(f"[+] Đã cấu hình {len(user_polygons)} vùng bàn giám sát tùy chỉnh.")
 
         window_name = "AIoT SMART OFFICE - OCCUPANCY MONITOR"
-        if show_window:
+        if display_window:
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(window_name, 1280, 720)
 
@@ -171,6 +205,8 @@ class VideoStreamProcessor:
 
                 frame_count += 1
                 fps_counter += 1
+                self.ring_buffer.append(frame)
+
                 now = time.time()
                 if now - fps_start_time >= 1.0:
                     current_fps = fps_counter / (now - fps_start_time)
@@ -191,8 +227,16 @@ class VideoStreamProcessor:
                 # 2. Xử lý FSM trạng thái chỗ ngồi
                 seat_statuses = self.pipeline.process_frame(detections, frame_shape=frame.shape[:2], current_time=now)
 
-                # 3. Vẽ Dashboard trực quan
-                if show_window:
+                # 3. Đẩy đồng bộ State-Sync sang Backend .NET (Non-blocking)
+                if self.sync_backend and self.backend_client:
+                    self.backend_client.submit_occupancy_state_async(
+                        camera_code=self.camera_code,
+                        frame_sequence=frame_count,
+                        seat_statuses=seat_statuses
+                    )
+
+                # 4. Vẽ Dashboard trực quan
+                if display_window:
                     annotated = self._render_ui(frame, detections, seat_statuses, current_fps, latency_ms)
                     cv2.imshow(window_name, annotated)
                     key = cv2.waitKey(1) & 0xFF
@@ -204,7 +248,7 @@ class VideoStreamProcessor:
 
         finally:
             self.stop()
-            if show_window:
+            if display_window:
                 cv2.destroyAllWindows()
 
     def _render_ui(
@@ -222,12 +266,23 @@ class VideoStreamProcessor:
         for seat in seat_statuses:
             color = seat["color_bgr"]
             poly = seat.get("polygon_pixel")
+            norm_poly = seat.get("normalized_polygon")
             box_norm = seat.get("normalized_box")
 
             if poly is not None:
                 cv2.fillPoly(overlay, [poly], color)
                 cv2.polylines(frame, [poly], True, color, 2)
                 M = cv2.moments(poly)
+                if M["m00"] != 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    label = f"{seat['seat_name']}: {seat['status']}"
+                    cv2.putText(frame, label, (cx - 50, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            elif norm_poly is not None and len(norm_poly) >= 3:
+                px_pts = np.array([denormalize_point(pt, w, h) for pt in norm_poly], dtype=np.int32)
+                cv2.fillPoly(overlay, [px_pts], color)
+                cv2.polylines(frame, [px_pts], True, color, 2)
+                M = cv2.moments(px_pts)
                 if M["m00"] != 0:
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
