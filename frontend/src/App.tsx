@@ -5,6 +5,8 @@ import { LoginPage } from './pages/auth/LoginPage'
 import { DashboardPage } from './pages/reporting/DashboardPage'
 import { MonthlyReportPage } from './pages/reporting/MonthlyReportPage'
 import { UserManagementPage } from './pages/reporting/UserManagementPage'
+import { EmployeeDirectoryPage } from './pages/biometrics/EmployeeDirectoryPage'
+import { DailyAttendancePage } from './pages/attendance/DailyAttendancePage'
 import { unauthorizedEvent } from './services/apiClient'
 import { readSession, saveSession } from './services/sessionStore'
 import { roles } from './types/auth.types'
@@ -13,6 +15,8 @@ import './App.css'
 
 const routes = [
   { path: '/dashboard', label: 'Tổng quan', icon: 'overview' as const, allowed: roles, Page: DashboardPage },
+  { path: '/biometrics/employees', label: 'Sinh trắc & Nhân sự', icon: 'identification' as const, allowed: ['ADMIN', 'HR', 'DEPT_LEAD'] as const, Page: EmployeeDirectoryPage },
+  { path: '/attendance/daily', label: 'Chấm công & Ca làm', icon: 'calendar' as const, allowed: roles, Page: DailyAttendancePage },
   { path: '/reports/monthly', label: 'Báo cáo tháng', icon: 'reports' as const, allowed: ['ADMIN', 'HR', 'DEPT_LEAD'] as const, Page: MonthlyReportPage },
   { path: '/admin/users', label: 'Tài khoản', icon: 'users' as const, allowed: ['ADMIN'] as const, Page: UserManagementPage },
 ]

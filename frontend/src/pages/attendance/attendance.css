@@ -1,0 +1,162 @@
+/* Attendance Page Styles */
+
+.attendance-page {
+  padding: 0;
+  max-width: 100%;
+}
+
+.attendance-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--panel-padding);
+  margin-bottom: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+.attendance-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  padding: var(--panel-padding);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+.field-caption {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--color-muted-foreground);
+}
+
+/* KPI Cards Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 16px var(--panel-padding);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 35, 59, 0.08);
+}
+
+.kpi-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bg-blue {
+  background: var(--status-info-soft);
+  color: var(--status-info-text);
+}
+
+.bg-green {
+  background: var(--status-success-soft);
+  color: var(--status-success-text);
+}
+
+.bg-yellow {
+  background: var(--status-warning-soft);
+  color: var(--status-warning-text);
+}
+
+.bg-purple {
+  background: var(--status-special-soft);
+  color: var(--status-special-text);
+}
+
+.bg-red {
+  background: var(--status-danger-soft);
+  color: var(--status-danger-text);
+}
+
+.kpi-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kpi-label {
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.kpi-number {
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-success {
+  color: var(--status-success-text) !important;
+}
+
+.text-warning {
+  color: var(--status-warning-text) !important;
+}
+
+.text-special {
+  color: var(--status-special-text) !important;
+}
+
+.text-danger {
+  color: var(--status-danger-text) !important;
+}
+
+.time-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+
+/* Employee name cell with avatar badge */
+.emp-name-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.emp-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}

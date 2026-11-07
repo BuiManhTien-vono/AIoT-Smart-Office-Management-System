@@ -4,12 +4,13 @@ import { aiHealthUrl, backendHealthUrl } from '../../services/apiClient'
 import { roleLabels } from '../../types/auth.types'
 import type { Session } from '../../types/auth.types'
 import { Icon } from './Icon'
+import type { IconName } from './Icon'
 import './MainLayout.css'
 
 export type NavigationLink = {
   path: string
   label: string
-  icon: 'overview' | 'reports' | 'users'
+  icon: IconName
   description?: string
 }
 
