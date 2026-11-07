@@ -28,3 +28,13 @@ AIoT-Smart-Office-Management-System/
 - **Database & Storage:** PostgreSQL 16 + Cloudflare R2 / MinIO (S3-compatible)
 - **DevOps:** Docker Compose, Nginx, Cloudflare SSL, GitHub Actions CI/CD
 
+## 3. Quy trình làm việc cùng AI (Harness Engineering)
+
+Bắt đầu với [hướng dẫn harness](harness/README.md), [bài thực hành baseline](harness/PRACTICE_01.md) và [mẫu nhiệm vụ để cùng tùy chỉnh](harness/TASK_TEMPLATE.md). Quy tắc agent nằm ở [AGENTS.md](AGENTS.md); tập kiểm tra có thể sửa trong [harness/checks.json](harness/checks.json).
+
+Kiểm tra điều kiện môi trường từ thư mục gốc trong PowerShell:
+
+```powershell
+.\scripts\harness.ps1 -Profile doctor
+```
+

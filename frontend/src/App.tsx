@@ -1,122 +1,73 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { MainLayout } from './components/common/MainLayout'
+import { RouteGuard } from './components/common/RouteGuard'
+import { LoginPage } from './pages/auth/LoginPage'
+import { DashboardPage } from './pages/reporting/DashboardPage'
+import { MonthlyReportPage } from './pages/reporting/MonthlyReportPage'
+import { UserManagementPage } from './pages/reporting/UserManagementPage'
+import { unauthorizedEvent } from './services/apiClient'
+import { readSession, saveSession } from './services/sessionStore'
+import { roles } from './types/auth.types'
+import type { Role, Session } from './types/auth.types'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+const routes = [
+  { path: '/dashboard', label: 'Tổng quan', icon: 'overview' as const, allowed: roles, Page: DashboardPage },
+  { path: '/reports/monthly', label: 'Báo cáo tháng', icon: 'reports' as const, allowed: ['ADMIN', 'HR', 'DEPT_LEAD'] as const, Page: MonthlyReportPage },
+  { path: '/admin/users', label: 'Tài khoản', icon: 'users' as const, allowed: ['ADMIN'] as const, Page: UserManagementPage },
+]
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function subscribePath(listener: () => void) {
+  window.addEventListener('hashchange', listener)
+  return () => window.removeEventListener('hashchange', listener)
 }
 
-export default App
+const readPath = () => window.location.hash.slice(1) || '/dashboard'
+
+export default function App() {
+  const [session, setSession] = useState(readSession)
+  const path = useSyncExternalStore(subscribePath, readPath)
+  const logout = useCallback(() => {
+    saveSession(null)
+    setSession(null)
+    window.location.hash = '/dashboard'
+  }, [])
+
+  useEffect(() => {
+    if (!session) return
+    const timer = window.setTimeout(logout, Math.max(0, session.expiresAt - Date.now()))
+    const checkExpiry = () => { if (session.expiresAt <= Date.now()) logout() }
+    const handleUnauthorized = (event: Event) => {
+      if ((event as CustomEvent<{ token: string }>).detail?.token === session.accessToken) logout()
+    }
+    window.addEventListener(unauthorizedEvent, handleUnauthorized)
+    window.addEventListener('focus', checkExpiry)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener(unauthorizedEvent, handleUnauthorized)
+      window.removeEventListener('focus', checkExpiry)
+    }
+  }, [session, logout])
+
+  function login(next: Session) {
+    saveSession(next)
+    setSession(next)
+  }
+
+  if (!session) return <LoginPage onLogin={login} />
+  const route = routes.find(item => item.path === path)
+  const links = routes.filter(item => (item.allowed as readonly Role[]).includes(session.user.role))
+
+  return <MainLayout session={session} links={links} path={path} onLogout={logout}>
+    {route
+      ? <RouteGuard session={session} allowedRoles={route.allowed}>
+          <route.Page key={`${session.user.id}:${route.path}`} session={session} />
+        </RouteGuard>
+      : <section className="panel access-message">
+          <p className="eyebrow">ĐIỀU HƯỚNG</p>
+          <h1>Không tìm thấy trang</h1>
+          <p className="muted">Đường dẫn hiện tại chưa có trong ứng dụng.</p>
+          <a className="button button-primary" href="#/dashboard">Về tổng quan</a>
+        </section>}
+  </MainLayout>
+}
