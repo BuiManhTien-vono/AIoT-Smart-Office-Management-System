@@ -1,5 +1,6 @@
 # Ignored local plugin / external repos
 superpowers/
+.agents/
 
 # .NET / C# Build Artifacts
 **/[Bb]in/
