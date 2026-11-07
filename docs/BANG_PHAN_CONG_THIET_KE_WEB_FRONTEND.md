@@ -27,7 +27,45 @@
    - **Vắng quá hạn > 15p / Vắng không phép / Đột nhập khẩn cấp (`PROLONGED_AWAY`, `ABSENT`, `LEVEL_3_BREACH`):** Đỏ hồng ngọc (`#EF4444` / `red-500`).
    - **Giả mạo sinh trắc / Ngồi sai bàn / Về sớm (`SPOOFING_ATTEMPT`, `WRONG_SEAT`, `EARLY_LEAVE`):** Tím (`#8B5CF6` / `violet-500`).
    - **Bàn trống / Nghỉ trưa (`EMPTY`, `LUNCH_MUTE`):** Xám trung tính (`#64748B` / `slate-500`).
-2. **Cấu hình Cổng Kết nối (Environment Variables trong `frontend/.env`):**
+2. **Token giao diện ngữ nghĩa:**
+   - Dùng CSS variables chung cho màu thương hiệu, nền trang, bề mặt/card, chữ chính/phụ, đường viền, focus ring và các trạng thái nghiệp vụ.
+   - Ánh xạ màu trạng thái ở mục 1 vào token ngữ nghĩa để mọi module dùng cùng một màu cho cùng ý nghĩa. Không dùng màu trạng thái làm màu trang trí hoặc màu thương hiệu.
+   - Không đặt mã màu rời rạc trong từng component nếu màu đó thuộc hệ token chung. Màu riêng của biểu đồ phải có quy ước và nhãn đi kèm.
+3. **Typography và dữ liệu:**
+   - Dùng một họ font sans-serif thống nhất, hỗ trợ đầy đủ tiếng Việt và dấu.
+   - Chuẩn hóa thang cỡ chữ, độ đậm và chiều cao dòng cho tiêu đề trang, tiêu đề khu vực, nội dung, nhãn biểu mẫu và chú thích.
+   - Dùng chữ số tabular cho KPI, thời gian và cột số để các chữ số không làm xê dịch bố cục.
+   - Giữ nội dung dễ đọc, tránh cỡ chữ quá nhỏ; không cắt mất thông tin thiết yếu. Khi cần rút gọn nội dung, phải có cách xem giá trị đầy đủ.
+4. **Spacing và hình khối:**
+   - Dùng thang khoảng cách theo bội số 4 px, ưu tiên nhịp 8 px cho lề, khoảng cách giữa component và phân đoạn nội dung.
+   - Thống nhất bán kính bo góc, độ dày đường viền, mức đổ bóng và chiều cao các điều khiển biểu mẫu trên toàn hệ thống.
+   - Quy định các mức kích thước icon và khoảng cách icon-văn bản; không dùng emoji làm icon điều hướng hay biểu tượng chức năng.
+5. **Component và trạng thái tương tác:**
+   - Tạo component dùng chung cho nút chính/phụ, trường nhập liệu, select, badge trạng thái, card/KPI, bảng, thông báo, modal và thanh công cụ.
+   - Mỗi component tương tác cần có trạng thái mặc định, hover, focus, đang xử lý, disabled, thành công và lỗi phù hợp với chức năng.
+   - Thao tác bất đồng bộ phải phản hồi trạng thái đang xử lý, hạn chế gửi lặp và thông báo kết quả gần nơi người dùng thực hiện thao tác.
+   - Form phải có nhãn hiển thị, hướng dẫn khi cần và lỗi gắn với trường tương ứng. Không dùng placeholder thay cho nhãn.
+6. **Bố cục responsive:**
+   - Thiết kế ưu tiên màn hình quản trị desktop, đồng thời xác định rõ cách chuyển bố cục ở tablet và màn hình hẹp.
+   - Dùng breakpoint thống nhất cho toàn ứng dụng. Sidebar, topbar, bộ lọc, KPI, bảng và biểu đồ phải có phương án hiển thị ở từng kích thước.
+   - Không để nội dung chính tràn ngang ngoài những vùng dữ liệu có chủ đích như bảng; vùng cuộn phải dễ nhận biết và không che thao tác quan trọng.
+   - Nội dung không bị che bởi header/footer cố định; giữ thứ tự đọc và thao tác hợp lý khi bố cục chuyển cột.
+7. **Accessibility và khả năng đọc:**
+   - Đảm bảo độ tương phản tối thiểu WCAG AA cho chữ thường (4.5:1) và chữ lớn (3:1); kiểm tra riêng từng cặp màu chữ/nền thực tế.
+   - Không truyền đạt trạng thái chỉ bằng màu. Kết hợp nhãn, biểu tượng hoặc nội dung văn bản phù hợp.
+   - Tất cả chức năng dùng được bằng bàn phím, có focus nhìn thấy rõ và thứ tự focus hợp lý.
+   - Điều khiển chỉ có icon cần tên truy cập; icon trang trí cạnh chữ cần được ẩn khỏi cây trợ năng.
+   - Biểu đồ cần mô tả/nhãn dễ hiểu và phương án đọc số liệu không phụ thuộc riêng vào hình ảnh hoặc màu sắc.
+   - Tôn trọng thiết lập giảm chuyển động của hệ điều hành; chuyển động không được làm chậm hay khóa thao tác.
+8. **Bảng, biểu đồ và nội dung dữ liệu:**
+   - Bảng dùng cấu trúc ngữ nghĩa, tiêu đề cột rõ ràng, định dạng số/ngày nhất quán và trạng thái tải, lỗi, rỗng riêng biệt.
+   - Biểu đồ có tiêu đề, đơn vị hoặc ngữ cảnh kỳ dữ liệu, nhãn/legend khi cần và cách xem giá trị cụ thể.
+   - Khi dữ liệu được cập nhật định kỳ, thể hiện thời điểm cập nhật hoặc trạng thái dữ liệu cũ. Chỉ dùng nhãn “thời gian thực” khi cơ chế và dữ liệu đáp ứng ý nghĩa đó.
+   - Các thao tác lọc cần làm rõ phạm vi dữ liệu đang xem và đồng bộ bộ lọc với dữ liệu xuất báo cáo.
+9. **Lựa chọn phong cách cần thống nhất trước khi hoàn thiện UI:**
+   - Nhóm dự án cần chốt tông màu thương hiệu/nền, phong cách typography, mật độ bố cục, hình khối component, cách xử lý bề mặt, ngôn ngữ icon, mức chuyển động, breakpoint và quy tắc dark mode.
+   - Cho đến khi nhóm thống nhất, các lựa chọn này là quyết định đang chờ, không tự tạo thêm biến thể riêng cho từng module. Màu trạng thái ở mục 1 vẫn áp dụng thống nhất.
+10. **Cấu hình Cổng Kết nối (Environment Variables trong `frontend/.env`):**
    - `VITE_BACKEND_API_URL=http://localhost:5155/api/v1`
    - `VITE_SIGNALR_HUB_URL=http://localhost:5155/hubs/occupancy`
    - `VITE_AI_SERVICE_URL=http://localhost:8000`
