@@ -37,8 +37,10 @@
    - Dùng chữ số tabular cho KPI, thời gian và cột số để các chữ số không làm xê dịch bố cục.
    - Giữ nội dung dễ đọc, tránh cỡ chữ quá nhỏ; không cắt mất thông tin thiết yếu. Khi cần rút gọn nội dung, phải có cách xem giá trị đầy đủ.
 4. **Spacing và hình khối:**
-   - Dùng thang khoảng cách theo bội số 4 px, ưu tiên nhịp 8 px cho lề, khoảng cách giữa component và phân đoạn nội dung.
-   - Thống nhất bán kính bo góc, độ dày đường viền, mức đổ bóng và chiều cao các điều khiển biểu mẫu trên toàn hệ thống.
+   - Dùng bố cục gọn, giảm 50% spacing/padding so với chuẩn trước đó: thang bội số 2 px; khoảng cách thường 4–6 px, padding card/panel 6–8 px, gutter desktop 8–12 px, padding dọc hàng bảng/list 4–5 px.
+   - Giảm cỡ chữ tiêu đề/nhãn/component quá lớn khoảng 3–6 px so với mockup cũ; nội dung chính tối thiểu 14 px, chữ phụ tối thiểu 12 px.
+   - Giữ button/input cao khoảng 36–40 px và topbar khoảng 48–52 px trên desktop; cỡ chữ chỉ giảm 3–6 px như dòng trên, không giảm theo tỷ lệ spacing 50%. Vùng đích chạm trên thiết bị cảm ứng tối thiểu 44 px hoặc có khoảng cách tương đương.
+   - Thống nhất bán kính bo góc, độ dày đường viền và mức đổ bóng trên toàn hệ thống.
    - Quy định các mức kích thước icon và khoảng cách icon-văn bản; không dùng emoji làm icon điều hướng hay biểu tượng chức năng.
 5. **Component và trạng thái tương tác:**
    - Tạo component dùng chung cho nút chính/phụ, trường nhập liệu, select, badge trạng thái, card/KPI, bảng, thông báo, modal và thanh công cụ.
@@ -48,6 +50,7 @@
 6. **Bố cục responsive:**
    - Thiết kế ưu tiên màn hình quản trị desktop, đồng thời xác định rõ cách chuyển bố cục ở tablet và màn hình hẹp.
    - Dùng breakpoint thống nhất cho toàn ứng dụng. Sidebar, topbar, bộ lọc, KPI, bảng và biểu đồ phải có phương án hiển thị ở từng kích thước.
+   - Sidebar desktop có thể thu gọn/mở rộng: khi mở hiển thị nhãn menu; khi thu gọn chỉ hiển thị icon kèm tooltip và tên truy cập.
    - Không để nội dung chính tràn ngang ngoài những vùng dữ liệu có chủ đích như bảng; vùng cuộn phải dễ nhận biết và không che thao tác quan trọng.
    - Nội dung không bị che bởi header/footer cố định; giữ thứ tự đọc và thao tác hợp lý khi bố cục chuyển cột.
 7. **Accessibility và khả năng đọc:**

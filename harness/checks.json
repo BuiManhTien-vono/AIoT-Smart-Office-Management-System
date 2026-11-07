@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "minimums": {
+    "node": "22.12.0",
+    "dotnetMajor": 10,
+    "python": "3.12.0"
+  },
+  "profiles": {
+    "frontend": [
+      { "name": "Frontend lint", "cwd": "frontend", "tool": "npm", "args": ["run", "lint"] },
+      { "name": "Frontend build", "cwd": "frontend", "tool": "npm", "args": ["run", "build"] }
+    ],
+    "backend": [
+      { "name": "Backend build", "cwd": ".", "tool": "dotnet", "args": ["build", "backend/SmartOffice.slnx", "--no-restore", "--verbosity", "minimal", "-m:1", "/nodeReuse:false"] },
+      { "name": "Backend tests", "cwd": ".", "tool": "dotnet", "args": ["test", "backend/SmartOffice.slnx", "--no-build", "--no-restore", "--verbosity", "normal", "-m:1", "/nodeReuse:false"] }
+    ],
+    "ai": [
+      {
+        "name": "AI logic (no model inference)",
+        "cwd": "ai_service/tests",
+        "tool": "python",
+        "args": [
+          "-m", "unittest", "-v",
+          "test_occupancy.TestOccupancyModule.test_point_in_box",
+          "test_occupancy.TestOccupancyModule.test_ray_casting_polygon",
+          "test_occupancy.TestOccupancyModule.test_fsm_transitions_and_backend_payload_mapping",
+          "test_onnx_inference.TestGeometryAndFSM",
+          "test_face.TestFaceRecognitionModule.test_cosine_similarity",
+          "test_face.TestFaceRecognitionModule.test_face_alignment",
+          "test_face.TestFaceRecognitionModule.test_laplacian_blur_check"
+        ]
+      }
+    ]
+  }
+}

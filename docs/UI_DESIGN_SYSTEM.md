@@ -2,9 +2,11 @@
 
 > Phiên bản 1 · Ngôn ngữ: tiếng Việt · Ưu tiên: desktop, hỗ trợ tablet và điện thoại
 
+> Cập nhật hiển thị ngày 07/11/2026 theo yêu cầu chủ dự án. Các trang sau đăng nhập dùng ảnh văn phòng `frontend/src/assets/background.png` và bề mặt glassmorphism. Padding container tăng lên 16px trên desktop, 14px trên điện thoại; thay thế mức 6–8px của đợt bố cục gọn trước. Trang đăng nhập dùng thiết kế riêng. Với đợt chỉnh thuần hiển thị này, kiểm tra trực tiếp trên trình duyệt theo yêu cầu người dùng.
+
 ## 1. Định hướng
 
-Smart Office là ứng dụng vận hành văn phòng, kết hợp công việc quản trị với giám sát dữ liệu thời gian thực. Giao diện dùng nền sáng cho quản trị, nhân sự, chấm công và báo cáo; dùng bề mặt tối riêng cho trung tâm an ninh (SOC), camera và bản đồ trực tiếp. Hai bề mặt chia sẻ cùng kiểu chữ, thành phần, khoảng cách, biểu tượng và quy ước trạng thái.
+Smart Office là ứng dụng vận hành văn phòng, kết hợp công việc quản trị với giám sát dữ liệu thời gian thực. Các trang sau đăng nhập chia sẻ ảnh nền văn phòng và bề mặt kính mờ, dùng nền kính sáng cho quản trị và báo cáo, kính navy cho điều hướng. Các vùng tác nghiệp tối như SOC có thể dùng biến thể kính tối khi được triển khai. Trang đăng nhập theo bố cục nhận diện riêng. Các bề mặt chia sẻ cùng kiểu chữ, thành phần, biểu tượng và quy ước trạng thái.
 
 Nguyên tắc thiết kế:
 
@@ -43,11 +45,13 @@ Menu toàn ứng dụng dự kiến gồm:
 
 ## 4. Bố cục ứng dụng
 
-- Desktop dùng sidebar có thể thu gọn, header trang và vùng nội dung linh hoạt.
+- Desktop dùng sidebar có thể thu gọn/mở rộng: chế độ mở hiển thị nhãn; chế độ thu gọn chỉ hiển thị icon, kèm tooltip và tên truy cập cho từng mục.
 - Header hiển thị tiêu đề, breadcrumb khi cần, trạng thái dữ liệu, tài khoản và hành động chính.
+- Topbar dùng chiều cao gọn khoảng 48–52px, ưu tiên trạng thái và thao tác thường dùng; không làm các pill trạng thái chiếm quá nhiều diện tích.
 - Bảng rộng và bản đồ có thể dùng toàn chiều rộng. Biểu mẫu và nội dung đọc dài giữ bề rộng dễ theo dõi.
 - SOC và bản đồ trực tiếp tận dụng màn hình rộng. Trên màn hình nhỏ, chuyển sang danh sách và chi tiết có điều khiển rõ.
 - Dùng dialog cho tác vụ ngắn. Quy trình nhiều bước hoặc cấu hình phức tạp nên có trang riêng.
+- Dashboard bỏ khối chào hỏi. Hai khối tiêu đề và ngày/nút được căn giữa theo chiều dọc; ngày làm việc nằm ngay trên nút Làm mới. Eyebrow “KHÔNG GIAN LÀM VIỆC / TỔNG QUAN” chuyển lên nhãn trang trên topbar, không lặp phía trên tiêu đề. Màn hình hẹp có thể xếp xuống hàng và rút gọn nhãn trang để giữ nội dung dễ đọc.
 
 ## 5. Bảng màu
 
@@ -110,10 +114,12 @@ Trên nền tối, chọn biến thể trạng thái có tương phản phù h�
 
 - Chọn sans-serif hỗ trợ tiếng Việt, ví dụ **Inter** hoặc **Be Vietnam Pro**.
 - Dùng monospace có giới hạn cho mã nhân viên, ID sự kiện và timestamp cần canh hàng.
-- Chữ nội dung khoảng 16px; chữ phụ không nhỏ hơn 12px.
-- Dùng thang khoảng cách bội số 4px, ưu tiên nhịp 8px. Padding panel thường 20–24px, gutter desktop 24–32px.
+- Giữ control và chữ gọn, tăng đệm giữa viền container và nội dung. Padding card/panel 16px ở desktop, 14px ở điện thoại; khoảng cách các vùng dữ liệu 12px, gutter desktop 20px và điện thoại 12px. Nội dung bảng cách mép panel khoảng 16px, cuộn trong khung trên màn hẹp.
+- Giảm cỡ chữ tiêu đề, nhãn và thành phần đang quá lớn khoảng 3–6px so với mockup trước; cỡ chữ nội dung chính hướng tới 14px, chữ phụ tối thiểu 12px. Không giảm dưới ngưỡng này để đổi lấy mật độ.
+- Button và input cao khoảng 36–40px trên desktop; topbar 48–52px. Trên thiết bị cảm ứng, giữ vùng đích tương tác tối thiểu 44px hoặc bố trí khoảng cách chạm tương đương.
+- Hàng bảng/list dùng padding dọc khoảng 8px; giữ phân cấp bằng nhãn, đường chia và độ tương phản.
 - Bo góc nhất quán khoảng 8–12px, đổ bóng nhẹ.
-- Tránh hiệu ứng glass/blur phía sau bảng hoặc đoạn chữ dài.
+- Dùng kính sáng bán trong suốt với blur 18px cho panel, sidebar, topbar và overlay. Bề mặt dữ liệu có độ phủ trắng đủ cao để chữ dễ đọc; giữ nhãn/màu trạng thái rõ ràng. Có nền đậm đặc hơn khi trình duyệt không hỗ trợ backdrop-filter. Giới hạn các token hiệu ứng trong khung sau đăng nhập để trang login giữ thiết kế riêng.
 - Dùng một bộ icon SVG như Phosphor hoặc Lucide. Không dùng emoji làm icon hệ thống.
 
 ## 7. Quy tắc thành phần
@@ -123,6 +129,7 @@ Trên nền tối, chọn biến thể trạng thái có tương phản phù h�
 - Cột có tiêu đề rõ, số liệu căn nhất quán, bộ lọc và sắp xếp khi phù hợp.
 - Bảng dài có tiêu đề cột cố định. Trên màn hình nhỏ dùng danh sách thẻ hoặc vùng cuộn có chủ đích.
 - Badge trạng thái có chữ. Hành động theo hàng có tên truy cập rõ.
+- Badge trong panel cập nhật dữ liệu Dashboard dùng chữ 14px, padding 6px dọc/12px ngang để dễ nhận biết trạng thái.
 - Có trạng thái đang tải, lỗi và thử lại, chưa có dữ liệu, không tìm thấy kết quả.
 
 ### KPI và biểu đồ
