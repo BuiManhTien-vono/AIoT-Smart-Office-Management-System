@@ -1,7 +1,51 @@
-version: '3.8'
-
 services:
-  # C# .NET 10 WebApi (Modular Monolith - Backend Core)
+  # 1. Database: PostgreSQL 16 + pgvector (Tự động khởi tạo 5 Schema độc lập)
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smartoffice_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smartoffice_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../backend/database/01_init_schemas_and_tables.sql:/docker-entrypoint-initdb.d/01_init_schemas_and_tables.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-smartoffice_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartoffice_net
+
+  # 2. Object Storage: MinIO (Tương thích chuẩn S3 / Cloudflare R2 - Buổi 7)
+  # Tự động khởi tạo thư mục Bucket 'smartoffice-media' ngay khi bật Server
+  minio:
+    image: elestio/minio:latest
+    container_name: smartoffice_minio
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c "mkdir -p /data/${OBJECT_STORAGE_BUCKET:-smartoffice-media} && minio server /data --console-address ':9001'"
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartoffice_net
+
+  # 3. C# .NET 10 WebApi (Modular Monolith - Backend Core 5 Modules)
   backend:
     build:
       context: ../backend
@@ -10,21 +54,28 @@ services:
     restart: unless-stopped
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__Database=Host=postgres;Port=5432;Database=smartoffice_db;Username=postgres;Password=postgres_password
-      - ObjectStorage__Provider=CloudflareR2 # or MinIO
-      - ObjectStorage__Endpoint=https://<account_id>.r2.cloudflarestorage.com
-      - ObjectStorage__AccessKey=${R2_ACCESS_KEY}
-      - ObjectStorage__SecretKey=${R2_SECRET_KEY}
-      - ObjectStorage__BucketName=smartoffice-media
-      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
-      - Telegram__ChatId=${TELEGRAM_CHAT_ID}
+      - ConnectionStrings__Database=Host=postgres;Port=5432;Database=${POSTGRES_DB:-smartoffice_db};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres_password}
+      - ObjectStorage__Provider=${OBJECT_STORAGE_PROVIDER:-MinIO}
+      - ObjectStorage__Endpoint=${OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
+      - ObjectStorage__AccessKey=${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+      - ObjectStorage__SecretKey=${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+      - ObjectStorage__BucketName=${OBJECT_STORAGE_BUCKET:-smartoffice-media}
+      - ObjectStorage__DefaultPresignedExpiryMinutes=15
+      - ObjectStorage__UseRemoteS3Put=${OBJECT_STORAGE_USE_REMOTE_PUT:-true}
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN:-}
+      - Telegram__ChatId=${TELEGRAM_CHAT_ID:-}
       - AiService__BaseUrl=http://ai_service:8000
     ports:
       - "5000:8080"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - smartoffice_net
 
-  # Python AI Service (Computer Vision & GPU Inference)
+  # 4. Python AI Service (Computer Vision & ONNX Inference)
   ai_service:
     build:
       context: ../ai_service
@@ -33,61 +84,63 @@ services:
     restart: unless-stopped
     environment:
       - BACKEND_API_URL=http://backend:8080/api/v1
+      - DEFAULT_CAMERA_CODE=CAM_DESK_IT
+      - BACKEND_SYNC_ENABLED=true
       - CUDA_VISIBLE_DEVICES=0
     ports:
       - "8000:8000"
     volumes:
-      - ../storage/mock_videos:/app/mock_videos
-    # Hỗ trợ GPU NVIDIA nếu có nvidia-container-toolkit
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - ai_occupancy_weights:/app/modules/occupancy/weights
+      - ai_face_weights:/app/modules/face_recognition/weights
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartoffice_net
 
-  # React Frontend (Vite + Nginx)
+  # 5. React Frontend (Vite + TypeScript + Nginx SPA)
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        VITE_BACKEND_API_URL: ${VITE_BACKEND_API_URL:-http://localhost:5000/api/v1}
+        VITE_AI_SERVICE_URL: ${VITE_AI_SERVICE_URL:-http://localhost:8000}
     container_name: smartoffice_frontend
     restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
       - backend
+    networks:
+      - smartoffice_net
 
-  # Database: PostgreSQL 16 + pgvector (Tự động khởi tạo 5 Schema độc lập)
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: smartoffice_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: smartoffice_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../backend/database/01_init_schemas_and_tables.sql:/docker-entrypoint-initdb.d/01_init_schemas_and_tables.sql:ro
-    ports:
-      - "5432:5432"
-
-  # Nginx Gateway Reverse Proxy (Cloudflare SSL Origin CA)
+  # 6. Nginx Gateway Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: smartoffice_gateway
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - backend
       - frontend
+      - ai_service
+    networks:
+      - smartoffice_net
+
+networks:
+  smartoffice_net:
+    driver: bridge
 
 volumes:
   postgres_data:
+  minio_data:
+  ai_occupancy_weights:
+  ai_face_weights:

@@ -11,6 +11,13 @@ public interface ISecurityIncidentService
         EvaluateNightGuardDetectionRequest request,
         CancellationToken ct = default);
 
+    Task<Result<SecurityEvidenceUploadResponse>> UploadIncidentEvidenceAsync(
+        Guid incidentId,
+        string evidenceType,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default);
+
     Task<Result<SecurityIncidentResponse>> ResolveIncidentTicketAsync(
         Guid incidentId,
         ResolveSecurityIncidentRequest request,
@@ -22,4 +29,3 @@ public interface ISecurityIncidentService
         int limit = 50,
         CancellationToken ct = default);
 }
-

@@ -13,6 +13,25 @@ public interface IBiometricsService
     Task<Result<EmployeeResponse>> GetEmployeeByIdAsync(Guid id, CancellationToken ct = default);
     Task<Result> DeactivateEmployeeAsync(Guid id, CancellationToken ct = default);
 
+    Task<Result<BiometricMediaUploadResponse>> UploadEmployeeAvatarAsync(
+        Guid employeeId,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default);
+
+    Task<Result<BiometricMediaUploadResponse>> UploadBiometricSampleImageAsync(
+        Guid employeeId,
+        string poseLabel,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default);
+
+    Task<Result<BiometricMediaUploadResponse>> GetBiometricPresignedUploadUrlAsync(
+        Guid employeeId,
+        string poseLabel = "FRONTAL",
+        string contentType = "image/jpeg",
+        CancellationToken ct = default);
+
     Task<Result<BiometricVectorResponse>> RegisterBiometricSampleAsync(Guid employeeId, RegisterBiometricVectorRequest request, CancellationToken ct = default);
     Task<Result<IdentifyFaceResponse>> IdentifyByVectorAsync(IdentifyFaceRequest request, CancellationToken ct = default);
 }

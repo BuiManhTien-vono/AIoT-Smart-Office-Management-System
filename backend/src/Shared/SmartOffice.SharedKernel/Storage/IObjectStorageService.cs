@@ -2,7 +2,7 @@ namespace SmartOffice.SharedKernel.Storage;
 
 /// <summary>
 /// Hợp đồng dịch vụ lưu trữ đối tượng chuẩn S3 / MinIO / Cloudflare R2.
-/// Phục vụ tải tệp lên qua Stream và sinh đường dẫn bảo mật có thời hạn (Presigned URL).
+/// Phục vụ tải tệp lên qua Stream và sinh đường dẫn bảo mật có thời hạn (Presigned GET / PUT URL).
 /// </summary>
 public interface IObjectStorageService
 {
@@ -16,5 +16,10 @@ public interface IObjectStorageService
         string objectKey,
         int expiryMinutes = 15,
         CancellationToken cancellationToken = default);
-}
 
+    Task<string> GetPresignedUploadUrlAsync(
+        string objectKey,
+        string contentType = "image/jpeg",
+        int expiryMinutes = 15,
+        CancellationToken cancellationToken = default);
+}

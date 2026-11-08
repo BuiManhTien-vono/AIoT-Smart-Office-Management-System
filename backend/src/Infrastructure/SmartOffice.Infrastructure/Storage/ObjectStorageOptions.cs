@@ -15,5 +15,6 @@ public sealed class ObjectStorageOptions
     public string SecretKey { get; set; } = "minioadmin";
     public string Region { get; set; } = "auto";
     public long MaxFileSizeBytes { get; set; } = 25 * 1024 * 1024; // 25 MB
+    public int DefaultPresignedExpiryMinutes { get; set; } = 15;
+    public bool UseRemoteS3Put { get; set; } = false;
 }
-

@@ -13,7 +13,7 @@ namespace SmartOffice.Modules.Security.Application.Services;
 /// Dịch vụ xử lý Sự cố An ninh Ngoài giờ & Phát hiện Người lạ (FR-SEC-01..06, US-SEC-02, US-SEC-03):
 /// - Kiểm tra chế độ Trực đêm tự động (Night Guard Mode: 19:00 - 06:30, Thứ Bảy, Chủ Nhật).
 /// - Vận hành Cây quyết định phân cấp cảnh báo 3 mức (LEVEL_1_OT, LEVEL_2_UNAUTH, LEVEL_3_BREACH) + SPOOFING_ATTEMPT.
-/// - Sinh Presigned URL cho Snapshot & Video bằng chứng 10s trên S3/R2.
+/// - Tải tệp & sinh Presigned URL cho Snapshot & Video bằng chứng 10s trên MinIO/S3/R2.
 /// - Quản lý đóng biên bản xử lý sự cố (ACKNOWLEDGED / FALSE_ALARM) và phát Event sang Module Reporting.
 /// </summary>
 public sealed class SecurityIncidentService(
@@ -31,6 +31,7 @@ public sealed class SecurityIncidentService(
     public const string TicketOpen = "OPEN";
     public const string TicketAcknowledged = "ACKNOWLEDGED";
     public const string TicketFalseAlarm = "FALSE_ALARM";
+    public const int DefaultPresignedExpiryMinutes = 15;
 
     public static readonly TimeOnly NightGuardStart = new(19, 0);
     public static readonly TimeOnly NightGuardEnd = new(6, 30);
@@ -172,6 +173,54 @@ public sealed class SecurityIncidentService(
         return Result.Success(await MapIncidentResponseAsync(incident, employee, actionSummary, ct));
     }
 
+    public async Task<Result<SecurityEvidenceUploadResponse>> UploadIncidentEvidenceAsync(
+        Guid incidentId,
+        string evidenceType,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default)
+    {
+        var incident = await dbContext.SecurityIncidents.FirstOrDefaultAsync(x => x.Id == incidentId, ct);
+        if (incident is null)
+        {
+            return Result.Failure<SecurityEvidenceUploadResponse>(
+                new Error("INCIDENT_NOT_FOUND", "Không tìm thấy hồ sơ sự cố an ninh để tải lên bằng chứng."));
+        }
+
+        var normalizedType = string.IsNullOrWhiteSpace(evidenceType)
+            ? "SNAPSHOT"
+            : evidenceType.Trim().ToUpperInvariant();
+
+        var dateFolder = incident.DetectedAt.ToString("yyyy-MM-dd");
+        string objectKey;
+
+        if (normalizedType == "VIDEO_CLIP")
+        {
+            objectKey = $"security_evidence/{dateFolder}/incident_{incident.Id:N}_clip10s.mp4";
+            var savedClipKey = await objectStorage.UploadFileAsync(objectKey, fileStream, contentType, ct);
+            incident.VideoClipObjectKey = savedClipKey;
+            objectKey = savedClipKey;
+        }
+        else
+        {
+            normalizedType = "SNAPSHOT";
+            objectKey = $"security_evidence/{dateFolder}/incident_{incident.Id:N}_snapshot.jpg";
+            var savedSnapKey = await objectStorage.UploadFileAsync(objectKey, fileStream, contentType, ct);
+            incident.SnapshotObjectKey = savedSnapKey;
+            objectKey = savedSnapKey;
+        }
+
+        await dbContext.SaveChangesAsync(ct);
+        var presignedUrl = await objectStorage.GetPresignedUrlAsync(objectKey, DefaultPresignedExpiryMinutes, ct);
+
+        return Result.Success(new SecurityEvidenceUploadResponse(
+            incident.Id,
+            normalizedType,
+            objectKey,
+            presignedUrl,
+            DefaultPresignedExpiryMinutes));
+    }
+
     public async Task<Result<SecurityIncidentResponse>> ResolveIncidentTicketAsync(
         Guid incidentId,
         ResolveSecurityIncidentRequest request,
@@ -273,13 +322,19 @@ public sealed class SecurityIncidentService(
         string? snapshotUrl = null;
         if (!string.IsNullOrWhiteSpace(incident.SnapshotObjectKey))
         {
-            snapshotUrl = await objectStorage.GetPresignedUrlAsync(incident.SnapshotObjectKey, 15, ct);
+            snapshotUrl = await objectStorage.GetPresignedUrlAsync(
+                incident.SnapshotObjectKey,
+                DefaultPresignedExpiryMinutes,
+                ct);
         }
 
         string? clipUrl = null;
         if (!string.IsNullOrWhiteSpace(incident.VideoClipObjectKey))
         {
-            clipUrl = await objectStorage.GetPresignedUrlAsync(incident.VideoClipObjectKey, 15, ct);
+            clipUrl = await objectStorage.GetPresignedUrlAsync(
+                incident.VideoClipObjectKey,
+                DefaultPresignedExpiryMinutes,
+                ct);
         }
 
         return new SecurityIncidentResponse(

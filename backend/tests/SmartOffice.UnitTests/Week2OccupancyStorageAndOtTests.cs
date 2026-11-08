@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SmartOffice.Infrastructure;
+using SmartOffice.Infrastructure.Storage;
 using SmartOffice.Modules.Attendance.Application.DTOs;
 using SmartOffice.Modules.Attendance.Application.Services;
 using SmartOffice.Modules.Attendance.Infrastructure;
@@ -318,5 +319,67 @@ public class Week2OccupancyStorageAndOtTests
         var csvBytes = await reportingService.ExportMonthlyReportCsvAsync(2026, 11, dept.Id);
         var csvText = Encoding.UTF8.GetString(csvBytes);
         Assert.Contains("SummaryDate,DepartmentCode,TotalEmployees,PresentCount,LateCount,AbsentCount", csvText);
+    }
+
+    [Fact]
+    public async Task ObjectStorage_MinIO_PresignedGetPut_And_ModuleMediaUploads_Should_Work_EndToEnd()
+    {
+        using var provider = BuildFullModularServiceProvider(nameof(ObjectStorage_MinIO_PresignedGetPut_And_ModuleMediaUploads_Should_Work_EndToEnd));
+        using var scope = provider.CreateScope();
+
+        var biometricsService = scope.ServiceProvider.GetRequiredService<IBiometricsService>();
+        var attendanceService = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
+        var incidentService = scope.ServiceProvider.GetRequiredService<ISecurityIncidentService>();
+
+        // 1. Kiểm tra chặn Path Traversal trong S3ObjectStorageService
+        Assert.Throws<ArgumentException>(() => S3ObjectStorageService.NormalizeAndValidateKey("../etc/passwd"));
+        Assert.Throws<ArgumentException>(() => S3ObjectStorageService.NormalizeAndValidateKey("biometrics//avatar.jpg"));
+
+        // 2. Tạo Phòng ban + Nhân viên + Ca làm việc
+        var dept = (await biometricsService.CreateDepartmentAsync(
+            new CreateDepartmentRequest("DEPT_MEDIA", "Phòng Truyền thông Số", null))).Value;
+
+        var shift = (await attendanceService.CreateShiftAsync(
+            new CreateShiftRequest("SHIFT_MEDIA", "Ca Sáng", new TimeOnly(8, 0), new TimeOnly(17, 0), 15, IsDefault: true))).Value;
+
+        var emp = (await biometricsService.CreateEmployeeAsync(
+            new CreateEmployeeRequest("NV301", "Trần Minh Quân", "quan@smartoffice.vn", null, dept.Id, shift.Id, null))).Value;
+
+        // 3. Module 1 (Biometrics): Upload Avatar + Upload Sample Image + Cấp Presigned PUT URL
+        await using var avatarStream = new MemoryStream(Encoding.UTF8.GetBytes("fake-avatar-jpeg-bytes"));
+        var avatarUpload = await biometricsService.UploadEmployeeAvatarAsync(emp.Id, avatarStream, "image/jpeg");
+        Assert.True(avatarUpload.IsSuccess);
+        Assert.Equal("biometrics/nv301/avatar.jpg", avatarUpload.Value.ObjectKey);
+        Assert.Contains("X-Amz-Algorithm=AWS4-HMAC-SHA256", avatarUpload.Value.PresignedViewUrl);
+        Assert.Contains("content-type%3Bhost", avatarUpload.Value.PresignedUploadUrl);
+
+        var empAfterAvatar = (await biometricsService.GetEmployeeByIdAsync(emp.Id)).Value;
+        Assert.NotNull(empAfterAvatar.AvatarPresignedUrl);
+        Assert.Contains("biometrics/nv301/avatar.jpg", empAfterAvatar.AvatarPresignedUrl);
+
+        var presignedPutResult = await biometricsService.GetBiometricPresignedUploadUrlAsync(emp.Id, "LEFT_PROFILE", "image/jpeg");
+        Assert.True(presignedPutResult.IsSuccess);
+        Assert.Contains("X-Amz-SignedHeaders=content-type%3Bhost", presignedPutResult.Value.PresignedUploadUrl);
+
+        // 4. Module 2 (Attendance): Chấm công và Upload Snapshot thực tế lên MinIO/S3
+        var checkIn = (await attendanceService.ProcessCheckInOutAsync(new CheckAttendanceRequest(
+            emp.Id, null, 0.96f, null, new DateTimeOffset(2026, 11, 6, 7, 50, 0, TimeSpan.Zero)))).Value;
+
+        await using var checkinStream = new MemoryStream(Encoding.UTF8.GetBytes("fake-checkin-snapshot-bytes"));
+        var snapUpload = await attendanceService.UploadAttendanceSnapshotAsync(checkIn.Id, checkinStream, "image/jpeg");
+        Assert.True(snapUpload.IsSuccess);
+        Assert.Contains("attendance_snapshots/2026-11-06/nv301_", snapUpload.Value.ObjectKey);
+        Assert.Contains("X-Amz-Algorithm=AWS4-HMAC-SHA256", snapUpload.Value.PresignedViewUrl);
+
+        // 5. Module 4 (Security): Tạo sự cố Mức 3 và Upload Video Clip bằng chứng 10s
+        var incident = (await incidentService.EvaluateAndRecordDetectionAsync(new EvaluateNightGuardDetectionRequest(
+            Guid.NewGuid(), dept.Id, null, 0.35f, null, null, new DateTimeOffset(2026, 11, 6, 23, 30, 0, TimeSpan.Zero)))).Value;
+
+        await using var videoClipStream = new MemoryStream(Encoding.UTF8.GetBytes("fake-mp4-video-evidence-10s"));
+        var evidenceUpload = await incidentService.UploadIncidentEvidenceAsync(incident.Id, "VIDEO_CLIP", videoClipStream, "video/mp4");
+        Assert.True(evidenceUpload.IsSuccess);
+        Assert.Equal("VIDEO_CLIP", evidenceUpload.Value.EvidenceType);
+        Assert.Contains("clip10s.mp4", evidenceUpload.Value.ObjectKey);
+        Assert.Contains("X-Amz-Algorithm=AWS4-HMAC-SHA256", evidenceUpload.Value.PresignedViewUrl);
     }
 }
