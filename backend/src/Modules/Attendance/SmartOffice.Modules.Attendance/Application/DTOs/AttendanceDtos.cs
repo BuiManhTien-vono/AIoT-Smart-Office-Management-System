@@ -42,7 +42,16 @@ public sealed record AttendanceRecordResponse(
     int EarlyLeaveMinutes,
     float MatchConfidence,
     bool IsDebounced,
-    string Message);
+    string Message,
+    string? CheckinSnapshotKey = null,
+    string? CheckinSnapshotPresignedUrl = null);
+
+public sealed record AttendanceSnapshotUploadResponse(
+    Guid AttendanceLogId,
+    string EmployeeCode,
+    string ObjectKey,
+    string PresignedViewUrl,
+    int ExpiryMinutes);
 
 public sealed record CreateLeaveRequestDto(
     Guid EmployeeId,

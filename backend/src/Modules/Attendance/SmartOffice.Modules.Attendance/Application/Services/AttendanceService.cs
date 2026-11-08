@@ -5,6 +5,7 @@ using SmartOffice.Modules.Attendance.Infrastructure;
 using SmartOffice.SharedKernel.Common;
 using SmartOffice.SharedKernel.Contracts;
 using SmartOffice.SharedKernel.Events;
+using SmartOffice.SharedKernel.Storage;
 
 namespace SmartOffice.Modules.Attendance.Application.Services;
 
@@ -13,15 +14,18 @@ namespace SmartOffice.Modules.Attendance.Application.Services;
 /// - Dùng IEmployeeLookupContract (Phương thức 2) để hỏi thông tin nhân viên từ Module Biometrics.
 /// - Áp dụng bộ lọc chống trùng lặp 5 phút (Debounce 300s).
 /// - Tính toán trạng thái Đúng giờ (ON_TIME), Đi muộn (LATE), Về sớm (EARLY_LEAVE) và Chốt vắng mặt cuối ngày (ABSENT).
+/// - Tải và cấp Presigned URL (15 phút) cho ảnh chụp lúc chấm công (CheckinSnapshotKey) trên MinIO/S3.
 /// - Phát sự kiện AttendanceCheckedIntegrationEvent & AttendanceAbsentMarkedIntegrationEvent qua InMemoryEventBus (Phương thức 1).
 /// </summary>
 public sealed class AttendanceService(
     AttendanceDbContext dbContext,
     IEmployeeLookupContract employeeLookup,
+    IObjectStorageService objectStorage,
     IInMemoryEventBus eventBus) : IAttendanceService
 {
     public const int DebounceWindowSeconds = 300; // 5 phút
     public const float MinMatchConfidence = 0.70f;
+    public const int DefaultPresignedExpiryMinutes = 15;
 
     public async Task<Result<ShiftResponse>> CreateShiftAsync(
         CreateShiftRequest request,
@@ -162,23 +166,14 @@ public sealed class AttendanceService(
                 lateMinutes,
                 IsFirstCheckInOfDay: true), ct);
 
-            return Result.Success(new AttendanceRecordResponse(
-                newLog.Id,
-                newLog.EmployeeId,
-                newLog.EmployeeCode,
+            return Result.Success(await MapAttendanceRecordResponseAsync(
+                newLog,
                 employee.FullName,
-                newLog.ShiftId,
-                newLog.WorkDate,
-                newLog.CheckInTime,
-                newLog.CheckOutTime,
-                newLog.Status,
-                newLog.LateMinutes,
-                newLog.EarlyLeaveMinutes,
-                newLog.MatchConfidence,
-                IsDebounced: false,
-                Message: isLate
+                isDebounced: false,
+                message: isLate
                     ? $"Ghi nhận vào ca (Đi muộn {lateMinutes} phút)."
-                    : "Ghi nhận vào ca đúng giờ."));
+                    : "Ghi nhận vào ca đúng giờ.",
+                ct));
         }
 
         // 5. Kiểm tra bộ lọc chống trùng lặp 5 phút (FR-ATT-03: Debounce 300 giây)
@@ -187,21 +182,12 @@ public sealed class AttendanceService(
             var elapsedSeconds = (nowUtc - existingLog.LastSeenTime.Value).TotalSeconds;
             if (elapsedSeconds >= 0 && elapsedSeconds < DebounceWindowSeconds)
             {
-                return Result.Success(new AttendanceRecordResponse(
-                    existingLog.Id,
-                    existingLog.EmployeeId,
-                    existingLog.EmployeeCode,
+                return Result.Success(await MapAttendanceRecordResponseAsync(
+                    existingLog,
                     employee.FullName,
-                    existingLog.ShiftId,
-                    existingLog.WorkDate,
-                    existingLog.CheckInTime,
-                    existingLog.CheckOutTime,
-                    existingLog.Status,
-                    existingLog.LateMinutes,
-                    existingLog.EarlyLeaveMinutes,
-                    existingLog.MatchConfidence,
-                    IsDebounced: true,
-                    Message: $"Bỏ qua quét trùng lặp trong cửa sổ 5 phút (cách lần trước {elapsedSeconds:F0} giây)."));
+                    isDebounced: true,
+                    message: $"Bỏ qua quét trùng lặp trong cửa sổ 5 phút (cách lần trước {elapsedSeconds:F0} giây).",
+                    ct));
             }
         }
 
@@ -224,21 +210,12 @@ public sealed class AttendanceService(
 
         await dbContext.SaveChangesAsync(ct);
 
-        return Result.Success(new AttendanceRecordResponse(
-            existingLog.Id,
-            existingLog.EmployeeId,
-            existingLog.EmployeeCode,
+        return Result.Success(await MapAttendanceRecordResponseAsync(
+            existingLog,
             employee.FullName,
-            existingLog.ShiftId,
-            existingLog.WorkDate,
-            existingLog.CheckInTime,
-            existingLog.CheckOutTime,
-            existingLog.Status,
-            existingLog.LateMinutes,
-            existingLog.EarlyLeaveMinutes,
-            existingLog.MatchConfidence,
-            IsDebounced: false,
-            Message: "Cập nhật giờ ra ca thành công."));
+            isDebounced: false,
+            message: "Cập nhật giờ ra ca thành công.",
+            ct));
     }
 
     public async Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(
@@ -251,21 +228,48 @@ public sealed class AttendanceService(
             .OrderByDescending(x => x.CheckInTime)
             .ToListAsync(ct);
 
-        return logs.Select(x => new AttendanceRecordResponse(
-            x.Id,
-            x.EmployeeId,
-            x.EmployeeCode,
-            x.EmployeeCode,
-            x.ShiftId,
-            x.WorkDate,
-            x.CheckInTime,
-            x.CheckOutTime,
-            x.Status,
-            x.LateMinutes,
-            x.EarlyLeaveMinutes,
-            x.MatchConfidence,
-            false,
-            string.Empty)).ToList();
+        var responses = new List<AttendanceRecordResponse>(logs.Count);
+        foreach (var log in logs)
+        {
+            var emp = await employeeLookup.GetByIdAsync(log.EmployeeId, ct);
+            responses.Add(await MapAttendanceRecordResponseAsync(
+                log,
+                emp?.FullName ?? log.EmployeeCode,
+                isDebounced: false,
+                message: string.Empty,
+                ct));
+        }
+
+        return responses;
+    }
+
+    public async Task<Result<AttendanceSnapshotUploadResponse>> UploadAttendanceSnapshotAsync(
+        Guid attendanceLogId,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default)
+    {
+        var log = await dbContext.AttendanceLogs.FirstOrDefaultAsync(x => x.Id == attendanceLogId, ct);
+        if (log is null)
+        {
+            return Result.Failure<AttendanceSnapshotUploadResponse>(
+                new Error("ATTENDANCE_LOG_NOT_FOUND", "Không tìm thấy bản ghi chấm công để đính kèm ảnh chụp."));
+        }
+
+        var objectKey = $"attendance_snapshots/{log.WorkDate:yyyy-MM-dd}/{log.EmployeeCode.ToLowerInvariant()}_{log.Id:N}.jpg";
+        var savedKey = await objectStorage.UploadFileAsync(objectKey, fileStream, contentType, ct);
+
+        log.CheckinSnapshotKey = savedKey;
+        await dbContext.SaveChangesAsync(ct);
+
+        var presignedUrl = await objectStorage.GetPresignedUrlAsync(savedKey, DefaultPresignedExpiryMinutes, ct);
+
+        return Result.Success(new AttendanceSnapshotUploadResponse(
+            log.Id,
+            log.EmployeeCode,
+            savedKey,
+            presignedUrl,
+            DefaultPresignedExpiryMinutes));
     }
 
     public async Task<Result<LeaveRequestResponse>> CreateLeaveRequestAsync(
@@ -424,5 +428,40 @@ public sealed class AttendanceService(
             onLeaveCount,
             absentCodes.Count,
             absentCodes));
+    }
+
+    private async Task<AttendanceRecordResponse> MapAttendanceRecordResponseAsync(
+        AttendanceLog log,
+        string fullName,
+        bool isDebounced,
+        string message,
+        CancellationToken ct)
+    {
+        string? snapshotPresignedUrl = null;
+        if (!string.IsNullOrWhiteSpace(log.CheckinSnapshotKey))
+        {
+            snapshotPresignedUrl = await objectStorage.GetPresignedUrlAsync(
+                log.CheckinSnapshotKey,
+                DefaultPresignedExpiryMinutes,
+                ct);
+        }
+
+        return new AttendanceRecordResponse(
+            log.Id,
+            log.EmployeeId,
+            log.EmployeeCode,
+            fullName,
+            log.ShiftId,
+            log.WorkDate,
+            log.CheckInTime,
+            log.CheckOutTime,
+            log.Status,
+            log.LateMinutes,
+            log.EarlyLeaveMinutes,
+            log.MatchConfidence,
+            isDebounced,
+            message,
+            log.CheckinSnapshotKey,
+            snapshotPresignedUrl);
     }
 }

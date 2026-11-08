@@ -4,18 +4,22 @@ using SmartOffice.Modules.Biometrics.Domain;
 using SmartOffice.Modules.Biometrics.Infrastructure;
 using SmartOffice.SharedKernel.Common;
 using SmartOffice.SharedKernel.Events;
+using SmartOffice.SharedKernel.Storage;
 
 namespace SmartOffice.Modules.Biometrics.Application.Services;
 
 /// <summary>
 /// Dịch vụ xử lý nghiệp vụ của Module 1 (Biometrics):
-/// Quản lý phòng ban, hồ sơ nhân sự, kiểm tra chất lượng & trùng lặp khuôn mặt,
-/// đồng thời phát sự kiện tích hợp qua InMemoryEventBus khi có nhân viên mới.
+/// Quản lý phòng ban, hồ sơ nhân sự, tải ảnh mẫu sinh trắc học lên MinIO/S3 (Presigned URL),
+/// kiểm tra chất lượng & trùng lặp khuôn mặt, và phát sự kiện tích hợp qua InMemoryEventBus.
 /// </summary>
 public sealed class BiometricsService(
     BiometricsDbContext dbContext,
+    IObjectStorageService objectStorage,
     IInMemoryEventBus eventBus) : IBiometricsService
 {
+    public const int DefaultPresignedExpiryMinutes = 15;
+
     public async Task<Result<DepartmentResponse>> CreateDepartmentAsync(
         CreateDepartmentRequest request,
         CancellationToken ct = default)
@@ -108,19 +112,7 @@ public sealed class BiometricsService(
             department.DepartmentCode,
             employee.DefaultShiftId), ct);
 
-        return Result.Success(new EmployeeResponse(
-            employee.Id,
-            employee.EmployeeCode,
-            employee.FullName,
-            employee.Email,
-            employee.PhoneNumber,
-            employee.DepartmentId,
-            department.DepartmentCode,
-            employee.DefaultShiftId,
-            employee.AvatarObjectKey,
-            employee.IsActive,
-            0,
-            employee.CreatedAt));
+        return Result.Success(await MapEmployeeResponseAsync(employee, department.DepartmentCode, 0, ct));
     }
 
     public async Task<IReadOnlyList<EmployeeResponse>> GetEmployeesAsync(
@@ -137,20 +129,18 @@ public sealed class BiometricsService(
         }
 
         var items = await query.OrderBy(x => x.Employee.EmployeeCode).ToListAsync(ct);
+        var results = new List<EmployeeResponse>(items.Count);
 
-        return items.Select(x => new EmployeeResponse(
-            x.Employee.Id,
-            x.Employee.EmployeeCode,
-            x.Employee.FullName,
-            x.Employee.Email,
-            x.Employee.PhoneNumber,
-            x.Employee.DepartmentId,
-            x.DepartmentCode,
-            x.Employee.DefaultShiftId,
-            x.Employee.AvatarObjectKey,
-            x.Employee.IsActive,
-            x.Employee.BiometricVectors.Count,
-            x.Employee.CreatedAt)).ToList();
+        foreach (var item in items)
+        {
+            results.Add(await MapEmployeeResponseAsync(
+                item.Employee,
+                item.DepartmentCode,
+                item.Employee.BiometricVectors.Count,
+                ct));
+        }
+
+        return results;
     }
 
     public async Task<Result<EmployeeResponse>> GetEmployeeByIdAsync(Guid id, CancellationToken ct = default)
@@ -168,19 +158,11 @@ public sealed class BiometricsService(
         var department = await dbContext.Departments
             .FirstOrDefaultAsync(d => d.Id == employee.DepartmentId, ct);
 
-        return Result.Success(new EmployeeResponse(
-            employee.Id,
-            employee.EmployeeCode,
-            employee.FullName,
-            employee.Email,
-            employee.PhoneNumber,
-            employee.DepartmentId,
+        return Result.Success(await MapEmployeeResponseAsync(
+            employee,
             department?.DepartmentCode ?? string.Empty,
-            employee.DefaultShiftId,
-            employee.AvatarObjectKey,
-            employee.IsActive,
             employee.BiometricVectors.Count,
-            employee.CreatedAt));
+            ct));
     }
 
     public async Task<Result> DeactivateEmployeeAsync(Guid id, CancellationToken ct = default)
@@ -194,6 +176,100 @@ public sealed class BiometricsService(
         employee.IsActive = false;
         await dbContext.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    public async Task<Result<BiometricMediaUploadResponse>> UploadEmployeeAvatarAsync(
+        Guid employeeId,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default)
+    {
+        var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+        if (employee is null)
+        {
+            return Result.Failure<BiometricMediaUploadResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên để cập nhật ảnh đại diện."));
+        }
+
+        var objectKey = $"biometrics/{employee.EmployeeCode.ToLowerInvariant()}/avatar.jpg";
+        var savedKey = await objectStorage.UploadFileAsync(objectKey, fileStream, contentType, ct);
+
+        employee.AvatarObjectKey = savedKey;
+        await dbContext.SaveChangesAsync(ct);
+
+        var viewUrl = await objectStorage.GetPresignedUrlAsync(savedKey, DefaultPresignedExpiryMinutes, ct);
+        var uploadUrl = await objectStorage.GetPresignedUploadUrlAsync(savedKey, contentType, DefaultPresignedExpiryMinutes, ct);
+
+        return Result.Success(new BiometricMediaUploadResponse(
+            employee.Id,
+            employee.EmployeeCode,
+            savedKey,
+            viewUrl,
+            uploadUrl,
+            DefaultPresignedExpiryMinutes));
+    }
+
+    public async Task<Result<BiometricMediaUploadResponse>> UploadBiometricSampleImageAsync(
+        Guid employeeId,
+        string poseLabel,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default)
+    {
+        var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+        if (employee is null)
+        {
+            return Result.Failure<BiometricMediaUploadResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên để tải ảnh mẫu khuôn mặt."));
+        }
+
+        var normalizedPose = string.IsNullOrWhiteSpace(poseLabel)
+            ? "frontal"
+            : poseLabel.Trim().ToLowerInvariant();
+
+        var objectKey = $"biometrics/{employee.EmployeeCode.ToLowerInvariant()}/samples/{normalizedPose}_{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.jpg";
+        var savedKey = await objectStorage.UploadFileAsync(objectKey, fileStream, contentType, ct);
+
+        var viewUrl = await objectStorage.GetPresignedUrlAsync(savedKey, DefaultPresignedExpiryMinutes, ct);
+        var uploadUrl = await objectStorage.GetPresignedUploadUrlAsync(savedKey, contentType, DefaultPresignedExpiryMinutes, ct);
+
+        return Result.Success(new BiometricMediaUploadResponse(
+            employee.Id,
+            employee.EmployeeCode,
+            savedKey,
+            viewUrl,
+            uploadUrl,
+            DefaultPresignedExpiryMinutes));
+    }
+
+    public async Task<Result<BiometricMediaUploadResponse>> GetBiometricPresignedUploadUrlAsync(
+        Guid employeeId,
+        string poseLabel = "FRONTAL",
+        string contentType = "image/jpeg",
+        CancellationToken ct = default)
+    {
+        var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+        if (employee is null)
+        {
+            return Result.Failure<BiometricMediaUploadResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên để cấp Presigned URL."));
+        }
+
+        var normalizedPose = string.IsNullOrWhiteSpace(poseLabel)
+            ? "frontal"
+            : poseLabel.Trim().ToLowerInvariant();
+
+        var objectKey = $"biometrics/{employee.EmployeeCode.ToLowerInvariant()}/samples/{normalizedPose}_{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.jpg";
+        var viewUrl = await objectStorage.GetPresignedUrlAsync(objectKey, DefaultPresignedExpiryMinutes, ct);
+        var uploadUrl = await objectStorage.GetPresignedUploadUrlAsync(objectKey, contentType, DefaultPresignedExpiryMinutes, ct);
+
+        return Result.Success(new BiometricMediaUploadResponse(
+            employee.Id,
+            employee.EmployeeCode,
+            objectKey,
+            viewUrl,
+            uploadUrl,
+            DefaultPresignedExpiryMinutes));
     }
 
     public async Task<Result<BiometricVectorResponse>> RegisterBiometricSampleAsync(
@@ -252,6 +328,15 @@ public sealed class BiometricsService(
         dbContext.BiometricVectors.Add(biometricVector);
         await dbContext.SaveChangesAsync(ct);
 
+        string? samplePresignedUrl = null;
+        if (!string.IsNullOrWhiteSpace(biometricVector.SampleImageKey))
+        {
+            samplePresignedUrl = await objectStorage.GetPresignedUrlAsync(
+                biometricVector.SampleImageKey,
+                DefaultPresignedExpiryMinutes,
+                ct);
+        }
+
         return Result.Success(new BiometricVectorResponse(
             biometricVector.Id,
             biometricVector.EmployeeId,
@@ -259,7 +344,8 @@ public sealed class BiometricsService(
             biometricVector.QualityScore,
             biometricVector.PoseLabel,
             biometricVector.EmbeddingVector.Length,
-            biometricVector.CreatedAt));
+            biometricVector.CreatedAt,
+            samplePresignedUrl));
     }
 
     public async Task<Result<IdentifyFaceResponse>> IdentifyByVectorAsync(
@@ -313,5 +399,36 @@ public sealed class BiometricsService(
             null,
             Math.Max(0f, maxSimilarity),
             "UNKNOWN"));
+    }
+
+    private async Task<EmployeeResponse> MapEmployeeResponseAsync(
+        Employee employee,
+        string departmentCode,
+        int vectorCount,
+        CancellationToken ct)
+    {
+        string? avatarUrl = null;
+        if (!string.IsNullOrWhiteSpace(employee.AvatarObjectKey))
+        {
+            avatarUrl = await objectStorage.GetPresignedUrlAsync(
+                employee.AvatarObjectKey,
+                DefaultPresignedExpiryMinutes,
+                ct);
+        }
+
+        return new EmployeeResponse(
+            employee.Id,
+            employee.EmployeeCode,
+            employee.FullName,
+            employee.Email,
+            employee.PhoneNumber,
+            employee.DepartmentId,
+            departmentCode,
+            employee.DefaultShiftId,
+            employee.AvatarObjectKey,
+            employee.IsActive,
+            vectorCount,
+            employee.CreatedAt,
+            avatarUrl);
     }
 }
