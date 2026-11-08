@@ -86,6 +86,73 @@ public sealed class OccupancyService(
         return Result.Success(await MapCameraResponseAsync(camera, ct));
     }
 
+    public async Task<Result<CameraResponse>> UpdateCameraAsync(
+        Guid id,
+        UpdateCameraRequest request,
+        CancellationToken ct = default)
+    {
+        var camera = await dbContext.Cameras.FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (camera is null)
+        {
+            return Result.Failure<CameraResponse>(
+                new Error("CAMERA_NOT_FOUND", $"Không tìm thấy camera với ID '{id}'."));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CameraName))
+        {
+            return Result.Failure<CameraResponse>(
+                new Error("INVALID_CAMERA_NAME", "Tên camera không được để trống."));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.StreamSource))
+        {
+            return Result.Failure<CameraResponse>(
+                new Error("INVALID_STREAM_SOURCE", "Nguồn phát video (streamSource) không được để trống."));
+        }
+
+        var cameraType = string.IsNullOrWhiteSpace(request.CameraType)
+            ? "DESK"
+            : request.CameraType.Trim().ToUpperInvariant();
+
+        if (!AllowedCameraTypes.Contains(cameraType))
+        {
+            return Result.Failure<CameraResponse>(
+                new Error("INVALID_CAMERA_TYPE", $"Loại camera '{cameraType}' không hợp lệ (chấp nhận DESK hoặc GATE)."));
+        }
+
+        camera.CameraName = request.CameraName.Trim();
+        camera.StreamSource = request.StreamSource.Trim();
+        camera.CameraType = cameraType;
+        camera.DepartmentId = request.DepartmentId;
+        camera.IsOnline = request.IsOnline;
+
+        await dbContext.SaveChangesAsync(ct);
+        return Result.Success(await MapCameraResponseAsync(camera, ct));
+    }
+
+    public async Task<Result<bool>> DeleteCameraAsync(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var camera = await dbContext.Cameras.FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (camera is null)
+        {
+            return Result.Failure<bool>(
+                new Error("CAMERA_NOT_FOUND", $"Không tìm thấy camera với ID '{id}'."));
+        }
+
+        var seats = await dbContext.Seats.Where(s => s.CameraId == id).ToListAsync(ct);
+        var seatIds = seats.Select(s => s.Id).ToList();
+        var logs = await dbContext.SeatOccupancyLogs.Where(l => seatIds.Contains(l.SeatId)).ToListAsync(ct);
+
+        dbContext.SeatOccupancyLogs.RemoveRange(logs);
+        dbContext.Seats.RemoveRange(seats);
+        dbContext.Cameras.Remove(camera);
+
+        await dbContext.SaveChangesAsync(ct);
+        return Result.Success(true);
+    }
+
     public async Task<IReadOnlyList<CameraResponse>> GetCamerasAsync(
         Guid? departmentId = null,
         CancellationToken ct = default)
@@ -199,6 +266,25 @@ public sealed class OccupancyService(
         await dbContext.SaveChangesAsync(ct);
 
         return Result.Success(MapSeatResponse(seat, request.PolygonPoints, assignedEmployee));
+    }
+
+    public async Task<Result<bool>> DeleteSeatAsync(
+        Guid seatId,
+        CancellationToken ct = default)
+    {
+        var seat = await dbContext.Seats.FirstOrDefaultAsync(s => s.Id == seatId, ct);
+        if (seat is null)
+        {
+            return Result.Failure<bool>(
+                new Error("SEAT_NOT_FOUND", "Không tìm thấy vị trí bàn làm việc cần xóa."));
+        }
+
+        var logs = await dbContext.SeatOccupancyLogs.Where(l => l.SeatId == seatId).ToListAsync(ct);
+        dbContext.SeatOccupancyLogs.RemoveRange(logs);
+        dbContext.Seats.Remove(seat);
+
+        await dbContext.SaveChangesAsync(ct);
+        return Result.Success(true);
     }
 
     public async Task<Result<SeatResponse>> UpdateSeatPolygonAsync(

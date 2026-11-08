@@ -28,6 +28,30 @@ public sealed class OccupancyController(IOccupancyService occupancyService) : Co
         return Created($"/api/v1/occupancy/cameras/{result.Value.Id}", result.Value);
     }
 
+    [HttpPut("cameras/{id:guid}")]
+    public async Task<IActionResult> UpdateCamera(Guid id, [FromBody] UpdateCameraRequest request, CancellationToken ct)
+    {
+        var result = await occupancyService.UpdateCameraAsync(id, request, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
+    [HttpDelete("cameras/{id:guid}")]
+    public async Task<IActionResult> DeleteCamera(Guid id, CancellationToken ct)
+    {
+        var result = await occupancyService.DeleteCameraAsync(id, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return NoContent();
+    }
+
     [HttpPost("cameras/{id:guid}/calibration-frame")]
     public async Task<IActionResult> UploadCalibrationFrame(
         Guid id,
@@ -102,6 +126,18 @@ public sealed class OccupancyController(IOccupancyService occupancyService) : Co
         }
 
         return Ok(result.Value);
+    }
+
+    [HttpDelete("seats/{id:guid}")]
+    public async Task<IActionResult> DeleteSeat(Guid id, CancellationToken ct)
+    {
+        var result = await occupancyService.DeleteSeatAsync(id, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return NoContent();
     }
 
     [HttpPost("state-sync")]

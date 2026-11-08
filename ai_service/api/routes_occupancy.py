@@ -2,7 +2,11 @@
 REST API Endpoints cho Module Occupancy (Giám sát Chỗ ngồi) và đồng bộ hai chiều với Backend .NET 10.
 """
 
-from fastapi import APIRouter, HTTPException
+import json
+import time
+import cv2
+import numpy as np
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
@@ -10,6 +14,7 @@ from shared.config import settings, SeatBox
 from shared.backend_client import BackendSyncClient
 from modules.occupancy.fsm import SeatStatus
 from modules.occupancy.pipeline import OccupancyPipeline
+from modules.occupancy.geometry import is_point_in_polygon
 
 router = APIRouter(prefix="/api/v1/occupancy", tags=["Occupancy Monitoring"])
 
@@ -146,3 +151,92 @@ def push_state_sync_to_backend(request: PushStateSyncRequest):
         }
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+_detector_instance: Optional[Any] = None
+
+
+def get_head_detector():
+    """Lấy hoặc khởi tạo singleton detector RT-DETR."""
+    global _detector_instance
+    if _detector_instance is None:
+        from modules.occupancy.detector import RTDETRHeadDetector
+        model_file = settings.occupancy.ensure_model_exists()
+        _detector_instance = RTDETRHeadDetector(
+            model_path=model_file,
+            conf_threshold=settings.confidence_threshold,
+            imgsz=settings.imgsz
+        )
+    return _detector_instance
+
+
+@router.post("/detect-preview")
+async def detect_preview(
+    file: UploadFile = File(...),
+    seats_json: Optional[str] = Form(None),
+    conf_threshold: Optional[float] = Form(None)
+):
+    """
+    Chạy thử nghiệm mô hình RT-DETR trên 1 khung hình chụp từ Canvas (Phương án 1).
+    Phát hiện vị trí đầu người và đối chiếu Ray-Casting với các vùng bàn làm việc.
+    """
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            raise HTTPException(status_code=400, detail="Không thể giải mã tệp hình ảnh.")
+
+        detector = get_head_detector()
+        old_conf = detector.conf_threshold
+        if conf_threshold is not None:
+            detector.conf_threshold = conf_threshold
+
+        t0 = time.perf_counter()
+        detections = detector.predict(frame)
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+        if conf_threshold is not None:
+            detector.conf_threshold = old_conf
+
+        seats_data = []
+        if seats_json:
+            try:
+                seats_data = json.loads(seats_json)
+            except Exception:
+                seats_data = []
+
+        detected_heads = []
+        occupied_seat_ids = set()
+
+        for det in detections:
+            xc, yc = det.center_normalized
+            matched_seat_id = None
+
+            for seat in seats_data:
+                pts = seat.get("polygonPoints") or seat.get("polygon_points") or []
+                if len(pts) >= 3:
+                    poly_tuples = [(float(p["x"]), float(p["y"])) for p in pts]
+                    if is_point_in_polygon((xc, yc), poly_tuples):
+                        matched_seat_id = seat.get("id") or seat.get("seatCode")
+                        occupied_seat_ids.add(matched_seat_id)
+                        break
+
+            detected_heads.append({
+                "bbox_normalized": [float(v) for v in det.bbox_normalized],
+                "center_normalized": [float(det.center_normalized[0]), float(det.center_normalized[1])],
+                "confidence": round(float(det.confidence), 3),
+                "matched_seat_id": matched_seat_id
+            })
+
+        return {
+            "status": "success",
+            "inference_time_ms": latency_ms,
+            "detections_count": len(detected_heads),
+            "detections": detected_heads,
+            "occupied_seat_ids": list(occupied_seat_ids)
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi suy luận RT-DETR: {str(exc)}")
