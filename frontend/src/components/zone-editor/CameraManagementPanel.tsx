@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { ChangeEvent, FormEvent } from 'react'
 import {
   Plus,
@@ -25,6 +26,14 @@ interface Props {
   onCalibrationUploaded: (camera: CameraModel, presignedUrl: string) => void
   token: string
   loading?: boolean
+}
+
+function normalizeCameraStreamSource(src: string): string {
+  const s = src.trim()
+  if (!s) return ''
+  if (/^https?:\/\/[^/]+:8080\/?$/i.test(s)) return s.replace(/\/?$/, '/video')
+  if (/^https?:\/\/[^/]+:4747\/?$/i.test(s)) return s.replace(/\/?$/, '/video')
+  return s
 }
 
 export function CameraManagementPanel({
@@ -110,7 +119,7 @@ export function CameraManagementPanel({
       await createCamera(token, {
         cameraCode: cameraCode.trim().toUpperCase(),
         cameraName: cameraName.trim(),
-        streamSource: streamSource.trim(),
+        streamSource: normalizeCameraStreamSource(streamSource),
         cameraType,
         isOnline: true,
       })
@@ -143,7 +152,7 @@ export function CameraManagementPanel({
     try {
       const updated = await updateCamera(token, editingCamera.id, {
         cameraName: editName.trim(),
-        streamSource: editStream.trim(),
+        streamSource: normalizeCameraStreamSource(editStream),
         cameraType: editType,
         isOnline: editIsOnline,
       })
@@ -355,7 +364,7 @@ export function CameraManagementPanel({
       )}
 
       {/* Modal 1: Thêm Camera Mới */}
-      {isCreateModalOpen && (
+      {isCreateModalOpen && createPortal(
         <div className="modal-backdrop" onClick={() => setIsCreateModalOpen(false)}>
           <div
             className="panel app-dialog"
@@ -428,11 +437,15 @@ export function CameraManagementPanel({
                 <input
                   id="cam-stream"
                   type="text"
-                  placeholder="rtsp://localhost:8554/desk02 hoặc 0 (webcam)"
+                  placeholder="http://192.168.1.xxx:8080/video hoặc 0"
                   value={streamSource}
                   onChange={e => setStreamSource(e.target.value)}
                   required
                 />
+                <small className="muted" style={{ marginTop: '4px', lineHeight: '1.4' }}>
+                  • Webcam: <code>0</code> | Video mẫu: <code>demo.mp4</code><br />
+                  • Camera điện thoại: <code>http://192.168.x.x:8080/video</code> (IP Webcam) hoặc <code>http://192.168.x.x:4747/video</code> (DroidCam)
+                </small>
               </div>
 
               <div className="app-dialog-actions">
@@ -453,11 +466,12 @@ export function CameraManagementPanel({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal 2: Chỉnh Sửa Camera */}
-      {editingCamera && (
+      {editingCamera && createPortal(
         <div className="modal-backdrop" onClick={() => setEditingCamera(null)}>
           <div
             className="panel app-dialog"
@@ -532,6 +546,10 @@ export function CameraManagementPanel({
                   onChange={e => setEditStream(e.target.value)}
                   required
                 />
+                <small className="muted" style={{ marginTop: '4px', lineHeight: '1.4' }}>
+                  • Webcam: <code>0</code> | Video mẫu: <code>demo.mp4</code><br />
+                  • Camera điện thoại: <code>http://192.168.x.x:8080/video</code> (IP Webcam) hoặc <code>http://192.168.x.x:4747/video</code> (DroidCam)
+                </small>
               </div>
 
               <div className="field" style={{ marginTop: '12px' }}>
@@ -563,23 +581,27 @@ export function CameraManagementPanel({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal 3: Xác Nhận Xóa Camera */}
-      {deletingCamera && (
+      {deletingCamera && createPortal(
         <div className="modal-backdrop" onClick={() => setDeletingCamera(null)}>
           <div
-            className="panel app-dialog"
+            className="panel app-dialog app-dialog-confirm"
             onClick={e => e.stopPropagation()}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="delete-camera-title"
           >
-            <div className="app-dialog-heading">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Warning size={24} className="text-danger" aria-hidden="true" />
-                <h2 id="delete-camera-title" style={{ color: '#ef4444' }}>Xác nhận xóa Camera</h2>
+            <div className="confirm-delete-header">
+              <div className="confirm-delete-icon-box">
+                <Warning size={24} weight="fill" aria-hidden="true" />
+              </div>
+              <div className="confirm-delete-header-text" style={{ flex: 1 }}>
+                <h2 id="delete-camera-title">Xác nhận xóa Camera</h2>
+                <p>Thao tác này không thể hoàn tác</p>
               </div>
               <button
                 type="button"
@@ -600,11 +622,11 @@ export function CameraManagementPanel({
             <div style={{ margin: '14px 0', fontSize: '0.875rem', lineHeight: '1.5' }}>
               <p>
                 Bạn có chắc chắn muốn xóa camera{' '}
-                <strong>{deletingCamera.cameraCode}</strong> ({deletingCamera.cameraName}) không?
+                <strong>{deletingCamera.cameraCode}</strong> ({deletingCamera.cameraName})?
               </p>
-              <p className="text-danger" style={{ marginTop: '8px', fontSize: '0.8125rem' }}>
-                ⚠️ <strong>Cảnh báo:</strong> Toàn bộ các vùng bàn làm việc và lịch sử hiện diện liên quan đến camera này sẽ bị xóa khỏi hệ thống.
-              </p>
+              <div className="confirm-delete-callout">
+                ⚠️ <strong>Cảnh báo mất dữ liệu:</strong> Toàn bộ các vùng bàn làm việc và dữ liệu lịch sử trạng thái liên quan đến camera này sẽ bị xóa vĩnh viễn khỏi hệ thống.
+              </div>
             </div>
 
             <div className="app-dialog-actions">
@@ -622,11 +644,12 @@ export function CameraManagementPanel({
                 onClick={handleDeleteCamera}
                 disabled={formSubmitting}
               >
-                {formSubmitting ? 'Đang xóa…' : 'Xác nhận xóa'}
+                {formSubmitting ? 'Đang xóa…' : 'Xóa vĩnh viễn'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </aside>
   )

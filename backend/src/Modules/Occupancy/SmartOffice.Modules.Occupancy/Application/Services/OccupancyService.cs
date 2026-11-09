@@ -466,7 +466,8 @@ public sealed class OccupancyService(
                 UnoccupiedContinuousFrames: obs.UnoccupiedContinuousFrames,
                 UnoccupiedContinuousSeconds: obs.UnoccupiedContinuousSeconds,
                 DetectedEmployeeId: obs.DetectedEmployeeId,
-                CapturedAtUtc: capturedAtUtc);
+                CapturedAtUtc: capturedAtUtc,
+                ProlongedAbsenceThresholdSeconds: request.ProlongedAbsenceThresholdSeconds ?? SeatStateMachine.DefaultProlongedAbsenceSeconds);
 
             var outcome = SeatStateMachine.Evaluate(evalContext);
 
@@ -644,6 +645,84 @@ public sealed class OccupancyService(
             seat.CurrentState,
             seat.ActiveSecondsToday,
             seat.StateUpdatedAt);
+    }
+
+    public async Task<Result<int>> ResetCameraSeatsAsync(string cameraCode, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(cameraCode))
+        {
+            return Result.Failure<int>(new Error("INVALID_CAMERA_CODE", "Mã camera không được để trống."));
+        }
+
+        var normalizedCamCode = cameraCode.Trim().ToUpperInvariant();
+        var camera = await dbContext.Cameras
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.CameraCode == normalizedCamCode, ct);
+
+        if (camera is null)
+        {
+            return Result.Failure<int>(new Error("CAMERA_NOT_FOUND", $"Không tìm thấy camera '{normalizedCamCode}'."));
+        }
+
+        var seats = await dbContext.Seats
+            .Where(s => s.CameraId == camera.Id)
+            .ToListAsync(ct);
+
+        if (seats.Count == 0)
+        {
+            return Result.Success(0);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        int resetCount = 0;
+        var pendingEvents = new List<SeatStateChangedIntegrationEvent>();
+
+        foreach (var seat in seats)
+        {
+            var prevState = seat.CurrentState;
+            if (prevState != SeatStateMachine.StateEmpty)
+            {
+                seat.CurrentState = SeatStateMachine.StateEmpty;
+                seat.StateUpdatedAt = now;
+                resetCount++;
+
+                var logEntry = new SeatOccupancyLog
+                {
+                    SeatId = seat.Id,
+                    DetectedEmployeeId = seat.AssignedEmployeeId,
+                    PreviousState = prevState,
+                    NewState = SeatStateMachine.StateEmpty,
+                    DurationSeconds = 0,
+                    RecordedAt = now
+                };
+                dbContext.SeatOccupancyLogs.Add(logEntry);
+
+                pendingEvents.Add(new SeatStateChangedIntegrationEvent(
+                    Guid.NewGuid(),
+                    now,
+                    seat.Id,
+                    seat.SeatCode,
+                    seat.CameraId,
+                    seat.DepartmentId,
+                    seat.AssignedEmployeeId,
+                    null,
+                    prevState,
+                    SeatStateMachine.StateEmpty,
+                    0,
+                    seat.ActiveSecondsToday));
+            }
+        }
+
+        if (resetCount > 0)
+        {
+            await dbContext.SaveChangesAsync(ct);
+            foreach (var evt in pendingEvents)
+            {
+                await eventBus.PublishAsync(evt, ct);
+            }
+        }
+
+        return Result.Success(resetCount);
     }
 
     private static IReadOnlyList<PolygonPointDto> DeserializePolygon(string? json)

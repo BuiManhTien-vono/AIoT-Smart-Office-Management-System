@@ -293,6 +293,48 @@
   opacity: 0.65;
 }
 
+.canvas-threshold-selector {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  color: var(--color-foreground, #e2e8f0);
+}
+
+.threshold-label {
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.threshold-select {
+  background: transparent;
+  color: #f8fafc;
+  border: none;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  padding: 2px 4px;
+}
+
+.threshold-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.threshold-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .live-indicator {
   display: inline-flex;
   align-items: center;
@@ -427,6 +469,55 @@
   gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
+}
+
+/* =============================================================================
+   Thanh Chú thích 4 Trạng thái FSM Chỗ ngồi (EMPTY, PRESENT, TEMP_AWAY, PROLONGED_AWAY)
+   ============================================================================= */
+.fsm-status-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  font-size: 0.725rem;
+  letter-spacing: 0.02em;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.legend-dot.dot-gray {
+  background-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+}
+
+.legend-dot.dot-green {
+  background-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+}
+
+.legend-dot.dot-amber {
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+
+.legend-dot.dot-red {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
 }
 
 .cheatsheet-title {
@@ -607,20 +698,6 @@
   gap: 12px;
 }
 
-.ai-sync-card {
-  padding: 10px 14px;
-  border-radius: var(--radius-control, 8px);
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-}
-
-.ai-sync-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
 .existing-seats-card {
   padding: 10px 14px;
   border-radius: var(--radius-control, 8px);
@@ -726,4 +803,279 @@
   background: rgba(0, 0, 0, 0.04) !important;
   cursor: not-allowed;
   opacity: 0.85;
+}
+
+/* Standard Centered Modal Backdrop */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 16px;
+  box-sizing: border-box;
+  animation: modalFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-backdrop .app-dialog {
+  animation: dialogScaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: auto;
+}
+
+/* Compact Centered Confirmation Dialog */
+.app-dialog-confirm {
+  width: min(100% - 24px, 450px) !important;
+  border: 1px solid rgba(239, 68, 68, 0.28) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(239, 68, 68, 0.15) !important;
+  background: var(--color-surface, #ffffff) !important;
+  border-radius: var(--radius-panel, 12px) !important;
+  padding: 24px !important;
+}
+
+.confirm-delete-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.confirm-delete-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.confirm-delete-header-text h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.confirm-delete-header-text p {
+  font-size: 0.8125rem;
+  color: var(--color-muted, #64748b);
+  margin: 2px 0 0;
+}
+
+.confirm-delete-callout {
+  padding: 12px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-control, 8px);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #b91c1c;
+  margin-top: 12px;
+}
+
+/* =============================================================================
+   8. View Switcher & LiveGrid Layout
+   ============================================================================= */
+
+.view-switcher-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-background);
+  padding: 3px;
+  border-radius: var(--radius-control, 8px);
+  border: 1px solid var(--color-border);
+  gap: 2px;
+}
+
+.view-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: calc(var(--radius-control, 8px) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.view-switcher-btn:hover {
+  color: var(--color-foreground);
+}
+
+.view-switcher-btn.active {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.live-grid-container {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.live-grid-container.cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.live-grid-container.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.live-grid-container.cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .live-grid-container.cols-2,
+  .live-grid-container.cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.live-grid-card {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel, 12px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.live-grid-card:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
+}
+
+.live-grid-card.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.live-grid-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  gap: 8px;
+}
+
+.live-grid-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.live-grid-header-info .camera-code-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  white-space: nowrap;
+}
+
+.live-grid-header-info .camera-name-label {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-grid-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.live-grid-media-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.live-grid-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.live-grid-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.live-grid-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239, 68, 68, 0.9);
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(4px);
+}
+
+.live-grid-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 0.8125rem;
+  gap: 8px;
+  background: #0f172a;
 }

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import type { FormEvent } from 'react'
 import {
   FloppyDisk,
-  ArrowsClockwise,
   User,
   ShieldCheck,
   CheckCircle,
@@ -14,12 +14,13 @@ import {
 } from '@phosphor-icons/react'
 import type { Camera, Seat, PolygonPoint, ZoneType } from '../../types/occupancy.types'
 import type { Employee } from '../../types/biometrics.types'
-import { createSeat, updateSeatPolygon, deleteSeat, syncZonesToAi } from '../../services/occupancyService'
+import { createSeat, updateSeatPolygon, deleteSeat } from '../../services/occupancyService'
 import { listEmployees } from '../../services/biometricsService'
 
 interface Props {
   selectedCamera: Camera | null
   seats: Seat[]
+  allSeats?: Seat[]
   selectedSeat: Seat | null
   currentPolygon: PolygonPoint[]
   onSelectSeat: (seat: Seat | null) => void
@@ -31,6 +32,7 @@ interface Props {
 export function SeatConfigSidebar({
   selectedCamera,
   seats,
+  allSeats = [],
   selectedSeat,
   currentPolygon,
   onSelectSeat,
@@ -45,7 +47,6 @@ export function SeatConfigSidebar({
 
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isSaving, setIsSaving] = useState(false)
-  const [isSyncingAi, setIsSyncingAi] = useState(false)
   const [deletingSeat, setDeletingSeat] = useState<Seat | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -62,6 +63,39 @@ export function SeatConfigSidebar({
     }
   }, [token, selectedCamera?.departmentId])
 
+  // Danh sách toàn bộ mã bàn đã tồn tại trong toàn hệ thống (để tránh trùng lặp)
+  const allExistingCodes = useMemo(() => {
+    const list = allSeats.length > 0 ? allSeats : seats
+    return new Set(list.map(s => s.seatCode.trim().toUpperCase()))
+  }, [allSeats, seats])
+
+  const normalizedInputCode = seatCode.trim().toUpperCase()
+  const isDuplicateCode = !selectedSeat && normalizedInputCode !== '' && allExistingCodes.has(normalizedInputCode)
+
+  // Tự động gợi ý mã và tên bàn tiếp theo chưa từng có trong toàn hệ thống
+  const getNextSuggestedSeat = useCallback(() => {
+    const list = allSeats.length > 0 ? allSeats : seats
+    const existingSet = new Set(list.map(s => s.seatCode.trim().toUpperCase()))
+    let nextNum = 1
+    const matchNums = list
+      .map(s => {
+        const m = s.seatCode.match(/\d+/)
+        return m ? parseInt(m[0], 10) : 0
+      })
+      .filter(n => !isNaN(n) && n > 0)
+    if (matchNums.length > 0) {
+      nextNum = Math.max(...matchNums) + 1
+    }
+    // Đảm bảo không trùng với bất kỳ mã bàn nào đã có
+    while (existingSet.has(`BAN_${String(nextNum).padStart(2, '0')}`)) {
+      nextNum++
+    }
+    return {
+      code: `BAN_${String(nextNum).padStart(2, '0')}`,
+      name: `Bàn làm việc ${nextNum}`,
+    }
+  }, [allSeats, seats])
+
   // Populate form when selectedSeat changes
   useEffect(() => {
     if (selectedSeat) {
@@ -71,21 +105,26 @@ export function SeatConfigSidebar({
       setAssignedEmployeeId(selectedSeat.assignedEmployeeId || '')
       setFeedback(null)
     } else {
-      setSeatCode('')
-      setSeatName('')
+      const suggested = getNextSuggestedSeat()
+      setSeatCode(suggested.code)
+      setSeatName(suggested.name)
       setZoneType('WORK_DESK')
       setAssignedEmployeeId('')
     }
-  }, [selectedSeat])
+  }, [selectedSeat, getNextSuggestedSeat])
 
   function handleStartNewSeat() {
     onSelectSeat(null)
     onClearPolygon()
-    setSeatCode('')
-    setSeatName('')
+    const suggested = getNextSuggestedSeat()
+    setSeatCode(suggested.code)
+    setSeatName(suggested.name)
     setZoneType('WORK_DESK')
     setAssignedEmployeeId('')
-    setFeedback(null)
+    setFeedback({
+      type: 'success',
+      message: '👉 Hãy click chuột trái trên khung hình để vẽ các góc bàn, sau đó chuột phải để chốt vùng và bấm "Lưu bàn".',
+    })
   }
 
   async function handleSaveSeat(e: FormEvent) {
@@ -105,6 +144,14 @@ export function SeatConfigSidebar({
       return
     }
 
+    if (isDuplicateCode) {
+      setFeedback({
+        type: 'error',
+        message: `Mã chỗ ngồi '${normalizedInputCode}' đã tồn tại trong hệ thống. Vui lòng chọn mã khác.`,
+      })
+      return
+    }
+
     setIsSaving(true)
     setFeedback(null)
 
@@ -119,8 +166,9 @@ export function SeatConfigSidebar({
         setFeedback({ type: 'success', message: `Đã cập nhật đa giác bàn ${seatCode} thành công!` })
       } else {
         // Create new seat
+        const createdCode = seatCode.trim().toUpperCase()
         await createSeat(token, {
-          seatCode: seatCode.trim().toUpperCase(),
+          seatCode: createdCode,
           seatName: seatName.trim(),
           cameraId: selectedCamera.id,
           departmentId: selectedCamera.departmentId || '11111111-1111-1111-1111-111111111101',
@@ -128,7 +176,8 @@ export function SeatConfigSidebar({
           polygonPoints: currentPolygon,
           zoneType,
         })
-        setFeedback({ type: 'success', message: `Đã lưu vị trí ${seatCode} vào cơ sở dữ liệu!` })
+        setFeedback({ type: 'success', message: `Đã lưu vị trí ${createdCode} vào cơ sở dữ liệu thành công!` })
+        onClearPolygon()
       }
       onSeatSaved()
     } catch (err: unknown) {
@@ -164,33 +213,8 @@ export function SeatConfigSidebar({
     }
   }
 
-  async function handleSyncAi() {
-    if (!selectedCamera) {
-      setFeedback({ type: 'error', message: 'Chưa chọn camera để đồng bộ.' })
-      return
-    }
-
-    setIsSyncingAi(true)
-    setFeedback(null)
-
-    try {
-      const res = await syncZonesToAi(selectedCamera.cameraCode)
-      setFeedback({
-        type: 'success',
-        message: `Đồng bộ thành công! AI Service đã nạp ${res.synced_seats_count} vùng bàn từ Backend.`,
-      })
-    } catch (err: unknown) {
-      setFeedback({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Không thể kết nối sang AI Service (Port 8000).',
-      })
-    } finally {
-      setIsSyncingAi(false)
-    }
-  }
-
   return (
-    <section className="panel seat-bottom-panel" aria-label="Thuộc tính chỗ ngồi và đồng bộ AI">
+    <section className="panel seat-bottom-panel" aria-label="Thuộc tính chỗ ngồi và danh sách bàn">
       <div className="seat-panel-header">
         <div>
           <p className="eyebrow">CẤU HÌNH VÙNG ẢO</p>
@@ -229,13 +253,19 @@ export function SeatConfigSidebar({
               <input
                 id="seat-code"
                 type="text"
-                placeholder="VD: SEAT_IT_01"
+                placeholder="VD: BAN_01"
                 value={seatCode}
                 onChange={e => setSeatCode(e.target.value)}
                 disabled={!!selectedSeat}
                 required
               />
-              <small>Mã viết liền không dấu, duy nhất.</small>
+              {isDuplicateCode ? (
+                <small style={{ color: '#ef4444', fontWeight: 600 }}>
+                  ⚠️ Mã vị trí này đã tồn tại trong hệ thống. Vui lòng chọn mã khác (gợi ý: {getNextSuggestedSeat().code}).
+                </small>
+              ) : (
+                <small>Mã viết liền không dấu, duy nhất toàn hệ thống.</small>
+              )}
             </div>
 
             <div className="field">
@@ -243,7 +273,7 @@ export function SeatConfigSidebar({
               <input
                 id="seat-name"
                 type="text"
-                placeholder="VD: Bàn Lập trình viên 01"
+                placeholder="VD: Bàn làm việc 1"
                 value={seatName}
                 onChange={e => setSeatName(e.target.value)}
                 required
@@ -318,40 +348,17 @@ export function SeatConfigSidebar({
               <button
                 type="submit"
                 className="button button-primary button-sm"
-                disabled={isSaving || currentPolygon.length < 3 || !selectedCamera}
+                disabled={isSaving || currentPolygon.length < 3 || !selectedCamera || isDuplicateCode}
               >
                 <FloppyDisk size={16} aria-hidden="true" />
-                <span>{isSaving ? 'Đang lưu…' : selectedSeat ? 'Cập nhật đa giác' : 'Lưu bàn làm việc'}</span>
+                <span>{isSaving ? 'Đang lưu…' : selectedSeat ? 'Cập nhật đa giác' : 'Lưu bàn'}</span>
               </button>
             </div>
           </div>
         </form>
 
-        {/* Khối Phải: Cụm Đồng bộ AI & Danh sách bàn */}
+        {/* Khối Phải: Danh sách bàn đã cấu hình */}
         <div className="seat-bottom-meta-col">
-          {/* Cụm nút đồng bộ AI */}
-          <div className="ai-sync-card">
-            <div className="ai-sync-card-header">
-              <div>
-                <p className="eyebrow" style={{ margin: 0 }}>ĐỒNG BỘ MÔ HÌNH AI</p>
-                <h3 style={{ margin: '2px 0 0', fontSize: '0.9375rem' }}>Đẩy vùng sang AI Service</h3>
-              </div>
-              <button
-                type="button"
-                className="button button-secondary button-sm"
-                onClick={handleSyncAi}
-                disabled={isSyncingAi || !selectedCamera}
-                title="Bắn sự kiện sang FastAPI để nạp ngay tọa độ mới"
-              >
-                <ArrowsClockwise size={15} className={isSyncingAi ? 'spin' : ''} aria-hidden="true" />
-                <span>{isSyncingAi ? 'Đang đồng bộ…' : 'Đồng bộ AI'}</span>
-              </button>
-            </div>
-            <p className="muted" style={{ fontSize: '0.75rem', margin: '4px 0 0' }}>
-              Cập nhật trực tiếp bộ nhớ RAM của RT-DETR trên Port 8000.
-            </p>
-          </div>
-
           {/* Danh sách các bàn thuộc camera này */}
           <div className="existing-seats-card">
             <div className="existing-seats-card-header">
@@ -387,8 +394,18 @@ export function SeatConfigSidebar({
                           <span className="badge badge-info badge-subtle" title={`Gán cho: ${s.assignedEmployeeName}`}>
                             <User size={11} aria-hidden="true" /> {s.assignedEmployeeCode}
                           </span>
-                        ) : (
-                          <span className="badge badge-neutral badge-subtle">Trống</span>
+                        ) : null}
+
+                        {s.zoneType !== 'RESTRICTED_ZONE' && (
+                          s.currentState === 'PRESENT' ? (
+                            <span className="badge badge-success badge-subtle" title="Có mặt tại bàn">Có mặt</span>
+                          ) : s.currentState === 'TEMP_AWAY' ? (
+                            <span className="badge badge-warning badge-subtle" title="Vắng mặt tạm thời (< threshold)">Tạm vắng</span>
+                          ) : s.currentState === 'PROLONGED_AWAY' ? (
+                            <span className="badge badge-danger badge-subtle" title="Vắng mặt kéo dài / Cảnh báo rời chỗ">Rời chỗ</span>
+                          ) : (
+                            <span className="badge badge-neutral badge-subtle" title="Bàn trống / Chưa có ai ngồi">Trống</span>
+                          )
                         )}
 
                         <button
@@ -414,19 +431,22 @@ export function SeatConfigSidebar({
       </div>
 
       {/* Modal Xác nhận Xóa Bàn làm việc */}
-      {deletingSeat && (
+      {deletingSeat && createPortal(
         <div className="modal-backdrop" onClick={() => setDeletingSeat(null)}>
           <div
-            className="panel app-dialog"
+            className="panel app-dialog app-dialog-confirm"
             onClick={e => e.stopPropagation()}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="delete-seat-title"
           >
-            <div className="app-dialog-heading">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Warning size={24} className="text-danger" aria-hidden="true" />
-                <h2 id="delete-seat-title" style={{ color: '#ef4444' }}>Xác nhận xóa Vùng bàn</h2>
+            <div className="confirm-delete-header">
+              <div className="confirm-delete-icon-box">
+                <Warning size={24} weight="fill" aria-hidden="true" />
+              </div>
+              <div className="confirm-delete-header-text" style={{ flex: 1 }}>
+                <h2 id="delete-seat-title">Xác nhận xóa Vùng bàn</h2>
+                <p>Thao tác này không thể hoàn tác</p>
               </div>
               <button
                 type="button"
@@ -441,11 +461,11 @@ export function SeatConfigSidebar({
             <div style={{ margin: '14px 0', fontSize: '0.875rem', lineHeight: '1.5' }}>
               <p>
                 Bạn có chắc chắn muốn xóa vị trí bàn{' '}
-                <strong>{deletingSeat.seatCode}</strong> ({deletingSeat.seatName}) không?
+                <strong>{deletingSeat.seatCode}</strong> ({deletingSeat.seatName})?
               </p>
-              <p className="text-danger" style={{ marginTop: '8px', fontSize: '0.8125rem' }}>
-                ⚠️ Toàn bộ tọa độ đa giác và dữ liệu lịch sử trạng thái của bàn này sẽ bị xóa khỏi hệ thống.
-              </p>
+              <div className="confirm-delete-callout">
+                ⚠️ <strong>Cảnh báo mất dữ liệu:</strong> Toàn bộ tọa độ đa giác và dữ liệu lịch sử trạng thái của bàn này sẽ bị xóa vĩnh viễn khỏi hệ thống.
+              </div>
             </div>
 
             <div className="app-dialog-actions">
@@ -463,11 +483,12 @@ export function SeatConfigSidebar({
                 onClick={() => handleDeleteSeat(deletingSeat)}
                 disabled={isSaving}
               >
-                {isSaving ? 'Đang xóa…' : 'Xác nhận xóa'}
+                {isSaving ? 'Đang xóa…' : 'Xóa vĩnh viễn'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   )

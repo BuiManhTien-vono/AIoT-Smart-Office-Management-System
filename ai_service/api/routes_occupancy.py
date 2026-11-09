@@ -4,6 +4,8 @@ REST API Endpoints cho Module Occupancy (Giám sát Chỗ ngồi) và đồng b�
 
 import json
 import time
+import re
+import urllib.request
 import cv2
 import numpy as np
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -12,7 +14,7 @@ from pydantic import BaseModel
 
 from shared.config import settings, SeatBox
 from shared.backend_client import BackendSyncClient
-from modules.occupancy.fsm import SeatStatus
+from modules.occupancy.fsm import SeatStatus, SeatState
 from modules.occupancy.pipeline import OccupancyPipeline
 from modules.occupancy.geometry import is_point_in_polygon
 
@@ -172,20 +174,73 @@ def get_head_detector():
 
 @router.post("/detect-preview")
 async def detect_preview(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
+    stream_url: Optional[str] = Form(None),
     seats_json: Optional[str] = Form(None),
-    conf_threshold: Optional[float] = Form(None)
+    conf_threshold: Optional[float] = Form(None),
+    away_alert_sec: Optional[float] = Form(None),
+    reset_fsm: Optional[bool] = Form(False),
+    camera_code: Optional[str] = Form(None),
+    sync_backend: Optional[bool] = Form(True)
 ):
     """
-    Chạy thử nghiệm mô hình RT-DETR trên 1 khung hình chụp từ Canvas (Phương án 1).
-    Phát hiện vị trí đầu người và đối chiếu Ray-Casting với các vùng bàn làm việc.
+    Chạy thử nghiệm mô hình RT-DETR trên 1 khung hình chụp từ Canvas (Phương án 1)
+    hoặc kéo trực tiếp từ luồng stream_url của IP Camera/Điện thoại để vượt qua rào cản CORS trình duyệt.
     """
     try:
-        contents = await file.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        frame = None
+
+        # 1. Giải mã từ tệp tải lên nếu có
+        if file is not None:
+            try:
+                contents = await file.read()
+                if len(contents) > 0:
+                    nparr = np.frombuffer(contents, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception:
+                frame = None
+
+        # 2. Nếu không có file (hoặc canvas bị CORS tainted ở client), kéo khung hình trực tiếp từ stream_url
+        if frame is None and stream_url:
+            s_url = stream_url.strip()
+            shot_candidates = []
+            if ":8080" in s_url:
+                shot_candidates.append(re.sub(r"/video.*$", "/shot.jpg", s_url))
+                shot_candidates.append(s_url.rstrip("/") + "/shot.jpg")
+            elif ":4747" in s_url:
+                shot_candidates.append(re.sub(r"/video.*$", "/cam/1/frame.jpg", s_url))
+                shot_candidates.append(s_url.rstrip("/") + "/cam/1/frame.jpg")
+
+            for cand in shot_candidates:
+                try:
+                    req = urllib.request.Request(cand, headers={"User-Agent": "SmartOffice-AI/1.0"})
+                    with urllib.request.urlopen(req, timeout=2.0) as resp:
+                        data = resp.read()
+                        if len(data) > 0:
+                            f = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+                            if f is not None:
+                                frame = f
+                                break
+                except Exception:
+                    continue
+
+            # Fallback sang cv2.VideoCapture (MJPEG stream hoặc RTSP)
+            if frame is None:
+                try:
+                    cap = cv2.VideoCapture(s_url)
+                    if cap.isOpened():
+                        ret, f = cap.read()
+                        if ret and f is not None:
+                            frame = f
+                    cap.release()
+                except Exception as exc:
+                    print(f"[!] Lỗi đọc frame từ stream_url: {exc}")
+
         if frame is None:
-            raise HTTPException(status_code=400, detail="Không thể giải mã tệp hình ảnh.")
+            raise HTTPException(
+                status_code=400,
+                detail="Không thể lấy khung hình để suy luận AI. Vui lòng kiểm tra kết nối IP camera hoặc tải file ảnh mẫu."
+            )
 
         detector = get_head_detector()
         old_conf = detector.conf_threshold
@@ -199,6 +254,19 @@ async def detect_preview(
         if conf_threshold is not None:
             detector.conf_threshold = old_conf
 
+        if away_alert_sec is not None and away_alert_sec > 0:
+            occupancy_pipeline.away_alert_sec = away_alert_sec
+
+        if reset_fsm:
+            for st in occupancy_pipeline.seats_state.values():
+                st.status = SeatStatus.EMPTY
+                st.consecutive_absent_frames = 0
+                st.consecutive_present_frames = 0
+                st.away_start_time = None
+                st.away_duration_sec = 0.0
+                st.occupant_head = None
+                st.is_alert = False
+
         seats_data = []
         if seats_json:
             try:
@@ -206,37 +274,113 @@ async def detect_preview(
             except Exception:
                 seats_data = []
 
+        # Đồng bộ cấu hình ghế động vào occupancy_pipeline
+        current_seat_ids = set()
+        for seat in seats_data:
+            s_id = str(seat.get("seatCode") or seat.get("id") or "")
+            if not s_id:
+                continue
+            current_seat_ids.add(s_id)
+            s_name = str(seat.get("seatName") or seat.get("seatCode") or s_id)
+            pts = seat.get("polygonPoints") or seat.get("polygon_points") or []
+            poly_tuples = [(float(p["x"]), float(p["y"])) for p in pts] if len(pts) >= 3 else None
+            emp_id = seat.get("assignedEmployeeId")
+
+            if s_id not in occupancy_pipeline.seats_state:
+                occupancy_pipeline.seats_state[s_id] = SeatState(
+                    seat_id=s_id,
+                    seat_name=s_name,
+                    normalized_polygon=poly_tuples,
+                    assigned_employee_id=emp_id,
+                    status=SeatStatus.EMPTY
+                )
+            else:
+                st = occupancy_pipeline.seats_state[s_id]
+                st.normalized_polygon = poly_tuples
+                st.seat_name = s_name
+                if emp_id:
+                    st.assigned_employee_id = emp_id
+
+        # Loại bỏ các ghế đã bị xóa nếu seats_data được cung cấp
+        if seats_data:
+            to_remove = [sid for sid in occupancy_pipeline.seats_state if sid not in current_seat_ids]
+            for sid in to_remove:
+                occupancy_pipeline.seats_state.pop(sid, None)
+
+        # Chạy máy trạng thái FSM (EMPTY, PRESENT, TEMP_AWAY, PROLONGED_AWAY)
+        pipeline_results = occupancy_pipeline.process_frame(
+            detections,
+            frame_shape=(frame.shape[0], frame.shape[1])
+        )
+
         detected_heads = []
         occupied_seat_ids = set()
+        seat_states = []
+
+        for res in pipeline_results:
+            seat_states.append({
+                "seat_id": res["seat_id"],
+                "seat_code": res["seat_name"],
+                "status": res["status"],
+                "away_duration_sec": res["away_duration_sec"],
+                "has_occupant": res["has_occupant"],
+                "is_alert": res["is_alert"]
+            })
+            if res["has_occupant"]:
+                occupied_seat_ids.add(res["seat_id"])
 
         for det in detections:
-            xc, yc = det.center_normalized
-            matched_seat_id = None
-
-            for seat in seats_data:
-                pts = seat.get("polygonPoints") or seat.get("polygon_points") or []
-                if len(pts) >= 3:
-                    poly_tuples = [(float(p["x"]), float(p["y"])) for p in pts]
-                    if is_point_in_polygon((xc, yc), poly_tuples):
-                        matched_seat_id = seat.get("id") or seat.get("seatCode")
-                        occupied_seat_ids.add(matched_seat_id)
-                        break
+            matched_id = None
+            for res in pipeline_results:
+                if res["occupant_head"] == det:
+                    matched_id = res["seat_id"]
+                    break
 
             detected_heads.append({
                 "bbox_normalized": [float(v) for v in det.bbox_normalized],
                 "center_normalized": [float(det.center_normalized[0]), float(det.center_normalized[1])],
                 "confidence": round(float(det.confidence), 3),
-                "matched_seat_id": matched_seat_id
+                "matched_seat_id": matched_id
             })
+
+        # Tự động đẩy đồng bộ trạng thái FSM sang Backend .NET để kích hoạt SignalR thời gian thực
+        if sync_backend and backend_client and len(pipeline_results) > 0:
+            target_cam = (camera_code or settings.occupancy.default_camera_code).strip().upper()
+            prolonged_thresh = int(occupancy_pipeline.away_alert_sec) if occupancy_pipeline.away_alert_sec else None
+            try:
+                backend_client.submit_occupancy_state_async(
+                    camera_code=target_cam,
+                    frame_sequence=int(time.time() * 1000) % 1_000_000,
+                    seat_statuses=pipeline_results,
+                    prolonged_absence_threshold_seconds=prolonged_thresh
+                )
+            except Exception as exc:
+                print(f"[!] Lỗi đồng bộ state-sync sang backend: {exc}")
 
         return {
             "status": "success",
             "inference_time_ms": latency_ms,
             "detections_count": len(detected_heads),
             "detections": detected_heads,
-            "occupied_seat_ids": list(occupied_seat_ids)
+            "occupied_seat_ids": list(occupied_seat_ids),
+            "seat_states": seat_states
         }
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Lỗi khi suy luận RT-DETR: {str(exc)}")
+
+
+
+@router.post("/reset-fsm")
+async def reset_fsm_endpoint():
+    """Reset toàn bộ bộ nhớ FSM của các bàn về trạng thái EMPTY trong RAM của AI Service."""
+    for st in occupancy_pipeline.seats_state.values():
+        st.status = SeatStatus.EMPTY
+        st.consecutive_absent_frames = 0
+        st.consecutive_present_frames = 0
+        st.away_start_time = None
+        st.away_duration_sec = 0.0
+        st.occupant_head = None
+        st.is_alert = False
+    return {"status": "success", "message": "Đã reset bộ nhớ FSM các bàn về EMPTY."}

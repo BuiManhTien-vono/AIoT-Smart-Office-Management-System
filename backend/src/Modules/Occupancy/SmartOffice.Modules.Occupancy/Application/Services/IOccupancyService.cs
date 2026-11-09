@@ -58,5 +58,8 @@ public interface IOccupancyService
         Guid? seatId = null,
         int limit = 50,
         CancellationToken ct = default);
+    Task<Result<int>> ResetCameraSeatsAsync(
+        string cameraCode,
+        CancellationToken ct = default);
 }
 

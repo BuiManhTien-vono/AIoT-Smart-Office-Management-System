@@ -40,6 +40,18 @@ public sealed class OccupancyController(IOccupancyService occupancyService) : Co
         return Ok(result.Value);
     }
 
+    [HttpPost("cameras/{cameraCode}/reset-seats")]
+    public async Task<IActionResult> ResetCameraSeats(string cameraCode, CancellationToken ct)
+    {
+        var result = await occupancyService.ResetCameraSeatsAsync(cameraCode, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(new { cameraCode, resetSeatsCount = result.Value, message = $"Đã đưa {result.Value} bàn làm việc về trạng thái TRỐNG (EMPTY)." });
+    }
+
     [HttpDelete("cameras/{id:guid}")]
     public async Task<IActionResult> DeleteCamera(Guid id, CancellationToken ct)
     {

@@ -12,9 +12,10 @@ import {
   Play,
   Stop,
   Keyboard,
+  Clock,
 } from '@phosphor-icons/react'
-import type { PolygonPoint, Seat, DetectPreviewResponse } from '../../types/occupancy.types'
-import { testDetectPreview } from '../../services/occupancyService'
+import type { PolygonPoint, Seat, DetectPreviewResponse, SeatState } from '../../types/occupancy.types'
+import { testDetectPreview, resetCameraSeats, resetAiFsm } from '../../services/occupancyService'
 
 interface Props {
   backgroundImageUrl: string | null
@@ -25,8 +26,8 @@ interface Props {
   onPolygonChange: (points: PolygonPoint[]) => void
   onSelectExistingSeat?: (seat: Seat) => void
   onCaptureSnapshot?: (file: File) => Promise<void>
-  onQuickCommitZone?: (points: PolygonPoint[]) => Promise<void> | void
   onSyncZonesToAi?: () => Promise<void> | void
+  cameraCode?: string
   isCapturing?: boolean
   isReadOnly?: boolean
 }
@@ -67,8 +68,8 @@ export function InteractiveZoneCanvas({
   onPolygonChange,
   onSelectExistingSeat,
   onCaptureSnapshot,
-  onQuickCommitZone,
   onSyncZonesToAi,
+  cameraCode,
   isCapturing = false,
   isReadOnly = false,
 }: Props) {
@@ -78,6 +79,7 @@ export function InteractiveZoneCanvas({
   const liveImgRef = useRef<HTMLImageElement>(null)
 
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
+  const [isZoneCommitted, setIsZoneCommitted] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imgElement, setImgElement] = useState<HTMLImageElement | null>(null)
 
@@ -95,6 +97,83 @@ export function InteractiveZoneCanvas({
     isRealtimeRef.current = isRealtimeAiActive
     existingSeatsRef.current = existingSeats
   }, [isRealtimeAiActive, existingSeats])
+
+  // Tự động đồng bộ trạng thái chốt vùng khi thay đổi đa giác hoặc chọn bàn
+  useEffect(() => {
+    if (currentPolygon.length === 0) {
+      setIsZoneCommitted(false)
+      setMousePos(null)
+    } else if (selectedSeatId) {
+      setIsZoneCommitted(true)
+      setMousePos(null)
+    }
+  }, [currentPolygon.length, selectedSeatId])
+
+  // Cấu hình ngưỡng thời gian vắng mặt (mặc định 15s cho chế độ thử nghiệm/demo, hoặc 900s quy chuẩn 15 phút)
+  const [awayThresholdSec, setAwayThresholdSec] = useState<number>(15)
+  const awayThresholdSecRef = useRef<number>(15)
+  useEffect(() => {
+    awayThresholdSecRef.current = awayThresholdSec
+  }, [awayThresholdSec])
+
+  // Quản lý 4 trạng thái FSM chỗ ngồi:
+  // EMPTY (Xám) | PRESENT (Xanh lá) | TEMP_AWAY (Vàng cam) | PROLONGED_AWAY (Đỏ)
+  const seatFsmMapRef = useRef<Map<string, {
+    status: SeatState
+    awayStartTime: number | null
+    awayDurationSec: number
+    hasOccupant: boolean
+  }>>(new Map())
+
+  const updateFsmStateFromAi = useCallback((res: DetectPreviewResponse) => {
+    const now = Date.now()
+    if (res.seat_states && res.seat_states.length > 0) {
+      res.seat_states.forEach(ss => {
+        const sid = ss.seat_id
+        const existing = seatFsmMapRef.current.get(sid)
+        const isAway = ss.status === 'TEMP_AWAY' || ss.status === 'PROLONGED_AWAY'
+        seatFsmMapRef.current.set(sid, {
+          status: ss.status,
+          awayStartTime: isAway ? (existing?.awayStartTime || (now - (ss.away_duration_sec || 0) * 1000)) : null,
+          awayDurationSec: ss.away_duration_sec || 0,
+          hasOccupant: ss.has_occupant
+        })
+      })
+    } else {
+      existingSeatsRef.current.forEach(seat => {
+        const isOcc = res.occupied_seat_ids.includes(seat.id) || res.occupied_seat_ids.includes(seat.seatCode)
+        const current = seatFsmMapRef.current.get(seat.id) || {
+          status: 'EMPTY' as SeatState,
+          awayStartTime: null,
+          awayDurationSec: 0,
+          hasOccupant: false
+        }
+
+        if (isOcc) {
+          current.status = 'PRESENT'
+          current.awayStartTime = null
+          current.awayDurationSec = 0
+          current.hasOccupant = true
+        } else {
+          current.hasOccupant = false
+          if (current.status === 'PRESENT' || current.awayStartTime !== null) {
+            if (!current.awayStartTime) current.awayStartTime = now
+            current.awayDurationSec = Math.round((now - current.awayStartTime) / 1000)
+            if (current.awayDurationSec >= awayThresholdSecRef.current) {
+              current.status = 'PROLONGED_AWAY'
+            } else {
+              current.status = 'TEMP_AWAY'
+            }
+          } else {
+            current.status = 'EMPTY'
+            current.awayStartTime = null
+            current.awayDurationSec = 0
+          }
+        }
+        seatFsmMapRef.current.set(seat.id, current)
+      })
+    }
+  }, [])
 
   // Hotkey notice toast
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -147,7 +226,20 @@ export function InteractiveZoneCanvas({
     }
   }, [backgroundImageUrl])
 
-  const trimmedSource = streamSource?.trim() || ''
+  function getEffectiveStreamUrl(source: string): string {
+    const s = source.trim()
+    if (!s) return ''
+    if (/^https?:\/\/[^/]+:8080\/?$/i.test(s)) {
+      return s.replace(/\/?$/, '/video')
+    }
+    if (/^https?:\/\/[^/]+:4747\/?$/i.test(s)) {
+      return s.replace(/\/?$/, '/video')
+    }
+    return s
+  }
+
+  const rawTrimmed = streamSource?.trim() || ''
+  const trimmedSource = getEffectiveStreamUrl(rawTrimmed)
   const isVideoFile = Boolean(
     trimmedSource &&
     (trimmedSource.toLowerCase().endsWith('.mp4') ||
@@ -245,12 +337,19 @@ export function InteractiveZoneCanvas({
       }
     }
 
-    // 2. Draw existing seats
+    // 2. Draw existing seats with 4-State FSM:
+    // EMPTY: Xám (Bàn trống / Chưa có ai ngồi)
+    // PRESENT: Xanh lá (Có mặt tại bàn)
+    // TEMP_AWAY: Vàng cam (Vắng mặt tạm thời < threshold)
+    // PROLONGED_AWAY: Đỏ (Vắng mặt kéo dài / Cảnh báo rời chỗ)
     existingSeats.forEach(seat => {
       if (!seat.polygonPoints || seat.polygonPoints.length < 3) return
       const isSelected = seat.id === selectedSeatId
       const isRestricted = seat.zoneType === 'RESTRICTED_ZONE'
-      const isAiOccupied = aiResult?.occupied_seat_ids.includes(seat.id) || aiResult?.occupied_seat_ids.includes(seat.seatCode)
+
+      const fsmEntry = seatFsmMapRef.current.get(seat.id) || seatFsmMapRef.current.get(seat.seatCode)
+      const seatStatus: SeatState = fsmEntry ? fsmEntry.status : (seat.currentState || 'EMPTY')
+      const awaySec = fsmEntry ? fsmEntry.awayDurationSec : 0
 
       ctx.beginPath()
       seat.polygonPoints.forEach((pt, idx) => {
@@ -261,40 +360,120 @@ export function InteractiveZoneCanvas({
       })
       ctx.closePath()
 
-      // Styling: Highlight AI occupied seats in vibrant green
-      if (isAiOccupied) {
-        ctx.fillStyle = 'rgba(16, 185, 129, 0.42)'
-        ctx.strokeStyle = '#10b981'
-        ctx.lineWidth = 3.5
-      } else if (isSelected) {
-        ctx.fillStyle = isRestricted ? 'rgba(239, 68, 68, 0.4)' : 'rgba(37, 99, 235, 0.35)'
-        ctx.strokeStyle = isRestricted ? '#ef4444' : '#2563eb'
-        ctx.lineWidth = 3
+      let fillColor: string
+      let strokeColor: string
+      let lineWidth: number
+      let statusBadgeText: string
+      let statusBadgeBg: string
+
+      if (isRestricted) {
+        fillColor = isSelected ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.22)'
+        strokeColor = '#ef4444'
+        lineWidth = isSelected ? 3.5 : 2
+        statusBadgeText = 'KHU VỰC CẤM'
+        statusBadgeBg = '#ef4444'
       } else {
-        ctx.fillStyle = isRestricted ? 'rgba(239, 68, 68, 0.2)' : 'rgba(37, 99, 235, 0.18)'
-        ctx.strokeStyle = isRestricted ? 'rgba(239, 68, 68, 0.8)' : 'rgba(37, 99, 235, 0.75)'
-        ctx.lineWidth = 1.8
+        switch (seatStatus) {
+          case 'PRESENT':
+            // Xanh lá: Có mặt tại bàn
+            fillColor = 'rgba(16, 185, 129, 0.38)'
+            strokeColor = '#10b981'
+            lineWidth = isSelected ? 4 : 3
+            statusBadgeText = 'CÓ MẶT'
+            statusBadgeBg = '#10b981'
+            break
+
+          case 'TEMP_AWAY':
+            // Vàng cam: Vắng mặt tạm thời (< threshold)
+            fillColor = 'rgba(245, 158, 11, 0.36)'
+            strokeColor = '#f59e0b'
+            lineWidth = isSelected ? 4 : 3
+            statusBadgeText = awaySec > 0 ? `TẠM VẮNG (${awaySec}s)` : 'TẠM VẮNG'
+            statusBadgeBg = '#f59e0b'
+            break
+
+          case 'PROLONGED_AWAY':
+            // Đỏ: Vắng mặt kéo dài / Cảnh báo rời chỗ
+            fillColor = 'rgba(239, 68, 68, 0.42)'
+            strokeColor = '#ef4444'
+            lineWidth = isSelected ? 4.5 : 3.5
+            statusBadgeText = awaySec > 0 ? `⚠️ RỜI CHỖ (${awaySec}s)` : '⚠️ RỜI CHỖ'
+            statusBadgeBg = '#ef4444'
+            break
+
+          case 'EMPTY':
+          default:
+            // Xám: Bàn trống / Chưa có ai ngồi
+            fillColor = isSelected ? 'rgba(148, 163, 184, 0.35)' : 'rgba(148, 163, 184, 0.16)'
+            strokeColor = isSelected ? '#3b82f6' : '#94a3b8'
+            lineWidth = isSelected ? 3 : 1.8
+            statusBadgeText = 'TRỐNG'
+            statusBadgeBg = '#64748b'
+            break
+        }
       }
+
+      ctx.fillStyle = fillColor
+      ctx.strokeStyle = strokeColor
+      ctx.lineWidth = lineWidth
       ctx.fill()
       ctx.stroke()
 
-      // Draw label in center
+      // Nhãn trung tâm: Mã bàn + Huy hiệu trạng thái FSM
       const centerX = (seat.polygonPoints.reduce((acc, p) => acc + p.x, 0) / seat.polygonPoints.length) * width
       const centerY = (seat.polygonPoints.reduce((acc, p) => acc + p.y, 0) / seat.polygonPoints.length) * height
 
-      ctx.fillStyle = '#ffffff'
+      // Tên mã bàn
       ctx.font = 'bold 12px Inter, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
       ctx.shadowBlur = 4
-      const displayLabel = isAiOccupied ? `${seat.seatCode} (CÓ NGƯỜI)` : seat.seatCode
-      ctx.fillText(displayLabel, centerX, centerY)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(seat.seatCode, centerX, centerY - 9)
+
+      // Vẽ status badge bên dưới tên bàn
+      ctx.font = 'bold 10px Inter, sans-serif'
+      const badgeText = statusBadgeText
+      const badgeWidth = ctx.measureText(badgeText).width + 12
+      const badgeHeight = 18
+      const badgeX = centerX - badgeWidth / 2
+      const badgeY = centerY + 3
+
       ctx.shadowBlur = 0
+      ctx.fillStyle = statusBadgeBg
+      ctx.beginPath()
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 4)
+      } else {
+        ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight)
+      }
+      ctx.fill()
+
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(badgeText, centerX, badgeY + badgeHeight / 2)
     })
 
     // 3. Draw current working polygon
     if (currentPolygon.length > 0) {
+      // Khi đang vẽ (chưa chốt) và có >= 2 đỉnh + có vị trí trỏ chuột:
+      // Tô mờ diện tích khép góc tạm thời để người dùng ước tính diện tích trực quan
+      if (!isZoneCommitted && mousePos && !isReadOnly && currentPolygon.length >= 2) {
+        ctx.save()
+        ctx.beginPath()
+        currentPolygon.forEach((pt, idx) => {
+          const px = pt.x * width
+          const py = pt.y * height
+          if (idx === 0) ctx.moveTo(px, py)
+          else ctx.lineTo(px, py)
+        })
+        ctx.lineTo(mousePos.x, mousePos.y)
+        ctx.closePath()
+        ctx.fillStyle = 'rgba(37, 99, 235, 0.16)'
+        ctx.fill()
+        ctx.restore()
+      }
+
       ctx.beginPath()
       currentPolygon.forEach((pt, idx) => {
         const px = pt.x * width
@@ -304,20 +483,53 @@ export function InteractiveZoneCanvas({
       })
 
       // If mouse is moving and drawing is in progress
-      if (mousePos && !isReadOnly) {
+      if (!isZoneCommitted && mousePos && !isReadOnly) {
         ctx.lineTo(mousePos.x, mousePos.y)
+        ctx.strokeStyle = '#2563eb'
+        ctx.lineWidth = 2.5
+        ctx.setLineDash([4, 4])
+        ctx.stroke()
+        ctx.setLineDash([])
+      } else {
+        // Vùng đã được chốt (Chuột phải / phím n) -> Khép góc bằng nét liền cố định
+        ctx.closePath()
+        ctx.strokeStyle = '#2563eb'
+        ctx.lineWidth = 3
+        ctx.setLineDash([])
+        ctx.stroke()
       }
-
-      ctx.strokeStyle = '#2563eb'
-      ctx.lineWidth = 2.5
-      ctx.setLineDash([4, 4])
-      ctx.stroke()
-      ctx.setLineDash([])
 
       // Fill polygon if >= 3 vertices
       if (currentPolygon.length >= 3) {
-        ctx.fillStyle = 'rgba(37, 99, 235, 0.22)'
+        ctx.fillStyle = isZoneCommitted ? 'rgba(37, 99, 235, 0.35)' : 'rgba(37, 99, 235, 0.22)'
         ctx.fill()
+
+        // Khi đã chốt vùng, luôn hiển thị nhãn chỉ báo trung tâm
+        if (isZoneCommitted) {
+          const xs = currentPolygon.map(p => p.x * width)
+          const ys = currentPolygon.map(p => p.y * height)
+          const cx = xs.reduce((a, b) => a + b, 0) / xs.length
+          const cy = ys.reduce((a, b) => a + b, 0) / ys.length
+
+          const tagText = '✓ ĐÃ CHỐT VÙNG (BẤM LƯU BÀN BÊN DƯỚI)'
+          ctx.font = 'bold 12px sans-serif'
+          const tagW = ctx.measureText(tagText).width + 18
+          const tagH = 26
+
+          ctx.fillStyle = 'rgba(37, 99, 235, 0.95)'
+          ctx.beginPath()
+          if (ctx.roundRect) {
+            ctx.roundRect(cx - tagW / 2, cy - tagH / 2, tagW, tagH, 6)
+          } else {
+            ctx.rect(cx - tagW / 2, cy - tagH / 2, tagW, tagH)
+          }
+          ctx.fill()
+
+          ctx.fillStyle = '#ffffff'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(tagText, cx, cy)
+        }
       }
 
       // Draw vertex handles
@@ -372,6 +584,7 @@ export function InteractiveZoneCanvas({
     selectedSeatId,
     currentPolygon,
     mousePos,
+    isZoneCommitted,
     isReadOnly,
     aiResult,
   ])
@@ -389,19 +602,25 @@ export function InteractiveZoneCanvas({
     const pixelX = e.clientX - rect.left
     const pixelY = e.clientY - rect.top
 
-    // Normalize coordinates to [0.0, 1.0]
-    const normX = Math.max(0, Math.min(1, Number((pixelX / rect.width).toFixed(4))))
-    const normY = Math.max(0, Math.min(1, Number((pixelY / rect.height).toFixed(4))))
+    // Nếu vùng đã chốt, không thêm đỉnh mới nữa mà hướng dẫn lưu hoặc xóa vẽ lại
+    if (isZoneCommitted) {
+      showToast('⚠️ Vùng này đã được chốt! Bấm "Lưu bàn" bên dưới hoặc bấm "Xóa vẽ lại (r)" nếu muốn vẽ lại.')
+      return
+    }
 
     // Check if clicked near first point to close polygon (snap threshold: 18px)
     if (currentPolygon.length >= 3) {
       const first = currentPolygon[0]
       const dist = Math.hypot(pixelX - first.x * rect.width, pixelY - first.y * rect.height)
       if (dist < 18) {
-        setMousePos(null)
+        handleCommitCurrentZone()
         return
       }
     }
+
+    // Normalize coordinates to [0.0, 1.0]
+    const normX = Math.max(0, Math.min(1, Number((pixelX / rect.width).toFixed(4))))
+    const normY = Math.max(0, Math.min(1, Number((pixelY / rect.height).toFixed(4))))
 
     // If not drawing and clicked on an existing seat polygon, select it!
     if (currentPolygon.length === 0 && onSelectExistingSeat) {
@@ -416,16 +635,23 @@ export function InteractiveZoneCanvas({
   }
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (isReadOnly || currentPolygon.length === 0) {
+    if (isReadOnly || currentPolygon.length === 0 || isZoneCommitted) {
       if (mousePos) setMousePos(null)
       return
     }
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
+    const pixelX = e.clientX - rect.left
+    const pixelY = e.clientY - rect.top
+
+    // Quy đổi chính xác từ tọa độ CSS hiển thị màn hình sang hệ tọa độ Canvas nội bộ (960x540)
+    const canvasX = (pixelX / rect.width) * canvas.width
+    const canvasY = (pixelY / rect.height) * canvas.height
+
     setMousePos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: canvasX,
+      y: canvasY,
     })
   }
 
@@ -435,16 +661,18 @@ export function InteractiveZoneCanvas({
 
   const handleUndoVertex = useCallback(() => {
     if (currentPolygon.length === 0) return
+    setIsZoneCommitted(false)
     onPolygonChange(currentPolygon.slice(0, -1))
   }, [currentPolygon, onPolygonChange])
 
   const handleClearPolygon = useCallback(() => {
-    onPolygonChange([])
+    setIsZoneCommitted(false)
     setMousePos(null)
+    onPolygonChange([])
   }, [onPolygonChange])
 
-  // Chốt vùng hiện tại (Bàn 1 -> Bàn 2 -> ...)
-  const handleCommitCurrentZone = useCallback(async () => {
+  // Chốt vùng hiện tại (Chuột phải / phím 'n')
+  const handleCommitCurrentZone = useCallback(() => {
     if (currentPolygon.length < 3) {
       if (currentPolygon.length > 0) {
         showToast('⚠️ Cần tối thiểu 3 điểm để chốt một vùng bàn!')
@@ -460,27 +688,55 @@ export function InteractiveZoneCanvas({
       return
     }
 
-    if (onQuickCommitZone) {
-      showToast('⏳ Đang lưu chốt vùng bàn...')
-      await onQuickCommitZone(currentPolygon)
-      showToast('🎉 Đã chốt bàn thành công! Hãy click tiếp để vẽ bàn kế tiếp.')
-    } else {
-      setMousePos(null)
-      showToast('✅ Đã khép góc đa giác. Bấm "Lưu bàn" bên dưới.')
-    }
-  }, [currentPolygon, onQuickCommitZone, showToast])
+    // Đánh dấu khóa chốt vùng và ngắt hoàn toàn đường vẽ chuột
+    setIsZoneCommitted(true)
+    setMousePos(null)
+    showToast('✅ Đã chốt vùng đa giác! Hãy kiểm tra Mã / Tên và bấm "Lưu bàn" bên dưới.')
+
+    setTimeout(() => {
+      const codeInput = document.getElementById('seat-code') as HTMLInputElement | null
+      if (codeInput) {
+        codeInput.focus()
+        codeInput.select()
+      }
+    }, 100)
+  }, [currentPolygon, showToast])
 
   // Hoàn tất tất cả và BẮT ĐẦU GIÁM SÁT (Phím SPACE / ENTER / 'c' hoặc nút Chạy AI Thật)
   const handleStartOrToggleMonitoring = useCallback(async () => {
-    // Tự động chốt bàn đang vẽ nếu có >= 3 đỉnh
-    if (currentPolygon.length >= 3 && onQuickCommitZone) {
-      await onQuickCommitZone(currentPolygon)
+    // Khép góc đa giác đang vẽ nếu có >= 3 đỉnh
+    if (currentPolygon.length >= 3) {
+      setMousePos(null)
     }
 
     if (isRealtimeAiActive) {
       setIsRealtimeAiActive(false)
-      showToast('⏹ Đã dừng giám sát AI thật.')
+      setAiResult(null)
+      setAiError(null)
+
+      // Đưa toàn bộ máy trạng thái bàn trong bộ nhớ Canvas về trạng thái TRỐNG (EMPTY)
+      seatFsmMapRef.current.clear()
+      existingSeatsRef.current.forEach(s => {
+        const emptyEntry = {
+          status: 'EMPTY' as SeatState,
+          awayStartTime: null,
+          awayDurationSec: 0,
+          hasOccupant: false
+        }
+        seatFsmMapRef.current.set(s.id, emptyEntry)
+        if (s.seatCode) {
+          seatFsmMapRef.current.set(s.seatCode, emptyEntry)
+        }
+      })
+
+      // Đồng thời reset máy trạng thái trên AI Service và Backend .NET (phát sự kiện SignalR tới Live Seat Map)
+      const camCode = cameraCode || 'CAM_DEMO'
+      void resetAiFsm()
+      void resetCameraSeats(camCode).catch(() => {})
+
+      showToast('⏹ Đã dừng giám sát AI. Các bàn đã đưa về trạng thái TRỐNG.')
     } else {
+      seatFsmMapRef.current.clear()
       if (onSyncZonesToAi) {
         showToast('🔄 Đang đồng bộ vùng bàn sang AI...')
         await onSyncZonesToAi()
@@ -488,7 +744,7 @@ export function InteractiveZoneCanvas({
       setIsRealtimeAiActive(true)
       showToast('🚀 Đang chạy giám sát AI thật liên tục!')
     }
-  }, [currentPolygon, onQuickCommitZone, isRealtimeAiActive, onSyncZonesToAi, showToast])
+  }, [currentPolygon, isRealtimeAiActive, onSyncZonesToAi, showToast, cameraCode])
 
   // Vòng lặp suy luận AI liên tục thời gian thực (Realtime Continuous AI Monitoring)
   useEffect(() => {
@@ -529,15 +785,26 @@ export function InteractiveZoneCanvas({
           frameBlob = await new Promise<Blob | null>(res => offscreen.toBlob(res, 'image/jpeg', 0.85))
         }
 
-        if (!frameBlob) {
+        // Nếu không có frameBlob và cũng không phải http stream thì chờ rồi thử lại
+        if (!frameBlob && !isHttpStream) {
           await new Promise(r => setTimeout(r, 400))
           continue
         }
 
-        const file = new File([frameBlob], `rt_${Date.now()}.jpg`, { type: 'image/jpeg' })
+        const file = frameBlob ? new File([frameBlob], `rt_${Date.now()}.jpg`, { type: 'image/jpeg' }) : undefined
         try {
-          const res = await testDetectPreview(file, existingSeatsRef.current, 0.35)
+          const res = await testDetectPreview(
+            file,
+            existingSeatsRef.current,
+            0.35,
+            undefined,
+            awayThresholdSecRef.current,
+            undefined,
+            cameraCode || 'CAM_DEMO',
+            isHttpStream ? trimmedSource : undefined
+          )
           if (!cancelled && isRealtimeRef.current) {
+            updateFsmStateFromAi(res)
             setAiResult(res)
             setAiError(null)
           }
@@ -560,7 +827,7 @@ export function InteractiveZoneCanvas({
       cancelled = true
       isLoopRunningRef.current = false
     }
-  }, [isRealtimeAiActive, imgElement, imageLoaded])
+  }, [isRealtimeAiActive, imgElement, imageLoaded, updateFsmStateFromAi, isHttpStream, cameraCode, trimmedSource])
 
   // Lắng nghe toàn bộ phím tắt thao tác bàn vẽ (Hotkeys)
   useEffect(() => {
@@ -681,8 +948,23 @@ export function InteractiveZoneCanvas({
 
     function sendToAi(blob: Blob) {
       const file = new File([blob], `preview_${Date.now()}.jpg`, { type: 'image/jpeg' })
-      testDetectPreview(file, existingSeats, 0.35)
+      testDetectPreview(file, existingSeats, 0.35, undefined, awayThresholdSecRef.current, undefined, cameraCode || 'CAM_DEMO')
         .then(res => {
+          updateFsmStateFromAi(res)
+          setAiResult(res)
+        })
+        .catch(err => {
+          setAiError(err instanceof Error ? err.message : 'Không thể kết nối sang AI Service.')
+        })
+        .finally(() => {
+          setIsRunningAi(false)
+        })
+    }
+
+    function sendStreamUrlToAi() {
+      testDetectPreview(undefined, existingSeats, 0.35, undefined, awayThresholdSecRef.current, undefined, cameraCode || 'CAM_DEMO', trimmedSource)
+        .then(res => {
+          updateFsmStateFromAi(res)
           setAiResult(res)
         })
         .catch(err => {
@@ -710,18 +992,25 @@ export function InteractiveZoneCanvas({
       }
 
       // 2. Chụp từ ảnh stream IP camera nếu đang xem LIVE
-      if (viewMode === 'LIVE' && liveImgRef.current && liveImgRef.current.naturalWidth > 0) {
-        offscreen.width = liveImgRef.current.naturalWidth
-        offscreen.height = liveImgRef.current.naturalHeight
-        ctx.drawImage(liveImgRef.current, 0, 0, offscreen.width, offscreen.height)
-        offscreen.toBlob(blob => {
-          if (blob) sendToAi(blob)
-          else {
-            setIsRunningAi(false)
-            setAiError('Không thể tạo file ảnh từ luồng camera.')
+      if (viewMode === 'LIVE' && isHttpStream) {
+        if (liveImgRef.current && liveImgRef.current.naturalWidth > 0) {
+          offscreen.width = liveImgRef.current.naturalWidth
+          offscreen.height = liveImgRef.current.naturalHeight
+          try {
+            ctx.drawImage(liveImgRef.current, 0, 0, offscreen.width, offscreen.height)
+            offscreen.toBlob(blob => {
+              if (blob) sendToAi(blob)
+              else sendStreamUrlToAi()
+            }, 'image/jpeg', 0.95)
+            return
+          } catch {
+            sendStreamUrlToAi()
+            return
           }
-        }, 'image/jpeg', 0.95)
-        return
+        } else {
+          sendStreamUrlToAi()
+          return
+        }
       }
 
       // 3. Chụp từ ảnh tĩnh hiệu chuẩn nếu có
@@ -798,10 +1087,16 @@ export function InteractiveZoneCanvas({
         {viewMode === 'LIVE' && isHttpStream && (
           <img
             ref={liveImgRef}
-            src={streamSource!}
+            src={trimmedSource}
             alt="Luồng trực tiếp camera"
             className="canvas-video-layer"
-            crossOrigin="anonymous"
+            onError={e => {
+              const el = e.currentTarget
+              if (el.crossOrigin) {
+                el.removeAttribute('crossOrigin')
+                el.src = trimmedSource
+              }
+            }}
           />
         )}
 
@@ -829,7 +1124,7 @@ export function InteractiveZoneCanvas({
           <div className="canvas-toolbar">
             <div className="canvas-stat-pill">
               <Compass size={14} aria-hidden="true" />
-              <span>Đỉnh: <strong>{currentPolygon.length}</strong></span>
+              <span>{isZoneCommitted ? 'Đã chốt:' : 'Đỉnh:'} <strong>{currentPolygon.length}</strong></span>
               {currentPolygon.length >= 3 && (
                 <span className="muted" style={{ marginLeft: '4px' }}>
                   ({(area * 100).toFixed(1)}%)
@@ -869,12 +1164,12 @@ export function InteractiveZoneCanvas({
                 {currentPolygon.length >= 3 && (
                   <button
                     type="button"
-                    className="button button-primary button-xs"
+                    className={`button ${isZoneCommitted ? 'button-special' : 'button-primary'} button-xs`}
                     onClick={() => void handleCommitCurrentZone()}
-                    title="Chốt bàn này (Phím tắt: Chuột phải hoặc 'n')"
+                    title="Chốt vùng này (Phím tắt: Chuột phải hoặc 'n')"
                   >
                     <Check size={14} aria-hidden="true" />
-                    <span>Chốt bàn (n)</span>
+                    <span>{isZoneCommitted ? '✓ Đã chốt vùng' : 'Chốt vùng (n)'}</span>
                   </button>
                 )}
               </div>
@@ -945,6 +1240,23 @@ export function InteractiveZoneCanvas({
             )}
           </button>
 
+          {/* Bộ chọn ngưỡng thời gian vắng mặt */}
+          <div className="canvas-threshold-selector" title="Cấu hình ngưỡng thời gian vắng mặt để FSM chuyển từ TẠM VẮNG sang RỜI CHỖ (PROLONGED_AWAY)">
+            <Clock size={13} weight="bold" aria-hidden="true" style={{ color: '#94a3b8' }} />
+            <span className="threshold-label">Ngưỡng:</span>
+            <select
+              className="threshold-select"
+              value={awayThresholdSec}
+              onChange={e => setAwayThresholdSec(Number(e.target.value))}
+              disabled={isRealtimeAiActive}
+            >
+              <option value={15}>15s (Thử nghiệm)</option>
+              <option value={30}>30s (Thử nghiệm)</option>
+              <option value={60}>1 phút</option>
+              <option value={900}>15 phút (Quy chuẩn)</option>
+            </select>
+          </div>
+
           {/* Nút Chạy thử nghiệm AI RT-DETR quét 1 lần */}
           <button
             type="button"
@@ -988,17 +1300,33 @@ export function InteractiveZoneCanvas({
           )}
         </div>
 
+        {/* Chú thích 4 Trạng thái Chỗ ngồi FSM */}
+        <div className="fsm-status-legend" title="4 trạng thái giám sát hiện diện chỗ ngồi FSM">
+          <span className="legend-chip">
+            <span className="legend-dot dot-gray" /> EMPTY (Trống)
+          </span>
+          <span className="legend-chip">
+            <span className="legend-dot dot-green" /> PRESENT (Có mặt)
+          </span>
+          <span className="legend-chip">
+            <span className="legend-dot dot-amber" /> {`TEMP_AWAY (Tạm vắng < ${awayThresholdSec >= 60 ? `${Math.round(awayThresholdSec / 60)}'` : `${awayThresholdSec}s`})`}
+          </span>
+          <span className="legend-chip">
+            <span className="legend-dot dot-red" /> {`PROLONGED_AWAY (Rời chỗ ≥ ${awayThresholdSec >= 60 ? `${Math.round(awayThresholdSec / 60)}'` : `${awayThresholdSec}s`})`}
+          </span>
+        </div>
+
         {/* Hướng Dẫn Thao Tác Ngắn Gọn Ở Góc Bên Phải */}
         <div
           className="canvas-cheatsheet-compact"
-          title="Phím tắt: Click trái thêm điểm, Chuột phải hoặc 'n' chốt bàn, 'u' hoàn tác, 'r' reset, 'Space' chạy AI, 'Esc' hủy"
+          title="Phím tắt: Click trái thêm điểm, Chuột phải hoặc 'n' chốt vùng, 'u' hoàn tác, 'r' reset, 'Space' chạy AI, 'Esc' hủy"
         >
           <Keyboard size={15} style={{ color: 'var(--color-muted)', flexShrink: 0 }} aria-hidden="true" />
           <span className="cheatsheet-chip">
             <kbd>Trái</kbd> Chấm điểm
           </span>
           <span className="cheatsheet-chip highlight">
-            <kbd>Phải</kbd>/<kbd>n</kbd> Chốt bàn
+            <kbd>Phải</kbd>/<kbd>n</kbd> Chốt vùng
           </span>
           <span className="cheatsheet-chip">
             <kbd>u</kbd> Lùi

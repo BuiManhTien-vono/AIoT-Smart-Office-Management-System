@@ -52,12 +52,22 @@ export interface HeadDetectionPreview {
   matched_seat_id?: string | null
 }
 
+export interface SeatStatePreview {
+  seat_id: string
+  seat_code?: string
+  status: SeatState
+  away_duration_sec?: number
+  has_occupant: boolean
+  is_alert?: boolean
+}
+
 export interface DetectPreviewResponse {
   status: string
   inference_time_ms: number
   detections_count: number
   detections: HeadDetectionPreview[]
   occupied_seat_ids: string[]
+  seat_states?: SeatStatePreview[]
 }
 
 export interface Seat {
@@ -98,3 +108,39 @@ export interface SyncAiZonesResponse {
   synced_seats_count: number
   seats: unknown[]
 }
+
+export interface SeatStateChangedEvent {
+  eventId: string
+  occurredOnUtc: string
+  seatId: string
+  seatCode: string
+  cameraId: string
+  departmentId: string
+  assignedEmployeeId: string | null
+  detectedEmployeeId: string | null
+  previousState: SeatState
+  newState: SeatState
+  durationSeconds: number
+  activeSecondsToday: number
+}
+
+export interface ProlongedAbsenceAlertEvent {
+  eventId: string
+  occurredOnUtc: string
+  seatId: string
+  seatCode: string
+  departmentId: string
+  assignedEmployeeId: string | null
+  awayDurationSeconds: number
+}
+
+export interface WrongSeatAlertEvent {
+  eventId: string
+  occurredOnUtc: string
+  seatId: string
+  seatCode: string
+  departmentId: string
+  assignedEmployeeId: string
+  detectedEmployeeId: string
+}
+

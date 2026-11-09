@@ -168,15 +168,34 @@ export async function syncZonesToAi(
 }
 
 export async function testDetectPreview(
-  file: File,
-  seats: Seat[],
+  file?: File,
+  seats: Seat[] = [],
   confThreshold: number = 0.35,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  awayAlertSec?: number,
+  resetFsm?: boolean,
+  cameraCode?: string,
+  streamUrl?: string
 ): Promise<DetectPreviewResponse> {
   const formData = new FormData()
-  formData.append('file', file)
+  if (file) {
+    formData.append('file', file)
+  }
+  if (streamUrl) {
+    formData.append('stream_url', streamUrl)
+  }
   formData.append('seats_json', JSON.stringify(seats))
   formData.append('conf_threshold', String(confThreshold))
+  if (awayAlertSec !== undefined) {
+    formData.append('away_alert_sec', String(awayAlertSec))
+  }
+  if (resetFsm) {
+    formData.append('reset_fsm', 'true')
+  }
+  if (cameraCode) {
+    formData.append('camera_code', cameraCode)
+  }
+  formData.append('sync_backend', 'true')
 
   // Determine endpoint: prefer gateway '/ai/', fallback to direct AI port (8000)
   const isGateway = typeof window !== 'undefined' && (window.location.port === '' || window.location.port === '80')
@@ -215,3 +234,56 @@ export async function testDetectPreview(
 
   return response.json() as Promise<DetectPreviewResponse>
 }
+
+export async function getSeatMap(
+  token: string,
+  departmentId?: string,
+  signal?: AbortSignal
+): Promise<Seat[]> {
+  const query = departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ''
+  return apiRequest<Seat[]>(`/occupancy/seat-map${query}`, {
+    method: 'GET',
+    token,
+    signal,
+  })
+}
+
+/**
+ * Đưa toàn bộ bàn làm việc thuộc camera về trạng thái TRỐNG (EMPTY) trên Backend .NET và phát sự kiện SignalR.
+ */
+export async function resetCameraSeats(cameraCode: string, token?: string): Promise<{ cameraCode: string; resetSeatsCount: number; message: string }> {
+  return apiRequest<{ cameraCode: string; resetSeatsCount: number; message: string }>(
+    `/occupancy/cameras/${encodeURIComponent(cameraCode)}/reset-seats`,
+    {
+      method: 'POST',
+      token,
+    }
+  )
+}
+
+/**
+ * Reset bộ nhớ máy trạng thái FSM trong RAM của AI Service về trạng thái EMPTY.
+ */
+export async function resetAiFsm(): Promise<{ status: string; message: string }> {
+  const isGateway = typeof window !== 'undefined' && (window.location.port === '' || window.location.port === '80')
+  const primaryUrl = isGateway ? '/ai/api/v1/occupancy/reset-fsm' : `${AI_BASE_URL}/api/v1/occupancy/reset-fsm`
+  const fallbackUrl = isGateway ? `${AI_BASE_URL}/api/v1/occupancy/reset-fsm` : '/ai/api/v1/occupancy/reset-fsm'
+
+  try {
+    const res = await fetch(primaryUrl, { method: 'POST' })
+    if (res.ok) return (await res.json()) as { status: string; message: string }
+  } catch {
+    // fallback
+  }
+
+  try {
+    const res = await fetch(fallbackUrl, { method: 'POST' })
+    if (res.ok) return (await res.json()) as { status: string; message: string }
+  } catch {
+    // ignore
+  }
+
+  return { status: 'ok', message: 'FSM reset locally' }
+}
+
+

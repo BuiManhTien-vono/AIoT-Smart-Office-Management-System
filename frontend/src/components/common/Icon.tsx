@@ -2,11 +2,12 @@ import {
   ArrowClockwiseIcon, ArrowRightIcon, BellIcon, BuildingsIcon,
   CalendarCheckIcon, CaretDoubleLeftIcon, CaretDoubleRightIcon, ChartBarIcon, CheckCircleIcon,
   ClockIcon, IdentificationCardIcon, ListIcon, CameraIcon, ShieldCheckIcon,
-  SignOutIcon, SquaresFourIcon, TrashIcon, UserPlusIcon, WarningCircleIcon, UsersThreeIcon, XIcon,
+  SignOutIcon, SquaresFourIcon, TrashIcon, UserPlusIcon, WarningCircleIcon, UsersThreeIcon, XIcon, ArmchairIcon,
 } from '@phosphor-icons/react'
 
 const icons = {
   overview: SquaresFourIcon,
+  seatMap: ArmchairIcon,
   reports: ChartBarIcon,
   users: UsersThreeIcon,
   office: BuildingsIcon,
