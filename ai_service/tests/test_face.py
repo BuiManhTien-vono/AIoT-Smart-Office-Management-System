@@ -78,6 +78,38 @@ class TestFaceRecognitionModule(unittest.TestCase):
         self.assertFalse(is_pass)
         self.assertIn("mờ nhòe", msg)
 
+    def test_scrfd_onnx_engine_fallback_decoding(self):
+        """Đảm bảo khi chạy trong Docker (không có insightface), bộ giải mã 9-tensor SCRFD ONNX vẫn trả về bbox và 5 landmarks."""
+        detector = SCRFDFaceDetector(auto_download=False, conf_threshold=0.5)
+        detector.detector = None  # Giả lập môi trường Docker thuần ONNX Runtime
+
+        # Tạo 9 tensor giả lập cho 3 tầng FPN [8, 16, 32] trên ảnh chuẩn 640x640 (num_anchors = 2)
+        counts = [(80 * 80 * 2, 8), (40 * 40 * 2, 16), (20 * 20 * 2, 32)]
+        scores_tensors = [np.zeros((n, 1), dtype=np.float32) for n, _ in counts]
+        bbox_tensors = [np.zeros((n, 4), dtype=np.float32) for n, _ in counts]
+        kps_tensors = [np.zeros((n, 10), dtype=np.float32) for n, _ in counts]
+
+        # Đặt 1 khuôn mặt tại tâm tầng stride=16 (h=20, w=20 -> idx = (20 * 40 + 20) * 2 = 1640)
+        anchor_idx = (20 * 40 + 20) * 2
+        scores_tensors[1][anchor_idx, 0] = 0.92
+        bbox_tensors[1][anchor_idx] = np.array([5.0, 6.0, 5.0, 6.0], dtype=np.float32)  # 80x96 px từ tâm (320, 320)
+        kps_tensors[1][anchor_idx] = np.array([-2.0, -2.0, 2.0, -2.0, 0.0, 0.0, -1.5, 2.5, 1.5, 2.5], dtype=np.float32)
+
+        outputs = scores_tensors + bbox_tensors + kps_tensors
+        detections = detector._decode_scrfd_outputs(
+            outputs=outputs,
+            orig_w=640,
+            orig_h=640,
+            input_size=(640, 640),
+            ratio=1.0,
+            pad_w=0.0,
+            pad_h=0.0
+        )
+        self.assertEqual(len(detections), 1)
+        self.assertAlmostEqual(detections[0].score, 0.92, places=4)
+        self.assertEqual(detections[0].bbox_pixel, (240, 224, 400, 416))
+        self.assertEqual(detections[0].landmarks.shape, (5, 2))
+
     def test_minifasnet_liveness_inference(self):
         # Kiểm tra suy luận thực tế với mô hình MiniFASNet-V2 ONNX nếu đã có file trọng số
         fas_path = settings.face.anti_spoofing_path

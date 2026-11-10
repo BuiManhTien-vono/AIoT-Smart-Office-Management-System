@@ -104,6 +104,7 @@ async def check_face_liveness(file: UploadFile = File(...)):
 async def gate_camera_checkin(
     file: UploadFile = File(...),
     gate_camera_id: Optional[str] = Form(default=None),
+    camera_id: Optional[str] = Form(default=None),
     snapshot_object_key: Optional[str] = Form(default=None)
 ):
     """
@@ -114,6 +115,7 @@ async def gate_camera_checkin(
     4. Gọi POST /api/v1/biometrics/identify trên Backend .NET để định danh 1:N.
     5. Nếu khớp nhân viên -> Tự động gọi POST /api/v1/attendance/check để chấm công!
     """
+    effective_camera_id = gate_camera_id or camera_id
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -133,7 +135,7 @@ async def gate_camera_checkin(
     if not is_real:
         try:
             incident = backend_client.report_security_incident(
-                camera_id=gate_camera_id or settings.face.default_gate_camera_id,
+                camera_id=effective_camera_id or settings.face.default_gate_camera_id,
                 department_id=settings.face.default_department_id,
                 is_spoofing_attempt=True,
                 snapshot_object_key=snapshot_object_key
@@ -162,7 +164,8 @@ async def gate_camera_checkin(
         identify_res = backend_client.identify_employee_on_backend(embedding=embedding, threshold=0.65)
         is_matched = identify_res.get("isMatched", False)
         employee_id = identify_res.get("employeeId")
-        similarity = float(identify_res.get("similarity", 0.0))
+        similarity = float(identify_res.get("similarity") or identify_res.get("maxSimilarity") or 0.0)
+        identify_res["similarity"] = similarity
 
         if not is_matched or not employee_id:
             return {
@@ -175,7 +178,7 @@ async def gate_camera_checkin(
         attendance_res = backend_client.check_in_out_on_backend(
             employee_id=str(employee_id),
             match_confidence=max(similarity, 0.75),
-            gate_camera_id=gate_camera_id,
+            gate_camera_id=effective_camera_id,
             snapshot_object_key=snapshot_object_key
         )
         return {

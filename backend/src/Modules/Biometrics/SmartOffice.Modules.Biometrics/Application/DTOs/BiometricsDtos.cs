@@ -38,7 +38,7 @@ public sealed record EmployeeResponse(
 
 public sealed record RegisterBiometricVectorRequest(
     float[] EmbeddingVector,
-    string SampleImageKey,
+    string? SampleImageKey = null,
     float QualityScore = 120.0f,
     string PoseLabel = "FRONTAL");
 
@@ -60,7 +60,10 @@ public sealed record BiometricMediaUploadResponse(
     string PresignedUploadUrl,
     int ExpiryMinutes);
 
-public sealed record IdentifyFaceRequest(float[] QueryVector);
+public sealed record IdentifyFaceRequest(
+    float[]? QueryVector = null,
+    float[]? Embedding = null,
+    float? Threshold = null);
 
 public sealed record IdentifyFaceResponse(
     bool IsMatched,
@@ -68,4 +71,7 @@ public sealed record IdentifyFaceResponse(
     string? EmployeeCode,
     string? FullName,
     float MaxSimilarity,
-    string Label);
+    string Label)
+{
+    public float Similarity => MaxSimilarity;
+}
