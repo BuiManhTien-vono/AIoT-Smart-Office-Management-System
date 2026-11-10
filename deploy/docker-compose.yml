@@ -1,4 +1,5 @@
 services:
+  # C# .NET 10 WebApi (Modular Monolith - Backend Core)
   # 1. Database: PostgreSQL 16 + pgvector (Tự động khởi tạo 5 Schema độc lập)
   postgres:
     image: pgvector/pgvector:pg16
