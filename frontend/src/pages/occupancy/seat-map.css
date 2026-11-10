@@ -1,0 +1,514 @@
+/* =============================================================================
+ * SƠ ĐỒ CHỖ NGỒI THỜI GIAN THỰC (LIVE SEAT MAP) - STYLES
+ * Tuân thủ UI Design System: Glassmorphism, FSM Color Coding, Pulse Alerts
+ * ============================================================================= */
+
+.seat-map-page-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Header & Connection Status */
+.seat-map-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.seat-map-title-wrap h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.seat-map-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.signalr-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.signalr-status-badge.connected {
+  color: #065f46;
+  border-color: #a7f3d0;
+  background: rgba(236, 253, 245, 0.85);
+}
+
+.signalr-status-badge.reconnecting {
+  color: #92400e;
+  border-color: #fde68a;
+  background: rgba(254, 243, 199, 0.85);
+}
+
+.signalr-status-badge.disconnected {
+  color: #991b1b;
+  border-color: #fecaca;
+  background: rgba(254, 242, 242, 0.85);
+}
+
+.status-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.connected .status-indicator-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+.reconnecting .status-indicator-dot {
+  background-color: #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
+.disconnected .status-indicator-dot {
+  background-color: #ef4444;
+}
+
+.dept-select-wrap select {
+  min-height: 38px;
+  padding: 6px 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-control-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Dải KPI Thời gian thực */
+.seat-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.seat-kpi-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 16px;
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+}
+
+.kpi-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.kpi-total .kpi-icon-wrap { background: #f1f5f9; color: #475569; }
+.kpi-present .kpi-icon-wrap { background: #dcfce7; color: #16a34a; }
+.kpi-away .kpi-icon-wrap { background: #fef3c7; color: #d97706; }
+.kpi-alert .kpi-icon-wrap { background: #fee2e2; color: #dc2626; }
+.kpi-empty .kpi-icon-wrap { background: #f8fafc; color: #94a3b8; }
+.kpi-restricted .kpi-icon-wrap { background: #ede9fe; color: #7c3aed; }
+
+.kpi-data {
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+  line-height: 1.3;
+}
+
+.kpi-value small {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+/* Thanh Tìm kiếm & Filter Chips */
+.seat-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+  margin-bottom: var(--space-4);
+}
+
+.seat-search-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+}
+
+.seat-search-input-wrap .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted-foreground);
+}
+
+.seat-search-input {
+  width: 100%;
+  padding: 8px 36px 8px 36px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-control-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-size: 0.875rem;
+}
+
+.seat-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.seat-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 6px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.filter-chip.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Lưới Thẻ Bàn (Seat Grid) */
+.seat-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Linh kiện Thẻ Bàn (SeatCard) */
+.seat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  min-height: 165px;
+  cursor: pointer;
+}
+
+.seat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(18, 40, 68, 0.12);
+}
+
+/* Header Thẻ Bàn */
+.seat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.seat-card-code-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seat-card-code {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--color-foreground);
+  letter-spacing: 0.5px;
+}
+
+.seat-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Body Thẻ Bàn */
+.seat-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.seat-card-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seat-card-employee-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seat-card-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.seat-card-employee-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.seat-card-employee-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seat-card-employee-code {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+
+/* Footer Thẻ Bàn */
+.seat-card-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.75rem;
+}
+
+.seat-card-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+}
+
+.seat-card-stat strong {
+  font-weight: 700;
+  font-size: 0.8125rem;
+}
+
+.stat-active strong { color: #10b981; }
+.stat-away strong { color: #f59e0b; }
+.stat-alert strong { color: #ef4444; }
+.stat-lunch strong { color: #0284c7; }
+
+/* Phân loại màu sắc thẻ theo trạng thái FSM */
+/* 1. PRESENT (Có mặt) */
+.seat-card-present {
+  border-color: #10b981;
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.7) 0%, var(--color-surface) 100%);
+}
+.seat-card-present .seat-card-icon { color: #10b981; }
+.seat-card-present-badge { background: #dcfce7; color: #15803d; }
+.seat-card-present .seat-card-avatar { background: #dcfce7; color: #15803d; }
+
+/* 2. TEMP_AWAY (Tạm vắng) */
+.seat-card-away {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(254, 243, 199, 0.7) 0%, var(--color-surface) 100%);
+}
+.seat-card-away .seat-card-icon { color: #f59e0b; }
+.seat-card-away-badge { background: #fef3c7; color: #b45309; }
+.seat-card-away .seat-card-avatar { background: #fef3c7; color: #b45309; }
+
+/* 3. PROLONGED_AWAY (Rời chỗ quá hạn) */
+.seat-card-prolonged {
+  border-color: #ef4444;
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.8) 0%, var(--color-surface) 100%);
+}
+.seat-card-prolonged .seat-card-icon { color: #ef4444; }
+.seat-card-prolonged-badge { background: #fee2e2; color: #b91c1c; }
+.seat-card-prolonged .seat-card-avatar { background: #fee2e2; color: #b91c1c; }
+
+/* 4. RESTRICTED_ZONE (Khu vực an ninh) */
+.seat-card-restricted {
+  border-color: #7c3aed;
+  background: linear-gradient(180deg, rgba(245, 243, 255, 0.7) 0%, var(--color-surface) 100%);
+}
+.seat-card-restricted .seat-card-icon { color: #7c3aed; }
+.seat-card-restricted-badge { background: #ede9fe; color: #6d28d9; }
+
+/* 5. LUNCH FREEZE (Nghỉ trưa đóng băng) */
+.seat-card-lunch {
+  border-color: #38bdf8;
+  background: linear-gradient(180deg, rgba(240, 249, 255, 0.7) 0%, var(--color-surface) 100%);
+}
+.seat-card-lunch .seat-card-icon { color: #0284c7; }
+.seat-card-lunch-badge { background: #e0f2fe; color: #0369a1; }
+
+/* 6. EMPTY (Trống) */
+.seat-card-empty {
+  border-color: #e2e8f0;
+}
+.seat-card-empty .seat-card-icon { color: #94a3b8; }
+.seat-card-empty-badge { background: #f1f5f9; color: #64748b; }
+.seat-card-empty .seat-card-avatar { background: #f1f5f9; color: #94a3b8; }
+
+/* Hiệu ứng nhấp nháy cho cảnh báo quá hạn */
+.seat-card-pulse {
+  animation: card-alert-pulse 2s infinite ease-in-out;
+}
+
+@keyframes card-alert-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Toast Cảnh báo nổi thời gian thực */
+.seat-map-alerts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+}
+
+.seat-map-alert-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-radius: var(--radius-control);
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+  animation: slideInDown 0.3s ease;
+}
+
+.seat-map-alert-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seat-map-alert-close {
+  background: none;
+  border: none;
+  color: #991b1b;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 0.8125rem;
+}
+
+@keyframes slideInDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.seat-map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  text-align: center;
+  gap: 12px;
+}

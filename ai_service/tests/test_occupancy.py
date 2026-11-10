@@ -77,6 +77,29 @@ class TestOccupancyModule(unittest.TestCase):
         self.assertEqual(obs["unoccupiedContinuousFrames"], 0)
         self.assertAlmostEqual(obs["detectionConfidence"], 0.92, places=2)
 
+    def test_dynamic_seat_state_sync_in_routes(self):
+        from api.routes_occupancy import occupancy_pipeline, SeatState, SeatStatus
+        test_seats = [
+            {
+                "id": "BAN_99",
+                "seatCode": "BAN_99",
+                "seatName": "Bàn Test 99",
+                "polygonPoints": [{"x": 0.1, "y": 0.1}, {"x": 0.3, "y": 0.1}, {"x": 0.3, "y": 0.3}, {"x": 0.1, "y": 0.3}]
+            }
+        ]
+        s_id = test_seats[0]["id"]
+        pts = test_seats[0]["polygonPoints"]
+        poly_tuples = [(float(p["x"]), float(p["y"])) for p in pts]
+        occupancy_pipeline.seats_state[s_id] = SeatState(
+            seat_id=s_id,
+            seat_name=test_seats[0]["seatName"],
+            normalized_polygon=poly_tuples,
+            status=SeatStatus.EMPTY
+        )
+        self.assertIn(s_id, occupancy_pipeline.seats_state)
+        self.assertEqual(occupancy_pipeline.seats_state[s_id].status, SeatStatus.EMPTY)
+        occupancy_pipeline.seats_state.pop(s_id, None)
+
     def test_rtdetr_inference(self):
         model_path = settings.occupancy.model_path
         if not os.path.exists(model_path):

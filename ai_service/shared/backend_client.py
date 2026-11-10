@@ -132,7 +132,8 @@ class BackendSyncClient:
         camera_code: str,
         frame_sequence: int,
         seat_statuses: List[Dict[str, Any]],
-        captured_at_utc: Optional[str] = None
+        captured_at_utc: Optional[str] = None,
+        prolonged_absence_threshold_seconds: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Chuyển đổi kết quả từ OccupancyPipeline.process_frame() sang đúng hợp đồng JSON
@@ -160,26 +161,31 @@ class BackendSyncClient:
                 "detectionConfidence": round(confidence, 4)
             })
 
-        return {
+        payload: Dict[str, Any] = {
             "cameraCode": camera_code.strip().upper(),
             "capturedAtUtc": timestamp_str,
             "frameSequence": int(frame_sequence),
             "observations": observations
         }
+        if prolonged_absence_threshold_seconds is not None:
+            payload["prolongedAbsenceThresholdSeconds"] = int(prolonged_absence_threshold_seconds)
+        return payload
 
     def sync_occupancy_state(
         self,
         camera_code: str,
         frame_sequence: int,
         seat_statuses: List[Dict[str, Any]],
-        captured_at_utc: Optional[str] = None
+        captured_at_utc: Optional[str] = None,
+        prolonged_absence_threshold_seconds: Optional[int] = None
     ) -> Dict[str, Any]:
         """Gửi đồng bộ trạng thái chỗ ngồi sang POST /api/v1/occupancy/state-sync."""
         payload = self.build_state_sync_payload(
             camera_code=camera_code,
             frame_sequence=frame_sequence,
             seat_statuses=seat_statuses,
-            captured_at_utc=captured_at_utc
+            captured_at_utc=captured_at_utc,
+            prolonged_absence_threshold_seconds=prolonged_absence_threshold_seconds
         )
         result = self._request_json("POST", "occupancy/state-sync", payload)
         with self._lock:
@@ -191,7 +197,8 @@ class BackendSyncClient:
         self,
         camera_code: str,
         frame_sequence: int,
-        seat_statuses: List[Dict[str, Any]]
+        seat_statuses: List[Dict[str, Any]],
+        prolonged_absence_threshold_seconds: Optional[int] = None
     ) -> bool:
         """
         Đẩy dữ liệu state-sync sang Backend trong một luồng ngầm (non-blocking)
@@ -211,7 +218,8 @@ class BackendSyncClient:
                 self.sync_occupancy_state(
                     camera_code=camera_code,
                     frame_sequence=frame_sequence,
-                    seat_statuses=snapshot_statuses
+                    seat_statuses=snapshot_statuses,
+                    prolonged_absence_threshold_seconds=prolonged_absence_threshold_seconds
                 )
             except Exception as exc:
                 with self._lock:

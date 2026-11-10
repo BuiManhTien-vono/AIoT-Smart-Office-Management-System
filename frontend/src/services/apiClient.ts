@@ -53,5 +53,8 @@ export async function apiFetch(path: string, options: ApiOptions = {}): Promise<
 
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const response = await apiFetch(path, options)
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as unknown as T
+  }
   return response.json() as Promise<T>
 }

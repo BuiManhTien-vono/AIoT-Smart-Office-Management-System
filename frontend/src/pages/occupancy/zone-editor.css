@@ -1,0 +1,1081 @@
+.zone-editor-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--container-gap, 12px);
+  min-height: calc(100svh - 100px);
+}
+
+/* Bố cục 2 cột: Cột trái (Camera) - Cột phải (Góc nhìn Canvas to rộng + Cấu hình vùng ảo bên dưới) */
+.zone-editor-layout {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: var(--container-gap, 14px);
+  align-items: flex-start;
+}
+
+@media (max-width: 1024px) {
+  .zone-editor-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.zone-editor-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--container-gap, 14px);
+  min-width: 0;
+}
+
+/* =============================================================================
+   1. Camera Panel
+   ============================================================================= */
+.camera-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.camera-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.camera-panel-heading h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.camera-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.camera-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-control, 8px);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.camera-item:hover {
+  background: var(--color-primary-soft);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+.camera-item.active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.camera-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.camera-item-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.camera-code {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-foreground);
+}
+
+.camera-name {
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+/* 3-dots Menu for Camera */
+.camera-menu-container {
+  position: relative;
+}
+
+.camera-menu-trigger {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.camera-menu-trigger:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--color-foreground);
+}
+
+.camera-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control, 8px);
+  box-shadow: var(--shadow-panel, 0 4px 14px rgba(0, 0, 0, 0.15));
+  padding: 4px;
+  z-index: 100;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  backdrop-filter: blur(12px);
+}
+
+.camera-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--color-foreground);
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.camera-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.camera-menu-item.text-danger {
+  color: #ef4444;
+}
+
+.camera-menu-item.text-danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+/* Phần loại camera chuyển sang bên cạnh chấm xanh */
+.camera-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.camera-status-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.online {
+  background-color: var(--status-success, #10b981);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.status-dot.offline {
+  background-color: var(--status-neutral, #94a3b8);
+}
+
+.badge-subtle {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+}
+
+.camera-calibration-actions {
+  margin-top: 4px;
+}
+
+/* =============================================================================
+   2. Interactive Zone Canvas (Mở rộng góc nhìn tiêu chuẩn to rõ)
+   ============================================================================= */
+.canvas-main-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone-canvas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.canvas-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  border-radius: var(--radius-panel, 12px);
+  overflow: hidden;
+  box-shadow: var(--shadow-panel);
+  border: 1px solid var(--color-border);
+}
+
+.canvas-video-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.zone-canvas {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+.canvas-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.canvas-toolbar-left {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.canvas-toolbar button {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.canvas-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.canvas-threshold-selector {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  color: var(--color-foreground, #e2e8f0);
+}
+
+.threshold-label {
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.threshold-select {
+  background: transparent;
+  color: #f8fafc;
+  border: none;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  padding: 2px 4px;
+}
+
+.threshold-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.threshold-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.9) !important;
+  color: #ffffff !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  display: inline-block;
+  animation: pulse-live 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-live {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.6; }
+}
+
+.canvas-stat-pill {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.warning-pill {
+  background: rgba(153, 27, 27, 0.85);
+  color: #fee2e2;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.ai-stat-pill {
+  background: rgba(180, 83, 9, 0.85) !important;
+  color: #fef3c7 !important;
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  gap: 8px !important;
+}
+
+.ai-clear-btn {
+  background: transparent;
+  border: none;
+  color: #fef3c7;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+}
+
+.ai-clear-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.canvas-actions-row {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button-xs {
+  min-height: 30px !important;
+  padding: 4px 10px !important;
+  font-size: 0.75rem !important;
+}
+
+.button-sm {
+  min-height: 34px !important;
+  padding: 4px 12px !important;
+  font-size: 0.8125rem !important;
+}
+
+.button-block {
+  width: 100%;
+}
+
+/* =============================================================================
+   Thanh Điều Khiển Dưới Canvas & Hướng dẫn Phím tắt (Control & Cheatsheet Bar)
+   ============================================================================= */
+.canvas-bottom-bar,
+.canvas-cheatsheet-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control, 8px);
+  font-size: 0.8125rem;
+  flex-wrap: wrap;
+  min-height: 48px;
+}
+
+.canvas-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.canvas-controls-left button {
+  cursor: pointer;
+}
+
+.canvas-controls-left button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.canvas-cheatsheet-compact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* =============================================================================
+   Thanh Chú thích 4 Trạng thái FSM Chỗ ngồi (EMPTY, PRESENT, TEMP_AWAY, PROLONGED_AWAY)
+   ============================================================================= */
+.fsm-status-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  font-size: 0.725rem;
+  letter-spacing: 0.02em;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.legend-dot.dot-gray {
+  background-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+}
+
+.legend-dot.dot-green {
+  background-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+}
+
+.legend-dot.dot-amber {
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+
+.legend-dot.dot-red {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+
+.cheatsheet-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-foreground);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.cheatsheet-items {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cheatsheet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-muted);
+  font-size: 0.775rem;
+}
+
+.cheatsheet-chip kbd {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.725rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--color-foreground);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.cheatsheet-chip.highlight kbd {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: var(--color-primary);
+}
+
+.cheatsheet-chip.highlight-green kbd {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #10b981;
+}
+
+/* Toast thông báo phím tắt nổi */
+.canvas-notice-toast {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+  pointer-events: none;
+  animation: toastFade 0.2s ease-out;
+}
+
+@keyframes toastFade {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.live-ai-stat-pill {
+  background: rgba(16, 185, 129, 0.88) !important;
+  color: #ffffff !important;
+  border-color: rgba(16, 185, 129, 0.6) !important;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.9) !important;
+  color: #ffffff !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+/* =============================================================================
+   3. Seat Config Bottom Panel (Cấu hình vùng ảo nằm ngay dưới góc nhìn)
+   ============================================================================= */
+.seat-bottom-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.seat-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.seat-panel-header h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.seat-bottom-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+@media (max-width: 900px) {
+  .seat-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.seat-bottom-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.seat-form-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .seat-form-fields-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.seat-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+.polygon-meta-box {
+  padding: 8px 12px;
+  border-radius: var(--radius-control, 8px);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.polygon-meta-box.horizontal {
+  display: flex;
+  align-items: center;
+}
+
+.seat-form-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Khối Meta cột phải: AI Sync & Danh sách bàn */
+.seat-bottom-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.existing-seats-card {
+  padding: 10px 14px;
+  border-radius: var(--radius-control, 8px);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.existing-seats-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.seat-chips-wrapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.seat-chip-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.seat-chip-compact:hover {
+  background: var(--color-primary-soft);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+.seat-chip-compact.active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.seat-chip-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.seat-chip-code {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-chip-name {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-chip-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seat-chip-del-icon {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.seat-chip-del-icon:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.text-danger {
+  color: #ef4444 !important;
+}
+
+.disabled-field {
+  background: rgba(0, 0, 0, 0.04) !important;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+/* Standard Centered Modal Backdrop */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 16px;
+  box-sizing: border-box;
+  animation: modalFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-backdrop .app-dialog {
+  animation: dialogScaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: auto;
+}
+
+/* Compact Centered Confirmation Dialog */
+.app-dialog-confirm {
+  width: min(100% - 24px, 450px) !important;
+  border: 1px solid rgba(239, 68, 68, 0.28) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(239, 68, 68, 0.15) !important;
+  background: var(--color-surface, #ffffff) !important;
+  border-radius: var(--radius-panel, 12px) !important;
+  padding: 24px !important;
+}
+
+.confirm-delete-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.confirm-delete-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.confirm-delete-header-text h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.confirm-delete-header-text p {
+  font-size: 0.8125rem;
+  color: var(--color-muted, #64748b);
+  margin: 2px 0 0;
+}
+
+.confirm-delete-callout {
+  padding: 12px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-control, 8px);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #b91c1c;
+  margin-top: 12px;
+}
+
+/* =============================================================================
+   8. View Switcher & LiveGrid Layout
+   ============================================================================= */
+
+.view-switcher-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-background);
+  padding: 3px;
+  border-radius: var(--radius-control, 8px);
+  border: 1px solid var(--color-border);
+  gap: 2px;
+}
+
+.view-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: calc(var(--radius-control, 8px) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.view-switcher-btn:hover {
+  color: var(--color-foreground);
+}
+
+.view-switcher-btn.active {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.live-grid-container {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.live-grid-container.cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.live-grid-container.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.live-grid-container.cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .live-grid-container.cols-2,
+  .live-grid-container.cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.live-grid-card {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel, 12px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.live-grid-card:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
+}
+
+.live-grid-card.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.live-grid-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  gap: 8px;
+}
+
+.live-grid-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.live-grid-header-info .camera-code-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  white-space: nowrap;
+}
+
+.live-grid-header-info .camera-name-label {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-grid-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.live-grid-media-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.live-grid-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.live-grid-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.live-grid-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239, 68, 68, 0.9);
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(4px);
+}
+
+.live-grid-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 0.8125rem;
+  gap: 8px;
+  background: #0f172a;
+}
