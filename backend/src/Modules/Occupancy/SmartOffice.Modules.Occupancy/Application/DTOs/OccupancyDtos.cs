@@ -17,6 +17,13 @@ public sealed record CreateCameraRequest(
     Guid? DepartmentId = null,
     bool IsOnline = true);
 
+public sealed record UpdateCameraRequest(
+    string CameraName,
+    string StreamSource,
+    string CameraType = "DESK",
+    Guid? DepartmentId = null,
+    bool IsOnline = true);
+
 public sealed record CameraResponse(
     Guid Id,
     string CameraCode,
@@ -102,7 +109,8 @@ public sealed record OccupancyStateSyncRequest(
     string CameraCode,
     DateTimeOffset? CapturedAtUtc,
     long FrameSequence,
-    IReadOnlyList<SeatObservationInput> Observations);
+    IReadOnlyList<SeatObservationInput> Observations,
+    int? ProlongedAbsenceThresholdSeconds = null);
 
 public sealed record SeatStateTransitionResultDto(
     Guid SeatId,

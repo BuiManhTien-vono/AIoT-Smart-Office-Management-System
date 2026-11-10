@@ -32,6 +32,17 @@ public static class DependencyInjection
                 storageOptions.AccessKey = section[nameof(ObjectStorageOptions.AccessKey)] ?? storageOptions.AccessKey;
                 storageOptions.SecretKey = section[nameof(ObjectStorageOptions.SecretKey)] ?? storageOptions.SecretKey;
                 storageOptions.Region = section[nameof(ObjectStorageOptions.Region)] ?? storageOptions.Region;
+
+                if (bool.TryParse(section[nameof(ObjectStorageOptions.UseRemoteS3Put)], out var useRemotePut))
+                {
+                    storageOptions.UseRemoteS3Put = useRemotePut;
+                }
+
+                if (int.TryParse(section[nameof(ObjectStorageOptions.DefaultPresignedExpiryMinutes)], out var expiryMinutes) &&
+                    expiryMinutes > 0)
+                {
+                    storageOptions.DefaultPresignedExpiryMinutes = expiryMinutes;
+                }
             }
         }
 

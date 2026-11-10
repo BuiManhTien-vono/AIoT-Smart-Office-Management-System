@@ -33,7 +33,8 @@ public sealed record EmployeeResponse(
     string? AvatarObjectKey,
     bool IsActive,
     int RegisteredVectorCount,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? AvatarPresignedUrl = null);
 
 public sealed record RegisterBiometricVectorRequest(
     float[] EmbeddingVector,
@@ -48,7 +49,16 @@ public sealed record BiometricVectorResponse(
     float QualityScore,
     string PoseLabel,
     int VectorDimension,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? SampleImagePresignedUrl = null);
+
+public sealed record BiometricMediaUploadResponse(
+    Guid EmployeeId,
+    string EmployeeCode,
+    string ObjectKey,
+    string PresignedViewUrl,
+    string PresignedUploadUrl,
+    int ExpiryMinutes);
 
 public sealed record IdentifyFaceRequest(float[] QueryVector);
 

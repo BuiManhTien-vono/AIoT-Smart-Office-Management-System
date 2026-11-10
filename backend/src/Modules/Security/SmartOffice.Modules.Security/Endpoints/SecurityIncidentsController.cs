@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SmartOffice.Modules.Security.Application.DTOs;
 using SmartOffice.Modules.Security.Application.Services;
@@ -40,6 +41,38 @@ public sealed class SecurityIncidentsController(ISecurityIncidentService inciden
         return Created($"/api/v1/security/incidents/{result.Value.Id}", result.Value);
     }
 
+    [HttpPost("incidents/{id:guid}/evidence")]
+    public async Task<IActionResult> UploadIncidentEvidence(
+        Guid id,
+        IFormFile file,
+        [FromQuery] string evidenceType = "SNAPSHOT",
+        CancellationToken ct = default)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { code = "EMPTY_FILE", message = "Vui lòng chọn tệp bằng chứng (ảnh chụp hoặc video clip)." });
+        }
+
+        await using var stream = file.OpenReadStream();
+        var defaultContentType = string.Equals(evidenceType, "VIDEO_CLIP", StringComparison.OrdinalIgnoreCase)
+            ? "video/mp4"
+            : "image/jpeg";
+
+        var result = await incidentService.UploadIncidentEvidenceAsync(
+            id,
+            evidenceType,
+            stream,
+            file.ContentType ?? defaultContentType,
+            ct);
+
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
     [HttpPut("incidents/{id:guid}/resolve")]
     public async Task<IActionResult> ResolveIncident(
         Guid id,
@@ -55,4 +88,3 @@ public sealed class SecurityIncidentsController(ISecurityIncidentService inciden
         return Ok(result.Value);
     }
 }
-

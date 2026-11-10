@@ -9,6 +9,15 @@ public interface IOccupancyService
         CreateCameraRequest request,
         CancellationToken ct = default);
 
+    Task<Result<CameraResponse>> UpdateCameraAsync(
+        Guid id,
+        UpdateCameraRequest request,
+        CancellationToken ct = default);
+
+    Task<Result<bool>> DeleteCameraAsync(
+        Guid id,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<CameraResponse>> GetCamerasAsync(
         Guid? departmentId = null,
         CancellationToken ct = default);
@@ -21,6 +30,10 @@ public interface IOccupancyService
 
     Task<Result<SeatResponse>> CreateSeatAsync(
         CreateSeatRequest request,
+        CancellationToken ct = default);
+
+    Task<Result<bool>> DeleteSeatAsync(
+        Guid seatId,
         CancellationToken ct = default);
 
     Task<Result<SeatResponse>> UpdateSeatPolygonAsync(
@@ -44,6 +57,9 @@ public interface IOccupancyService
     Task<IReadOnlyList<SeatOccupancyLogResponse>> GetOccupancyLogsAsync(
         Guid? seatId = null,
         int limit = 50,
+        CancellationToken ct = default);
+    Task<Result<int>> ResetCameraSeatsAsync(
+        string cameraCode,
         CancellationToken ct = default);
 }
 

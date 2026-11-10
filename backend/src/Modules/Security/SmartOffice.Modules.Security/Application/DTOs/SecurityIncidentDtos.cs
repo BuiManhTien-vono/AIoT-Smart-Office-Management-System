@@ -34,8 +34,14 @@ public sealed record SecurityIncidentResponse(
     DateTimeOffset? ResolvedAt,
     string ActionSummary);
 
+public sealed record SecurityEvidenceUploadResponse(
+    Guid IncidentId,
+    string EvidenceType,
+    string ObjectKey,
+    string PresignedViewUrl,
+    int ExpiryMinutes);
+
 public sealed record NightGuardStatusResponse(
     DateTimeOffset CheckedAtUtc,
     bool IsNightGuardActive,
     string Reason);
-

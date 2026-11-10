@@ -1,0 +1,277 @@
+/* Biometrics Styles */
+
+.biometrics-page {
+  padding: 0;
+  max-width: 100%;
+}
+
+.biometrics-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  padding: var(--panel-padding);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+/* Biometric Studio Modal Viewport */
+.enroll-viewport-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 360px;
+  background: #0f172a;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-feed-box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-video-stream {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.camera-guide-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.face-oval-guide {
+  width: 190px;
+  height: 250px;
+  border: 2px dashed rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+}
+
+.guide-hint {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.file-drop-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  padding: 2rem;
+  text-align: center;
+}
+
+.drop-icon {
+  color: #64748b;
+}
+
+.file-input-hidden {
+  display: none;
+}
+
+.preview-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.preview-image,
+.preview-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.btn-retake {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-retake:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+/* Gate Check-in Card */
+.gate-card {
+  padding: var(--panel-padding);
+  border-radius: var(--radius-panel);
+}
+
+.gate-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.gate-header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.gate-header-title h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-family: var(--font-heading);
+  font-weight: 500;
+}
+
+.gate-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gate-card-content {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-5);
+}
+
+@media (max-width: 900px) {
+  .gate-card-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gate-dropzone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 2.5rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  background: var(--status-neutral-soft);
+  transition: all 0.2s ease;
+}
+
+.gate-dropzone:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.gate-preview-box {
+  position: relative;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  max-height: 280px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gate-preview-img {
+  max-width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+}
+
+.gate-change-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.gate-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 240px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-muted-foreground);
+}
+
+.result-metric-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.result-card {
+  background: var(--status-neutral-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 14px;
+}
+
+.result-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--color-muted-foreground);
+  margin-bottom: 6px;
+}
+
+.emp-match-name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.emp-match-code {
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+}

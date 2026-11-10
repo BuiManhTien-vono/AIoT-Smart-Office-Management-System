@@ -11,6 +11,12 @@ public interface IAttendanceService
     Task<Result<AttendanceRecordResponse>> ProcessCheckInOutAsync(CheckAttendanceRequest request, CancellationToken ct = default);
     Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(DateOnly? workDate = null, CancellationToken ct = default);
 
+    Task<Result<AttendanceSnapshotUploadResponse>> UploadAttendanceSnapshotAsync(
+        Guid attendanceLogId,
+        Stream fileStream,
+        string contentType,
+        CancellationToken ct = default);
+
     Task<Result<LeaveRequestResponse>> CreateLeaveRequestAsync(CreateLeaveRequestDto request, CancellationToken ct = default);
     Task<IReadOnlyList<LeaveRequestResponse>> GetLeaveRequestsAsync(DateOnly? date = null, CancellationToken ct = default);
 

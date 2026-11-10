@@ -243,6 +243,7 @@ ON CONFLICT (shift_code) DO NOTHING;
 INSERT INTO occupancy.cameras (id, camera_code, camera_name, camera_type, department_id, stream_source, is_online)
 VALUES
     ('33333333-3333-3333-3333-333333333301', 'CAM_GATE_01', 'Camera Cửa Sảnh Chính', 'GATE', '11111111-1111-1111-1111-111111111101', 'rtsp://localhost:8554/gate01', TRUE),
-    ('33333333-3333-3333-3333-333333333302', 'CAM_DESK_IT', 'Camera Phòng Kỹ thuật', 'DESK', '11111111-1111-1111-1111-111111111101', 'rtsp://localhost:8554/desk_it', TRUE)
+    ('33333333-3333-3333-3333-333333333302', 'CAM_DESK_IT', 'Camera Phòng Kỹ thuật', 'DESK', '11111111-1111-1111-1111-111111111101', 'rtsp://localhost:8554/desk_it', TRUE),
+    ('33333333-3333-3333-3333-333333333303', 'CAM_DEMO', 'Camera Văn phòng Mẫu (Demo Video)', 'DESK', '11111111-1111-1111-1111-111111111101', '/demo.mp4', TRUE)
 ON CONFLICT (camera_code) DO NOTHING;
 
