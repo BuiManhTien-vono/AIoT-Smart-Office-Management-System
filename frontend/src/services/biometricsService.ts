@@ -120,6 +120,16 @@ export async function extractFaceFeatures(
   });
 
   if (!response.ok) {
+    if (response.status === 422) {
+      try {
+        const errorJson = (await response.json()) as { detail?: AiExtractFeaturesResponse };
+        if (errorJson?.detail && typeof errorJson.detail === 'object') {
+          return errorJson.detail;
+        }
+      } catch {
+        // fall through
+      }
+    }
     const errorText = await response.text();
     throw new Error(`AI Service error (${response.status}): ${errorText}`);
   }

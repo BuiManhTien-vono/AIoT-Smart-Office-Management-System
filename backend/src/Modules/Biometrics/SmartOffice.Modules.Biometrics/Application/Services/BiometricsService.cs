@@ -316,13 +316,21 @@ public sealed class BiometricsService(
             }
         }
 
+        var normalizedPose = string.IsNullOrWhiteSpace(request.PoseLabel)
+            ? "FRONTAL"
+            : request.PoseLabel.Trim().ToUpperInvariant();
+
+        var sampleKey = string.IsNullOrWhiteSpace(request.SampleImageKey)
+            ? $"biometrics/{employee.EmployeeCode.ToLowerInvariant()}/samples/{normalizedPose.ToLowerInvariant()}_{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.jpg"
+            : request.SampleImageKey.Trim();
+
         var biometricVector = new BiometricVector
         {
             EmployeeId = employeeId,
             EmbeddingVector = request.EmbeddingVector,
-            SampleImageKey = request.SampleImageKey,
+            SampleImageKey = sampleKey,
             QualityScore = request.QualityScore,
-            PoseLabel = request.PoseLabel
+            PoseLabel = normalizedPose
         };
 
         dbContext.BiometricVectors.Add(biometricVector);
@@ -352,7 +360,11 @@ public sealed class BiometricsService(
         IdentifyFaceRequest request,
         CancellationToken ct = default)
     {
-        if (request.QueryVector is null || request.QueryVector.Length == 0)
+        var queryVector = request.QueryVector is { Length: > 0 }
+            ? request.QueryVector
+            : request.Embedding;
+
+        if (queryVector is null || queryVector.Length == 0)
         {
             return Result.Failure<IdentifyFaceResponse>(
                 new Error("INVALID_VECTOR", "Vector truy vấn không hợp lệ."));
@@ -371,7 +383,7 @@ public sealed class BiometricsService(
 
         foreach (var candidate in candidates)
         {
-            var sim = BiometricMath.CosineSimilarity(request.QueryVector, candidate.EmbeddingVector);
+            var sim = BiometricMath.CosineSimilarity(queryVector, candidate.EmbeddingVector);
             if (sim > maxSimilarity)
             {
                 maxSimilarity = sim;
@@ -381,7 +393,8 @@ public sealed class BiometricsService(
             }
         }
 
-        if (maxSimilarity >= BiometricMath.MatchThreshold && matchedEmpId.HasValue)
+        var matchThreshold = request.Threshold ?? BiometricMath.MatchThreshold;
+        if (maxSimilarity >= matchThreshold && matchedEmpId.HasValue)
         {
             return Result.Success(new IdentifyFaceResponse(
                 true,

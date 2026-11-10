@@ -11,6 +11,7 @@ Bộ cầu nối giao tiếp HTTP/REST giữa Python AI Service và Backend .NET
 
 import json
 import time
+import uuid
 import threading
 import urllib.request
 import urllib.error
@@ -241,11 +242,22 @@ class BackendSyncClient:
         threshold: float = 0.65
     ) -> Dict[str, Any]:
         """Gọi POST /api/v1/biometrics/identify trên Backend .NET."""
+        vec = [float(x) for x in embedding]
         payload = {
-            "embedding": [float(x) for x in embedding],
+            "queryVector": vec,
+            "embedding": vec,
             "threshold": float(threshold)
         }
         return self._request_json("POST", "biometrics/identify", payload)
+
+    @staticmethod
+    def _resolve_camera_guid(camera_id: Optional[str]) -> str:
+        if camera_id:
+            try:
+                return str(uuid.UUID(str(camera_id).strip()))
+            except ValueError:
+                pass
+        return settings.face.default_gate_camera_id
 
     def check_in_out_on_backend(
         self,
@@ -257,7 +269,7 @@ class BackendSyncClient:
         """Gọi POST /api/v1/attendance/check trên Backend .NET."""
         payload = {
             "employeeId": employee_id,
-            "gateCameraId": gate_camera_id or settings.face.default_gate_camera_id,
+            "gateCameraId": self._resolve_camera_guid(gate_camera_id),
             "matchConfidence": float(match_confidence),
             "snapshotObjectKey": snapshot_object_key
         }
@@ -279,7 +291,7 @@ class BackendSyncClient:
     ) -> Dict[str, Any]:
         """Gọi POST /api/v1/security/incidents trên Backend .NET."""
         payload = {
-            "cameraId": camera_id or settings.face.default_gate_camera_id,
+            "cameraId": self._resolve_camera_guid(camera_id),
             "departmentId": department_id,
             "detectedEmployeeId": detected_employee_id,
             "isSpoofingAttempt": bool(is_spoofing_attempt),

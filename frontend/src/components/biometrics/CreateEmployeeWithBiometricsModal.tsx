@@ -80,21 +80,24 @@ export function CreateEmployeeWithBiometricsModal({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const [x1, y1, x2, y2] = bbox;
+    const boxW = x2 - x1;
+    const boxH = y2 - y1;
+    const drawX = Math.max(0, canvas.width - x2);
 
     // Green bounding box
     ctx.strokeStyle = '#10B981';
     ctx.lineWidth = 3;
-    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    ctx.strokeRect(drawX, y1, boxW, boxH);
 
     // Label
     ctx.fillStyle = 'rgba(16, 185, 129, 0.9)';
-    const labelText = `Chính diện (${Math.round(x2 - x1)}x${Math.round(y2 - y1)})`;
+    const labelText = `Chính diện (${Math.round(boxW)}x${Math.round(boxH)})`;
     ctx.font = 'bold 14px Inter, sans-serif';
     const textWidth = ctx.measureText(labelText).width;
-    ctx.fillRect(x1, y1 - 24 > 0 ? y1 - 24 : y1, textWidth + 10, 22);
+    ctx.fillRect(drawX, y1 - 24 > 0 ? y1 - 24 : y1, textWidth + 10, 22);
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(labelText, x1 + 5, y1 - 24 > 0 ? y1 - 8 : y1 + 16);
+    ctx.fillText(labelText, drawX + 5, y1 - 24 > 0 ? y1 - 8 : y1 + 16);
   }, []);
 
   // Stop camera helper
@@ -118,7 +121,7 @@ export function CreateEmployeeWithBiometricsModal({
     stopCamera();
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
       });
       streamRef.current = mediaStream;
       if (videoRef.current) {
@@ -195,6 +198,11 @@ export function CreateEmployeeWithBiometricsModal({
       setIsExtracting(true);
       try {
         const res = await extractFaceFeatures(payload);
+        if (res.bbox) {
+          drawFaceBbox(res.bbox);
+        } else {
+          clearOverlay();
+        }
         if (!res.success) {
           if (res.error_code === 'MULTIPLE_FACES') {
             setFeedbackType('MULTIPLE');
@@ -203,8 +211,8 @@ export function CreateEmployeeWithBiometricsModal({
             setFeedbackType('NO_FACE');
             setFeedbackMessage('Chưa thấy khuôn mặt. Nhìn thẳng vào khung hình...');
           } else {
-            setFeedbackType('SEARCHING');
-            setFeedbackMessage(res.message || 'Đang tìm khuôn mặt...');
+            setFeedbackType('BLURRY');
+            setFeedbackMessage(res.message || 'Vui lòng tiến gần camera hơn một chút...');
           }
           return;
         }
@@ -244,7 +252,7 @@ export function CreateEmployeeWithBiometricsModal({
         setIsExtracting(false);
       }
     },
-    [isExtracting, extractedVector, useCamera, grabFrameBlob, drawFaceBbox]
+    [isExtracting, extractedVector, useCamera, grabFrameBlob, drawFaceBbox, clearOverlay]
   );
 
   // Continuous auto loop scanner (quét liên tục cho đến khi thành công hoặc người dùng từ bỏ)
@@ -587,7 +595,7 @@ export function CreateEmployeeWithBiometricsModal({
                 <canvas
                   ref={overlayCanvasRef}
                   className="camera-video-stream"
-                  style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+                  style={{ position: 'absolute', inset: 0, pointerEvents: 'none', transform: 'none' }}
                 />
 
                 {/* Status Pill on top of camera */}
