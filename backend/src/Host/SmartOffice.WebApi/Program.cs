@@ -167,16 +167,66 @@ static async Task SeedInitialDemoDataAsync(IServiceProvider rootProvider)
             await occDb.SaveChangesAsync();
         }
 
-        if (!await repDb.Users.AnyAsync())
+        var existingUsernames = await repDb.Users.Select(u => u.Username).ToListAsync();
+        var usersToSeed = new List<AppUser>();
+
+        if (!existingUsernames.Contains("admin_smartoffice"))
         {
-            repDb.Users.Add(new AppUser
+            usersToSeed.Add(new AppUser
             {
+                Id = Guid.Parse("11111111-1111-1111-1111-111111110001"),
                 Username = "admin_smartoffice",
                 PasswordHash = ReportingService.HashPassword("Admin@123"),
                 FullName = "Quản trị viên Hệ thống",
                 Role = "ADMIN",
                 IsActive = true
             });
+        }
+
+        if (!existingUsernames.Contains("hr_demo"))
+        {
+            usersToSeed.Add(new AppUser
+            {
+                Id = Guid.Parse("11111111-1111-1111-1111-111111110002"),
+                Username = "hr_demo",
+                PasswordHash = ReportingService.HashPassword("Hr@123"),
+                FullName = "Chuyên viên Nhân sự",
+                Role = "HR",
+                DepartmentId = deptHrId,
+                IsActive = true
+            });
+        }
+
+        if (!existingUsernames.Contains("manager_demo"))
+        {
+            usersToSeed.Add(new AppUser
+            {
+                Id = Guid.Parse("11111111-1111-1111-1111-111111110003"),
+                Username = "manager_demo",
+                PasswordHash = ReportingService.HashPassword("Manager@123"),
+                FullName = "Trưởng phòng Kỹ thuật",
+                Role = "DEPT_LEAD",
+                DepartmentId = deptItId,
+                IsActive = true
+            });
+        }
+
+        if (!existingUsernames.Contains("security_demo"))
+        {
+            usersToSeed.Add(new AppUser
+            {
+                Id = Guid.Parse("11111111-1111-1111-1111-111111110004"),
+                Username = "security_demo",
+                PasswordHash = ReportingService.HashPassword("Security@123"),
+                FullName = "Nhân viên An ninh",
+                Role = "SECURITY",
+                IsActive = true
+            });
+        }
+
+        if (usersToSeed.Count > 0)
+        {
+            repDb.Users.AddRange(usersToSeed);
             await repDb.SaveChangesAsync();
         }
     }
