@@ -41,12 +41,37 @@ export async function apiFetch(path: string, options: ApiOptions = {}): Promise<
       : 'Không kết nối được dịch vụ. Kiểm tra kết nối rồi thử lại.', 0)
   }
   if (!response.ok) {
-    const detail = await response.json().catch(() => null) as { message?: string; code?: string } | null
+    const detail = await response.json().catch(() => null) as Record<string, unknown> | null
     signal?.throwIfAborted()
     if (response.status === 401 && token) {
       window.dispatchEvent(new CustomEvent(unauthorizedEvent, { detail: { token } }))
     }
-    throw new ApiError(detail?.message || `Yêu cầu không thành công (mã ${response.status}).`, response.status, detail?.code)
+
+    let message: string | undefined
+    if (typeof detail?.message === 'string' && detail.message.trim()) {
+      message = detail.message.trim()
+    } else if (typeof detail?.detail === 'string' && detail.detail.trim()) {
+      message = detail.detail.trim()
+    } else if (detail?.errors) {
+      if (typeof detail.errors === 'object' && !Array.isArray(detail.errors)) {
+        const errorEntries = Object.entries(detail.errors as Record<string, unknown>)
+          .map(([key, val]) => {
+            const valStr = Array.isArray(val) ? val.join(', ') : String(val)
+            return `${key}: ${valStr}`
+          })
+          .filter(Boolean)
+        if (errorEntries.length > 0) {
+          message = errorEntries.join('; ')
+        }
+      } else if (Array.isArray(detail.errors)) {
+        message = (detail.errors as unknown[]).join(', ')
+      }
+    } else if (typeof detail?.title === 'string' && detail.title.trim()) {
+      message = detail.title.trim()
+    }
+
+    const code = typeof detail?.code === 'string' ? detail.code : undefined
+    throw new ApiError(message || `Yêu cầu không thành công (mã ${response.status}).`, response.status, code)
   }
   return response
 }

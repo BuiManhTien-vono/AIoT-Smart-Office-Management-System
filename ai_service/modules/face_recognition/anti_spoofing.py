@@ -23,7 +23,7 @@ class AntiSpoofingChecker:
     def __init__(
         self,
         model_path: Optional[str] = None,
-        blur_threshold: float = 100.0,
+        blur_threshold: float = 20.0,
         min_face_size: int = 112,
         use_cpu: bool = True,
         auto_download: bool = True
@@ -51,19 +51,19 @@ class AntiSpoofingChecker:
     def assess_quality(self, face_crop: np.ndarray) -> Tuple[bool, str, float]:
         """
         Đánh giá chất lượng khuôn mặt (FR-BIO-03):
-        1. Kích thước tối thiểu >= 112x112 px.
-        2. Độ sắc nét Laplace > 100.0.
+        1. Kích thước tối thiểu: Chiều dài tối đa >= 112px và cạnh ngắn >= 65px (phù hợp tỷ lệ oval mặt người).
+        2. Độ sắc nét Laplace >= 20.0 (chấp nhận ảnh điện thoại có làm mịn da tự nhiên, lọc ảnh rung nhòe).
         """
         if face_crop is None or face_crop.size == 0:
             return False, "Khuôn mặt rỗng.", 0.0
 
         h, w = face_crop.shape[:2]
-        if h < self.min_face_size or w < self.min_face_size:
-            return False, f"Khuôn mặt quá nhỏ ({w}x{h} px < {self.min_face_size}x{self.min_face_size} px)", 0.0
+        if max(h, w) < self.min_face_size or min(h, w) < 65:
+            return False, f"Khuôn mặt quá nhỏ ({w}x{h} px < {self.min_face_size} px)", 0.0
 
         blur_score = calculate_laplacian_blur(face_crop)
-        if blur_score <= self.blur_threshold:
-            return False, f"Ảnh bị mờ nhòe (Score_blur={blur_score:.1f} <= {self.blur_threshold})", blur_score
+        if blur_score < self.blur_threshold:
+            return False, f"Ảnh bị mờ nhòe (Score_blur={blur_score:.1f} < {self.blur_threshold:.1f})", blur_score
 
         return True, "Chất lượng đạt yêu cầu", blur_score
 

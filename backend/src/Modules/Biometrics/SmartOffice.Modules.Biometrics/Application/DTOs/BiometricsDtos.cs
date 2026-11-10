@@ -63,7 +63,10 @@ public sealed record BiometricMediaUploadResponse(
 public sealed record IdentifyFaceRequest(
     float[]? QueryVector = null,
     float[]? Embedding = null,
-    float? Threshold = null);
+    float? Threshold = null)
+{
+    public float[] EffectiveVector => QueryVector ?? Embedding ?? [];
+}
 
 public sealed record IdentifyFaceResponse(
     bool IsMatched,

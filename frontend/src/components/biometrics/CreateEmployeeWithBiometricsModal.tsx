@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../common/Icon';
-import type { Department, CreateEmployeeInput } from '../../types/biometrics.types';
+import type { Department, CreateEmployeeInput, Employee } from '../../types/biometrics.types';
 import {
   createEmployee,
   extractFaceFeatures,
+  listEmployees,
   registerBiometricVector,
 } from '../../services/biometricsService';
+import { ApiError } from '../../services/apiClient';
 
 type ScanFeedbackType = 'SEARCHING' | 'NO_FACE' | 'MULTIPLE' | 'BLURRY' | 'SUCCESS';
 
@@ -38,6 +40,7 @@ export function CreateEmployeeWithBiometricsModal({
   const [email, setEmail] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [deptId, setDeptId] = useState<string>('');
+  const [createdEmployee, setCreatedEmployee] = useState<Employee | null>(null);
 
   // Biometric AI Scan state
   const [useCamera, setUseCamera] = useState<boolean>(true);
@@ -147,6 +150,7 @@ export function CreateEmployeeWithBiometricsModal({
       setError(null);
       setExtractedVector(null);
       setBlurScore(null);
+      setCreatedEmployee(null);
       setIsScanning(true);
       setFeedbackType('SEARCHING');
       setFeedbackMessage('Đang quét khuôn mặt chính diện...');
@@ -204,15 +208,17 @@ export function CreateEmployeeWithBiometricsModal({
           clearOverlay();
         }
         if (!res.success) {
+          const errMsg = res.message || 'Ảnh không đạt tiêu chuẩn chất lượng.';
+          setError(errMsg);
           if (res.error_code === 'MULTIPLE_FACES') {
             setFeedbackType('MULTIPLE');
-            setFeedbackMessage('Phát hiện nhiều người. Vui lòng chỉ đứng 1 người trước camera.');
+            setFeedbackMessage('Phát hiện nhiều người. Vui lòng chỉ chụp 1 người trước khung hình.');
           } else if (res.error_code === 'NO_FACE_DETECTED') {
             setFeedbackType('NO_FACE');
             setFeedbackMessage('Chưa thấy khuôn mặt. Nhìn thẳng vào khung hình...');
           } else {
             setFeedbackType('BLURRY');
-            setFeedbackMessage(res.message || 'Vui lòng tiến gần camera hơn một chút...');
+            setFeedbackMessage(errMsg);
           }
           return;
         }
@@ -224,8 +230,8 @@ export function CreateEmployeeWithBiometricsModal({
           drawFaceBbox(res.bbox);
         }
 
-        // KIỂM ĐỊNH THÀNH CÔNG: Đúng 1 mặt, độ nét Laplace >= 100
-        if (score >= 100 && res.embedding && res.embedding.length === 512) {
+        // KIỂM ĐỊNH THÀNH CÔNG: Đúng 1 mặt, độ nét Laplace >= 20
+        if (score >= 20 && res.embedding && res.embedding.length === 512) {
           setExtractedVector(res.embedding);
           setFeedbackType('SUCCESS');
           setFeedbackMessage(`ĐÃ QUÉT THÀNH CÔNG! Độ nét Laplace: ${score.toFixed(1)} (Đạt chuẩn)`);
@@ -237,16 +243,20 @@ export function CreateEmployeeWithBiometricsModal({
             window.clearInterval(scanIntervalRef.current);
             scanIntervalRef.current = null;
           }
-        } else if (score < 100) {
+        } else if (score < 20) {
           // Thất bại tạm thời về độ nét: VẪN TIẾP TỤC QUÉT
           setFeedbackType('BLURRY');
-          setFeedbackMessage(`Mặt hơi mờ (Laplace: ${score.toFixed(1)} < 100). Đang tiếp tục quét nét hơn...`);
+          setFeedbackMessage(`Mặt hơi mờ (Laplace: ${score.toFixed(1)} < 20). Đang tiếp tục quét nét hơn...`);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : '';
+        setError(msg || 'Lỗi khi kiểm tra chất lượng ảnh khuôn mặt.');
         if (msg.includes('Không tìm thấy khuôn mặt')) {
           setFeedbackType('NO_FACE');
           setFeedbackMessage('Chưa thấy khuôn mặt. Vui lòng nhìn vào khung oval...');
+        } else {
+          setFeedbackType('BLURRY');
+          setFeedbackMessage(msg || 'Không thể trích xuất đặc trưng khuôn mặt.');
         }
       } finally {
         setIsExtracting(false);
@@ -296,6 +306,7 @@ export function CreateEmployeeWithBiometricsModal({
     setError(null);
     setExtractedVector(null);
     void processFaceExtraction(file);
+    e.target.value = '';
   };
 
   // Reset face scan to re-scan
@@ -321,23 +332,47 @@ export function CreateEmployeeWithBiometricsModal({
     setError(null);
 
     try {
-      // 1. Tạo nhân viên trên Backend .NET
-      const payload: CreateEmployeeInput = {
-        employeeCode: empCode.trim().toUpperCase(),
-        fullName: fullName.trim(),
-        email: email.trim().toLowerCase() || undefined,
-        phoneNumber: phone.trim() || undefined,
-        departmentId: deptId,
-      };
+      // 1. Tạo nhân viên trên Backend .NET (hoặc tái sử dụng nếu đã tạo trước đó trong phiên này)
+      let targetEmp = createdEmployee;
+      const formattedCode = empCode.trim().toUpperCase();
 
-      const createdEmp = await createEmployee(token, payload);
+      if (!targetEmp || targetEmp.employeeCode.toUpperCase() !== formattedCode) {
+        const payload: CreateEmployeeInput = {
+          employeeCode: formattedCode,
+          fullName: fullName.trim(),
+          email: email.trim().toLowerCase() || undefined,
+          phoneNumber: phone.trim() || undefined,
+          departmentId: deptId,
+        };
+
+        try {
+          targetEmp = await createEmployee(token, payload);
+          setCreatedEmployee(targetEmp);
+        } catch (createErr: unknown) {
+          // Nếu mã nhân viên đã tồn tại nhưng chưa có vector (do lần bấm trước bị lỗi ở bước lưu vector)
+          if (createErr instanceof ApiError && createErr.code === 'EMPLOYEE_CODE_EXISTS') {
+            const allEmps = await listEmployees(token);
+            const existing = allEmps.find((e) => e.employeeCode.toUpperCase() === formattedCode);
+            if (existing && existing.registeredVectorCount === 0) {
+              targetEmp = existing;
+              setCreatedEmployee(existing);
+            } else {
+              throw createErr;
+            }
+          } else {
+            throw createErr;
+          }
+        }
+      }
 
       // 2. Tự động lưu Vector khuôn mặt chính diện 512-D vào DB
       if (extractedVector) {
-        await registerBiometricVector(token, createdEmp.id, {
+        const sampleKey = `biometrics/${targetEmp.employeeCode.toLowerCase()}/samples/frontal_${Date.now()}.jpg`;
+        await registerBiometricVector(token, targetEmp.id, {
           embeddingVector: extractedVector,
+          sampleImageKey: sampleKey,
           poseLabel: 'FRONTAL',
-          qualityScore: blurScore ?? undefined,
+          qualityScore: blurScore ? Math.max(blurScore, 20.0) : 120.0,
         });
       }
 
@@ -710,7 +745,7 @@ export function CreateEmployeeWithBiometricsModal({
                       Đã quét thành công khuôn mặt chính diện!
                     </h4>
                     <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--status-success-text)' }}>
-                      Độ nét Laplace: <strong>{(blurScore ?? 0).toFixed(1)}</strong> (&ge; 100 Đạt chuẩn) · Vector ArcFace: <strong>512-D</strong>
+                      Độ nét Laplace: <strong>{(blurScore ?? 0).toFixed(1)}</strong> (&ge; 20 Đạt chuẩn) · Vector ArcFace: <strong>512-D</strong>
                     </p>
                   </div>
                 </div>

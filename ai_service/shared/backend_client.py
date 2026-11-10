@@ -267,9 +267,17 @@ class BackendSyncClient:
         snapshot_object_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """Gọi POST /api/v1/attendance/check trên Backend .NET."""
+        import uuid
+        valid_camera_guid = None
+        if gate_camera_id:
+            try:
+                valid_camera_guid = str(uuid.UUID(str(gate_camera_id)))
+            except (ValueError, AttributeError):
+                valid_camera_guid = None
+
         payload = {
-            "employeeId": employee_id,
-            "gateCameraId": self._resolve_camera_guid(gate_camera_id),
+            "employeeId": str(employee_id),
+            "gateCameraId": valid_camera_guid,
             "matchConfidence": float(match_confidence),
             "snapshotObjectKey": snapshot_object_key
         }
@@ -290,10 +298,31 @@ class BackendSyncClient:
         detected_at_utc: Optional[str] = None
     ) -> Dict[str, Any]:
         """Gọi POST /api/v1/security/incidents trên Backend .NET."""
+        import uuid
+        cam_id_str = camera_id or settings.face.default_gate_camera_id
+        try:
+            valid_cam_guid = str(uuid.UUID(str(cam_id_str)))
+        except (ValueError, AttributeError):
+            valid_cam_guid = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(cam_id_str)))
+
+        valid_dept_guid = None
+        if department_id:
+            try:
+                valid_dept_guid = str(uuid.UUID(str(department_id)))
+            except (ValueError, AttributeError):
+                valid_dept_guid = None
+
+        valid_emp_guid = None
+        if detected_employee_id:
+            try:
+                valid_emp_guid = str(uuid.UUID(str(detected_employee_id)))
+            except (ValueError, AttributeError):
+                valid_emp_guid = None
+
         payload = {
-            "cameraId": self._resolve_camera_guid(camera_id),
-            "departmentId": department_id,
-            "detectedEmployeeId": detected_employee_id,
+            "cameraId": valid_cam_guid,
+            "departmentId": valid_dept_guid,
+            "detectedEmployeeId": valid_emp_guid,
             "isSpoofingAttempt": bool(is_spoofing_attempt),
             "snapshotObjectKey": snapshot_object_key,
             "videoClipObjectKey": video_clip_object_key,
