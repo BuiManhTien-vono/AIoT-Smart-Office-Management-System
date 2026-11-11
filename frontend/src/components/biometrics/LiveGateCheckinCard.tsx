@@ -137,6 +137,12 @@ export function LiveGateCheckinCard() {
 
         if (isDebounced) {
           setStatusMessage(`${empName} đã chấm công trước đó. Chuẩn bị người tiếp theo...`);
+        } else if (data.attendance?.status === 'LATE') {
+          const lateM = data.attendance.lateMinutes ? ` (${data.attendance.lateMinutes} phút)` : '';
+          setStatusMessage(`⚠️ ĐIỂM DANH: ${empName} - ĐI MUỘN${lateM}!`);
+        } else if (data.attendance?.status === 'EARLY_LEAVE') {
+          const earlyM = data.attendance.earlyLeaveMinutes ? ` (${data.attendance.earlyLeaveMinutes} phút)` : '';
+          setStatusMessage(`⏳ ĐIỂM DANH: ${empName} - VỀ SỚM${earlyM}!`);
         } else {
           setStatusMessage(`ĐIỂM DANH THÀNH CÔNG: ${empName}!`);
         }
@@ -822,9 +828,26 @@ export function LiveGateCheckinCard() {
                 <span className="result-label">3. GHI NHẬN CHẤM CÔNG VÀO CSDL</span>
                 {result.attendance?.recorded || result.attendance?.status ? (
                   <div>
-                    <span className="badge badge-success">
-                      {result.attendance.event_type || result.attendance.status || 'CHECK-IN THÀNH CÔNG'}
-                    </span>
+                    {result.attendance.status === 'LATE' ? (
+                      <span className="badge badge-warning" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Icon name="clock" size={14} /> Đi muộn {result.attendance.lateMinutes ? `(${result.attendance.lateMinutes} phút)` : ''}
+                      </span>
+                    ) : result.attendance.status === 'EARLY_LEAVE' ? (
+                      <span className="badge badge-danger" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Icon name="warning" size={14} /> Về sớm {result.attendance.earlyLeaveMinutes ? `(${result.attendance.earlyLeaveMinutes} phút)` : ''}
+                      </span>
+                    ) : (
+                      <span className="badge badge-success" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Icon name="check" size={14} /> Đúng giờ
+                      </span>
+                    )}
+
+                    {result.attendance.message && (
+                      <div style={{ fontSize: '0.8125rem', marginTop: '4px', fontWeight: 500, color: result.attendance.status === 'LATE' ? 'var(--status-warning-text)' : undefined }}>
+                        {result.attendance.message}
+                      </div>
+                    )}
+
                     <div className="muted" style={{ fontSize: '0.8125rem', marginTop: '4px' }}>
                       Thời gian ghi nhận: {result.attendance.timestamp || 'Vừa xong'}
                     </div>

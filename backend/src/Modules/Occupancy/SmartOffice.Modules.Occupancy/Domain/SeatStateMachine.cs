@@ -1,3 +1,5 @@
+using SmartOffice.SharedKernel.Common;
+
 namespace SmartOffice.Modules.Occupancy.Domain;
 
 /// <summary>

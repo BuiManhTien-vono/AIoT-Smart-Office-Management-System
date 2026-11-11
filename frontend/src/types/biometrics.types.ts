@@ -113,6 +113,8 @@ export interface AiGateCheckinResponse {
     recorded?: boolean
     event_type?: string
     timestamp?: string
+    lateMinutes?: number
+    earlyLeaveMinutes?: number
   }
   security_incident?: Record<string, unknown>
 }
