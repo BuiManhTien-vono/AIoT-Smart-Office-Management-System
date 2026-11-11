@@ -116,9 +116,25 @@ public sealed class AttendanceService(
                 new Error("SHIFT_NOT_CONFIGURED", "Hệ thống chưa được cấu hình ca làm việc."));
         }
 
-        var nowUtc = request.TimestampUtc ?? DateTimeOffset.UtcNow;
-        var workDate = DateOnly.FromDateTime(nowUtc.DateTime);
-        var currentTimeOfDay = TimeOnly.FromDateTime(nowUtc.DateTime);
+        DateTimeOffset nowUtc;
+        TimeOnly currentTimeOfDay;
+        DateOnly workDate;
+
+        if (request.TimestampUtc.HasValue)
+        {
+            var reqTime = request.TimestampUtc.Value;
+            nowUtc = reqTime;
+            currentTimeOfDay = TimeOnly.FromDateTime(reqTime.DateTime);
+            workDate = DateOnly.FromDateTime(reqTime.DateTime);
+        }
+        else
+        {
+            // Runtime thực tế (Webcam / AI Gate Camera): Lấy theo múi giờ chuẩn Việt Nam (GMT+7)
+            var nowVn = VietnamDateTime.Now;
+            nowUtc = DateTimeOffset.UtcNow;
+            currentTimeOfDay = TimeOnly.FromDateTime(nowVn.DateTime);
+            workDate = DateOnly.FromDateTime(nowVn.DateTime);
+        }
 
         var existingLog = await dbContext.AttendanceLogs
             .FirstOrDefaultAsync(x => x.EmployeeId == employee.EmployeeId && x.WorkDate == workDate, ct);
@@ -206,6 +222,10 @@ public sealed class AttendanceService(
         else
         {
             existingLog.EarlyLeaveMinutes = 0;
+            if (existingLog.Status == "EARLY_LEAVE")
+            {
+                existingLog.Status = existingLog.LateMinutes > 0 ? "LATE" : "ON_TIME";
+            }
         }
 
         await dbContext.SaveChangesAsync(ct);
@@ -222,7 +242,7 @@ public sealed class AttendanceService(
         DateOnly? workDate = null,
         CancellationToken ct = default)
     {
-        var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var targetDate = workDate ?? VietnamDateTime.Today;
         var logs = await dbContext.AttendanceLogs
             .Where(x => x.WorkDate == targetDate)
             .OrderByDescending(x => x.CheckInTime)
@@ -345,7 +365,7 @@ public sealed class AttendanceService(
         DateOnly? workDate = null,
         CancellationToken ct = default)
     {
-        var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var targetDate = workDate ?? VietnamDateTime.Today;
         var defaultShift = await dbContext.Shifts
             .OrderByDescending(s => s.IsDefault)
             .FirstOrDefaultAsync(ct);
