@@ -54,6 +54,10 @@ public sealed class OccupancyDbContext(DbContextOptions<OccupancyDbContext> opti
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
             entity.Ignore(x => x.UpdatedAt);
             entity.HasIndex(x => x.SeatCode).IsUnique();
+            entity.HasOne<Camera>()
+                .WithMany()
+                .HasForeignKey(x => x.CameraId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<SeatOccupancyLog>(entity =>
@@ -69,6 +73,10 @@ public sealed class OccupancyDbContext(DbContextOptions<OccupancyDbContext> opti
             entity.Property(x => x.RecordedAt).HasColumnName("recorded_at");
             entity.Ignore(x => x.CreatedAt);
             entity.Ignore(x => x.UpdatedAt);
+            entity.HasOne<Seat>()
+                .WithMany()
+                .HasForeignKey(x => x.SeatId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

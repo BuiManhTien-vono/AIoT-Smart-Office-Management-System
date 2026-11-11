@@ -165,6 +165,49 @@ public sealed class BiometricsService(
             ct));
     }
 
+    public async Task<Result<EmployeeResponse>> UpdateEmployeeAsync(
+        Guid id,
+        UpdateEmployeeRequest request,
+        CancellationToken ct = default)
+    {
+        var employee = await dbContext.Employees
+            .Include(e => e.BiometricVectors)
+            .FirstOrDefaultAsync(e => e.Id == id, ct);
+        if (employee is null)
+        {
+            return Result.Failure<EmployeeResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên."));
+        }
+
+        var department = await dbContext.Departments
+            .FirstOrDefaultAsync(d => d.Id == request.DepartmentId, ct);
+        if (department is null)
+        {
+            return Result.Failure<EmployeeResponse>(
+                new Error("DEPARTMENT_NOT_FOUND", "Không tìm thấy phòng ban được chọn."));
+        }
+
+        employee.FullName = request.FullName.Trim();
+        employee.Email = request.Email?.Trim();
+        employee.PhoneNumber = request.PhoneNumber?.Trim();
+        employee.DepartmentId = request.DepartmentId;
+        employee.DefaultShiftId = request.DefaultShiftId;
+
+        if (request.IsActive.HasValue)
+        {
+            employee.IsActive = request.IsActive.Value;
+        }
+
+        employee.UpdatedAt = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(ct);
+
+        return Result.Success(await MapEmployeeResponseAsync(
+            employee,
+            department.DepartmentCode,
+            employee.BiometricVectors.Count,
+            ct));
+    }
+
     public async Task<Result> DeactivateEmployeeAsync(Guid id, CancellationToken ct = default)
     {
         var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.Id == id, ct);
@@ -174,6 +217,41 @@ public sealed class BiometricsService(
         }
 
         employee.IsActive = false;
+        employee.UpdatedAt = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    public async Task<Result> ReactivateEmployeeAsync(Guid id, CancellationToken ct = default)
+    {
+        var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.Id == id, ct);
+        if (employee is null)
+        {
+            return Result.Failure(new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên."));
+        }
+
+        employee.IsActive = true;
+        employee.UpdatedAt = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    public async Task<Result> DeleteEmployeePermanentlyAsync(Guid id, CancellationToken ct = default)
+    {
+        var employee = await dbContext.Employees
+            .Include(e => e.BiometricVectors)
+            .FirstOrDefaultAsync(e => e.Id == id, ct);
+        if (employee is null)
+        {
+            return Result.Failure(new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên."));
+        }
+
+        if (employee.BiometricVectors.Count > 0)
+        {
+            dbContext.BiometricVectors.RemoveRange(employee.BiometricVectors);
+        }
+
+        dbContext.Employees.Remove(employee);
         await dbContext.SaveChangesAsync(ct);
         return Result.Success();
     }

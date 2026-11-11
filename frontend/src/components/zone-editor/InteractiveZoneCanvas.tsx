@@ -546,9 +546,16 @@ export function InteractiveZoneCanvas({
       })
     }
 
-    // 4. Draw RT-DETR AI Head Detections (Bounding Box + Head Center)
+    // 4. Draw RT-DETR / SCRFD AI Head Detections (Bounding Box + Head Center)
     if (aiResult?.detections && aiResult.detections.length > 0) {
       aiResult.detections.forEach((det) => {
+        // Lọc vùng khoang: Nếu camera đã có danh sách bàn (existingSeats.length > 0),
+        // chỉ hiển thị các đối tượng thực sự nằm trong vùng bàn (det.matched_seat_id != null)
+        // để loại bỏ hoàn toàn các phát hiện rác bên ngoài hành lang / hậu cảnh
+        if (existingSeats.length > 0 && !det.matched_seat_id) {
+          return
+        }
+
         const [xmin, ymin, xmax, ymax] = det.bbox_normalized
         const bx = xmin * width
         const by = ymin * height
@@ -558,14 +565,14 @@ export function InteractiveZoneCanvas({
         const cx = xc * width
         const cy = yc * height
 
-        // Hộp nhận diện đầu người (Màu cam nổi bật)
-        ctx.strokeStyle = '#f59e0b'
+        // Hộp nhận diện đầu người / khuôn mặt
+        ctx.strokeStyle = det.matched_seat_id ? '#10b981' : '#f59e0b'
         ctx.lineWidth = 2.5
         ctx.strokeRect(bx, by, bw, bh)
-        ctx.fillStyle = 'rgba(245, 158, 11, 0.16)'
+        ctx.fillStyle = det.matched_seat_id ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)'
         ctx.fillRect(bx, by, bw, bh)
 
-        // Điểm tâm đỉnh đầu (Chấm xanh lá cây)
+        // Điểm tâm đỉnh đầu / khuôn mặt (Chấm xanh lá cây)
         ctx.beginPath()
         ctx.arc(cx, cy, 6, 0, Math.PI * 2)
         ctx.fillStyle = '#10b981'
@@ -1273,14 +1280,18 @@ export function InteractiveZoneCanvas({
           {isRealtimeAiActive && (
             <div className="canvas-stat-pill live-ai-stat-pill">
               <span className="live-dot" />
-              <span>AI LIVE: <strong>{aiResult?.detections_count || 0} người</strong> ({aiResult?.inference_time_ms || 0}ms)</span>
+              <span>
+                AI LIVE: <strong>{existingSeats.length > 0 ? `${aiResult?.occupied_seat_ids?.length || 0}/${existingSeats.length} bàn có người` : `${aiResult?.detections_count || 0} người`}</strong> ({aiResult?.inference_time_ms || 0}ms)
+              </span>
             </div>
           )}
 
           {/* Thống kê kết quả AI 1 lần */}
           {!isRealtimeAiActive && aiResult && (
             <div className="canvas-stat-pill ai-stat-pill">
-              <span>AI: <strong>{aiResult.detections_count} người</strong> ({aiResult.inference_time_ms}ms)</span>
+              <span>
+                AI: <strong>{existingSeats.length > 0 ? `${aiResult.occupied_seat_ids?.length || 0}/${existingSeats.length} bàn có người` : `${aiResult.detections_count} người`}</strong> ({aiResult.inference_time_ms}ms)
+              </span>
               <button
                 type="button"
                 className="ai-clear-btn"

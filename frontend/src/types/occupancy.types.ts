@@ -50,6 +50,7 @@ export interface HeadDetectionPreview {
   center_normalized: [number, number]
   confidence: number
   matched_seat_id?: string | null
+  is_in_zone?: boolean
 }
 
 export interface SeatStatePreview {

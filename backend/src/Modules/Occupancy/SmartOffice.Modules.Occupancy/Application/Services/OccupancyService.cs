@@ -145,10 +145,19 @@ public sealed class OccupancyService(
         var seatIds = seats.Select(s => s.Id).ToList();
         var logs = await dbContext.SeatOccupancyLogs.Where(l => seatIds.Contains(l.SeatId)).ToListAsync(ct);
 
-        dbContext.SeatOccupancyLogs.RemoveRange(logs);
-        dbContext.Seats.RemoveRange(seats);
-        dbContext.Cameras.Remove(camera);
+        if (logs.Count > 0)
+        {
+            dbContext.SeatOccupancyLogs.RemoveRange(logs);
+            await dbContext.SaveChangesAsync(ct);
+        }
 
+        if (seats.Count > 0)
+        {
+            dbContext.Seats.RemoveRange(seats);
+            await dbContext.SaveChangesAsync(ct);
+        }
+
+        dbContext.Cameras.Remove(camera);
         await dbContext.SaveChangesAsync(ct);
         return Result.Success(true);
     }
@@ -280,9 +289,13 @@ public sealed class OccupancyService(
         }
 
         var logs = await dbContext.SeatOccupancyLogs.Where(l => l.SeatId == seatId).ToListAsync(ct);
-        dbContext.SeatOccupancyLogs.RemoveRange(logs);
-        dbContext.Seats.Remove(seat);
+        if (logs.Count > 0)
+        {
+            dbContext.SeatOccupancyLogs.RemoveRange(logs);
+            await dbContext.SaveChangesAsync(ct);
+        }
 
+        dbContext.Seats.Remove(seat);
         await dbContext.SaveChangesAsync(ct);
         return Result.Success(true);
     }

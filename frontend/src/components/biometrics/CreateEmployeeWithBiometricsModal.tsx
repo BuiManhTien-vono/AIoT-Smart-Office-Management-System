@@ -320,6 +320,35 @@ export function CreateEmployeeWithBiometricsModal({
     setIsScanning(true);
   };
 
+  // Save without face enrollment (quét khuôn mặt sau)
+  const handleSaveWithoutFace = async () => {
+    if (!empCode || !fullName || !deptId) {
+      setError('Vui lòng điền các trường có dấu * bắt buộc.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const payload: CreateEmployeeInput = {
+        employeeCode: empCode.trim().toUpperCase(),
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase() || undefined,
+        phoneNumber: phone.trim() || undefined,
+        departmentId: deptId,
+      };
+
+      await createEmployee(token, payload);
+      onSuccess();
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Lỗi khi lưu dữ liệu vào hệ thống');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Complete Registration
   const handleCompleteRegistration = async () => {
     if (!empCode || !fullName || !deptId) {
@@ -519,28 +548,41 @@ export function CreateEmployeeWithBiometricsModal({
             </label>
           </div>
 
-          <div className="app-dialog-actions">
+          <div className="app-dialog-actions" style={{ justifyContent: 'space-between' }}>
             <button
               type="button"
               className="button button-secondary"
               onClick={onClose}
+              disabled={isSubmitting}
             >
               Hủy
             </button>
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={() => {
-                if (!empCode || !fullName || !deptId) {
-                  setError('Vui lòng điền các trường có dấu * bắt buộc.');
-                  return;
-                }
-                setError(null);
-                setCurrentStep(2);
-              }}
-            >
-              Tiếp tục: Quét mặt chính diện <Icon name="arrow" size={16} />
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => void handleSaveWithoutFace()}
+                disabled={isSubmitting}
+                title="Lưu hồ sơ nhân sự trước, bổ sung quét khuôn mặt sau"
+              >
+                {isSubmitting ? 'Đang lưu...' : 'Lưu hồ sơ trước (quét mặt sau)'}
+              </button>
+              <button
+                type="button"
+                className="button button-primary"
+                disabled={isSubmitting}
+                onClick={() => {
+                  if (!empCode || !fullName || !deptId) {
+                    setError('Vui lòng điền các trường có dấu * bắt buộc.');
+                    return;
+                  }
+                  setError(null);
+                  setCurrentStep(2);
+                }}
+              >
+                Tiếp tục: Quét mặt AI <Icon name="arrow" size={16} />
+              </button>
+            </div>
           </div>
         </div>
       )}

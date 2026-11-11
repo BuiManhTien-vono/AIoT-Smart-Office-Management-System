@@ -30,13 +30,15 @@ public sealed class EmployeeRegisteredEventHandler(ReportingDbContext dbContext)
                 SummaryDate = today,
                 DepartmentId = integrationEvent.DepartmentId,
                 DepartmentCode = integrationEvent.DepartmentCode,
-                TotalEmployees = 1
+                TotalEmployees = 1,
+                UpdatedAt = DateTimeOffset.UtcNow
             };
             dbContext.DailyDepartmentSummaries.Add(summary);
         }
         else
         {
             summary.TotalEmployees += 1;
+            summary.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

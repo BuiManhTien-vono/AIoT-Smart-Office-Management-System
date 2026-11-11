@@ -191,3 +191,111 @@ class AsyncHeadDetector:
 
     def stop(self):
         self.running = False
+
+
+class HybridOccupancyDetector:
+    """
+    Bộ phát hiện hiện diện chỗ ngồi kết hợp thông minh (Hybrid Occupancy Detector):
+    - Tầng 1 (Fast Face - SCRFD): phát hiện khuôn mặt đa cự ly siêu nhanh (~15ms), đặc biệt tối ưu cho
+      webcam, camera bàn làm việc (DESK), người ngồi trực diện / nghiêng góc với camera.
+    - Tầng 2 (Head Detector - RT-DETR-L): phát hiện đỉnh đầu / gáy từ xa, tối ưu cho camera an ninh
+      gắn trần văn phòng nhìn từ phía sau.
+    """
+    def __init__(
+        self,
+        rtdetr_model_path: Optional[str] = None,
+        conf_threshold: float = 0.35,
+        use_cpu: bool = False,
+        rtdetr_imgsz: int = 960
+    ):
+        self.conf_threshold = conf_threshold
+        self._rtdetr_model_path = rtdetr_model_path
+        self._use_cpu = use_cpu
+        self._rtdetr_imgsz = rtdetr_imgsz
+
+        self._face_detector = None
+        self._rtdetr_detector = None
+
+    @property
+    def face_detector(self):
+        if self._face_detector is None:
+            try:
+                from modules.face_recognition.detector import SCRFDFaceDetector
+                self._face_detector = SCRFDFaceDetector(conf_threshold=0.42, use_cpu=self._use_cpu)
+            except Exception as exc:
+                print(f"[!] Không thể khởi tạo SCRFD Face Detector: {exc}")
+        return self._face_detector
+
+    @property
+    def rtdetr_detector(self):
+        if self._rtdetr_detector is None:
+            try:
+                self._rtdetr_detector = RTDETRHeadDetector(
+                    model_path=self._rtdetr_model_path,
+                    use_cpu=self._use_cpu,
+                    conf_threshold=self.conf_threshold,
+                    imgsz=self._rtdetr_imgsz
+                )
+            except Exception as exc:
+                print(f"[!] Không thể khởi tạo RTDETR Detector: {exc}")
+        return self._rtdetr_detector
+
+    def predict(self, frame: np.ndarray, prefer_fast: bool = True) -> List[HeadDetection]:
+        face_detections: List[HeadDetection] = []
+
+        # 1. Chạy SCRFD (cực nhanh ~15ms, chống nhiễu hậu cảnh, nhận diện cực nhạy cự ly gần/webcam)
+        f_det = self.face_detector
+        if f_det is not None:
+            try:
+                faces = f_det.detect(frame)
+                for f in faces:
+                    x1, y1, x2, y2 = f.bbox_pixel
+                    nx1, ny1, nx2, ny2 = f.bbox_normalized
+                    cx_px = int((x1 + x2) / 2)
+                    cy_px = int((y1 + y2) / 2)
+                    cx_norm = float((nx1 + nx2) / 2.0)
+                    cy_norm = float((ny1 + ny2) / 2.0)
+                    face_detections.append(HeadDetection(
+                        bbox_pixel=(x1, y1, x2, y2),
+                        bbox_normalized=(nx1, ny1, nx2, ny2),
+                        center_pixel=(cx_px, cy_px),
+                        center_normalized=(cx_norm, cy_norm),
+                        confidence=float(f.score),
+                        class_id=0
+                    ))
+            except Exception as exc:
+                print(f"[!] Lỗi khi chạy SCRFD trong HybridOccupancyDetector: {exc}")
+
+        # Nếu phát hiện được mặt với SCRFD và ở chế độ prefer_fast (mặc định), trả về ngay để đạt tốc độ tối đa ~15ms
+        if prefer_fast and len(face_detections) > 0:
+            return face_detections
+
+        # 2. Nếu SCRFD không thấy mặt (người quay lưng, góc máy từ sau gáy hoặc camera trần nhà)
+        r_det = self.rtdetr_detector
+        rtdetr_detections: List[HeadDetection] = []
+        if r_det is not None:
+            try:
+                rtdetr_detections = r_det.predict(frame)
+            except Exception as exc:
+                print(f"[!] Lỗi khi chạy RT-DETR trong HybridOccupancyDetector: {exc}")
+
+        if not face_detections:
+            return rtdetr_detections
+
+        # Nếu cả 2 cùng chạy, hợp nhất (NMS) tránh trùng lặp
+        combined = list(face_detections)
+        for r_det_item in rtdetr_detections:
+            is_dup = False
+            for f_item in face_detections:
+                dist = np.hypot(
+                    r_det_item.center_normalized[0] - f_item.center_normalized[0],
+                    r_det_item.center_normalized[1] - f_item.center_normalized[1]
+                )
+                if dist < 0.2:
+                    is_dup = True
+                    break
+            if not is_dup:
+                combined.append(r_det_item)
+
+        return combined
+

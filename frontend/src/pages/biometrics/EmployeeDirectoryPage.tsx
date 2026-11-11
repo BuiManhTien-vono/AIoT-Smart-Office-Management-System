@@ -6,10 +6,12 @@ import {
   listDepartments,
   listEmployees,
   createDepartment,
-  deactivateEmployee,
+  reactivateEmployee,
 } from '../../services/biometricsService';
 import { FaceEnrollmentModal } from '../../components/biometrics/FaceEnrollmentModal';
 import { CreateEmployeeWithBiometricsModal } from '../../components/biometrics/CreateEmployeeWithBiometricsModal';
+import { EditEmployeeModal } from '../../components/biometrics/EditEmployeeModal';
+import { DeleteEmployeeConfirmModal } from '../../components/biometrics/DeleteEmployeeConfirmModal';
 import { LiveGateCheckinCard } from '../../components/biometrics/LiveGateCheckinCard';
 import './biometrics.css';
 
@@ -32,6 +34,8 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
   const [showAddDeptModal, setShowAddDeptModal] = useState<boolean>(false);
   const [showAddEmpModal, setShowAddEmpModal] = useState<boolean>(false);
   const [enrollingEmployee, setEnrollingEmployee] = useState<Employee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [deletingEmployee, setDeletingEmployee] = useState<Employee | null>(null);
 
   const addDeptDialogRef = useRef<HTMLDialogElement>(null);
 
@@ -120,21 +124,13 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
     }
   };
 
-  // Handle Deactivate Employee
-  const handleDeactivate = async (emp: Employee) => {
-    if (
-      !window.confirm(
-        `Bạn có chắc chắn muốn ngưng kích hoạt nhân viên ${emp.fullName} (${emp.employeeCode})?`
-      )
-    ) {
-      return;
-    }
-
+  // Handle Quick Reactivate Employee
+  const handleQuickReactivate = async (emp: Employee) => {
     try {
-      await deactivateEmployee(session.accessToken, emp.id);
+      await reactivateEmployee(session.accessToken, emp.id);
       void fetchData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Lỗi khi ngưng kích hoạt');
+      alert(err instanceof Error ? err.message : 'Lỗi khi kích hoạt lại nhân viên');
     }
   };
 
@@ -309,16 +305,30 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                              {/* Nút Sửa thông tin */}
                               <button
                                 type="button"
                                 className="button button-secondary"
-                                style={{ minHeight: '32px', padding: '4px 10px', fontSize: '0.8125rem' }}
+                                style={{ minHeight: '32px', padding: '4px 8px', fontSize: '0.8125rem' }}
+                                onClick={() => setEditingEmployee(emp)}
+                                title="Chỉnh sửa thông tin nhân viên"
+                              >
+                                <Icon name="edit" size={14} /> Sửa
+                              </button>
+
+                              {/* Nút Quét thêm góc */}
+                              <button
+                                type="button"
+                                className="button button-secondary"
+                                style={{ minHeight: '32px', padding: '4px 8px', fontSize: '0.8125rem' }}
                                 onClick={() => setEnrollingEmployee(emp)}
                                 title="Quét thêm góc mặt (Chính diện / Trái / Phải)"
                               >
-                                <Icon name="camera" size={14} /> Quét thêm góc
+                                <Icon name="camera" size={14} /> Quét mặt
                               </button>
-                              {emp.isActive && (
+
+                              {/* Hành động trạng thái & xóa */}
+                              {emp.isActive ? (
                                 <button
                                   type="button"
                                   className="button button-secondary"
@@ -327,11 +337,41 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
                                     padding: '4px 8px',
                                     color: 'var(--status-danger-text)',
                                   }}
-                                  onClick={() => void handleDeactivate(emp)}
-                                  title="Ngưng kích hoạt"
+                                  onClick={() => setDeletingEmployee(emp)}
+                                  title="Ngưng hoạt động hoặc xóa vĩnh viễn"
                                 >
                                   <Icon name="trash" size={14} />
                                 </button>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="button button-secondary"
+                                    style={{
+                                      minHeight: '32px',
+                                      padding: '4px 8px',
+                                      color: 'var(--status-success-text, #10b981)',
+                                      borderColor: 'rgba(16, 185, 129, 0.4)',
+                                    }}
+                                    onClick={() => void handleQuickReactivate(emp)}
+                                    title="Kích hoạt lại nhân viên"
+                                  >
+                                    <Icon name="check" size={14} /> Kích hoạt lại
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button button-secondary"
+                                    style={{
+                                      minHeight: '32px',
+                                      padding: '4px 8px',
+                                      color: 'var(--status-danger-text)',
+                                    }}
+                                    onClick={() => setDeletingEmployee(emp)}
+                                    title="Xóa vĩnh viễn khỏi CSDL"
+                                  >
+                                    <Icon name="trash" size={14} />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -361,6 +401,29 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
           isOpen={Boolean(enrollingEmployee)}
           onClose={() => setEnrollingEmployee(null)}
           employee={enrollingEmployee}
+          token={session.accessToken}
+          onSuccess={() => void fetchData()}
+        />
+      )}
+
+      {/* Modal Chỉnh sửa thông tin nhân viên */}
+      {editingEmployee && (
+        <EditEmployeeModal
+          isOpen={Boolean(editingEmployee)}
+          onClose={() => setEditingEmployee(null)}
+          employee={editingEmployee}
+          departments={departments}
+          token={session.accessToken}
+          onSuccess={() => void fetchData()}
+        />
+      )}
+
+      {/* Modal Xác nhận ngưng hoạt động / Xóa vĩnh viễn nhân viên */}
+      {deletingEmployee && (
+        <DeleteEmployeeConfirmModal
+          isOpen={Boolean(deletingEmployee)}
+          onClose={() => setDeletingEmployee(null)}
+          employee={deletingEmployee}
           token={session.accessToken}
           onSuccess={() => void fetchData()}
         />
