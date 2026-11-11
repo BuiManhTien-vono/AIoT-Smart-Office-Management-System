@@ -18,10 +18,12 @@ export function LiveGateCheckinCard() {
   const [scanMode, setScanMode] = useState<'auto' | 'manual'>('auto');
   const [isScanning, setIsScanning] = useState<boolean>(true);
   const [isApiPending, setIsApiPending] = useState<boolean>(false);
+  const isApiPendingRef = useRef<boolean>(false);
 
   // Status phản hồi thời gian thực
   const [scanStatus, setScanStatus] = useState<LiveScanStatus>('SEARCHING');
   const [statusMessage, setStatusMessage] = useState<string>('Đang tìm khuôn mặt...');
+  const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -32,13 +34,13 @@ export function LiveGateCheckinCard() {
 
   // Cooldown timer ref sau khi nhận diện thành công
   const cooldownRef = useRef<boolean>(false);
-  const scanIntervalRef = useRef<number | null>(null);
+  const cooldownTimerRef = useRef<number | null>(null);
 
   // Stop webcam
   const stopWebcam = useCallback(() => {
-    if (scanIntervalRef.current) {
-      window.clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
+    if (cooldownTimerRef.current) {
+      window.clearInterval(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -102,7 +104,7 @@ export function LiveGateCheckinCard() {
 
   // Perform continuous gate checkin scan
   const scanFrame = useCallback(async (blob?: Blob) => {
-    if (isApiPending || cooldownRef.current) return;
+    if (isApiPendingRef.current || cooldownRef.current) return;
 
     let payload = blob;
     if (!payload && useWebcam) {
@@ -111,6 +113,7 @@ export function LiveGateCheckinCard() {
 
     if (!payload) return;
 
+    isApiPendingRef.current = true;
     setIsApiPending(true);
     try {
       const data = await testGateCheckin(payload, cameraId);
@@ -130,18 +133,43 @@ export function LiveGateCheckinCard() {
       if (isSuccess) {
         setScanStatus('SUCCESS');
         const empName = data.identification?.fullName || 'Nhân viên';
-        setStatusMessage(`ĐIỂM DANH THÀNH CÔNG: ${empName}!`);
+        const isDebounced = Boolean(data.attendance?.isDebounced);
 
-        // Tạm dừng 4s để hiển thị kết quả chúc mừng, rồi tự động tiếp tục quét người mới
+        if (isDebounced) {
+          setStatusMessage(`${empName} đã chấm công trước đó. Chuẩn bị người tiếp theo...`);
+        } else {
+          setStatusMessage(`ĐIỂM DANH THÀNH CÔNG: ${empName}!`);
+        }
+
+        // Tạm dừng 3s đếm ngược hiển thị kết quả, rồi TỰ ĐỘNG QUÉT TIẾP NGƯỜI MỚI (chế độ Kiosk Auto)
         cooldownRef.current = true;
-        setTimeout(() => {
-          cooldownRef.current = false;
-          setScanStatus('SEARCHING');
-          setStatusMessage('Sẵn sàng quét người tiếp theo...');
-          if (scanMode === 'manual') {
-            setIsScanning(false);
+        setCooldownRemaining(3);
+
+        if (cooldownTimerRef.current) {
+          window.clearInterval(cooldownTimerRef.current);
+          cooldownTimerRef.current = null;
+        }
+
+        let remaining = 3;
+        cooldownTimerRef.current = window.setInterval(() => {
+          remaining -= 1;
+          if (remaining > 0) {
+            setCooldownRemaining(remaining);
+          } else {
+            if (cooldownTimerRef.current) {
+              window.clearInterval(cooldownTimerRef.current);
+              cooldownTimerRef.current = null;
+            }
+            setCooldownRemaining(null);
+            cooldownRef.current = false;
+            setResult(null); // Xóa bảng kết quả người cũ để sẵn sàng hiển thị người mới
+            setScanStatus('SEARCHING');
+            setStatusMessage('Sẵn sàng quét người tiếp theo...');
+            if (scanMode === 'manual') {
+              setIsScanning(false);
+            }
           }
-        }, 4000);
+        }, 1000);
       }
       // TRƯỜNG HỢP 2: PHÁT HIỆN GIẢ MẠO (Không phải người thật)
       else if (isSpoof) {
@@ -189,41 +217,35 @@ export function LiveGateCheckinCard() {
         );
       }
     } finally {
+      isApiPendingRef.current = false;
       setIsApiPending(false);
     }
-  }, [isApiPending, useWebcam, grabVideoFrame, cameraId, scanMode]);
+  }, [useWebcam, grabVideoFrame, cameraId, scanMode]);
 
-  // Loop scanner when running
+  // Vòng lặp tự động quét liên tục thời gian thực (Kiosk Auto Scanner Loop)
+  // Đảm bảo không bao giờ bị dừng/ngắt quãng giữa các lượt người
   useEffect(() => {
-    if (!useWebcam) {
-      if (scanIntervalRef.current) {
-        window.clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
+    if (!useWebcam) return;
+
+    let cancelled = false;
+
+    async function runContinuousScanner() {
+      while (!cancelled) {
+        const shouldRun = scanMode === 'auto' || isScanning;
+
+        if (shouldRun && !cooldownRef.current && !isApiPendingRef.current) {
+          await scanFrame();
+        }
+
+        // Chu kỳ kiểm tra 650ms giữa các lần quét
+        await new Promise((r) => setTimeout(r, 650));
       }
-      return;
     }
 
-    const shouldRun = (scanMode === 'auto' || isScanning) && !cooldownRef.current;
-
-    if (shouldRun) {
-      if (!scanIntervalRef.current) {
-        // Quét liên tục mỗi 950ms cho đến khi thành công hoặc người dùng từ bỏ
-        scanIntervalRef.current = window.setInterval(() => {
-          void scanFrame();
-        }, 950);
-      }
-    } else {
-      if (scanIntervalRef.current) {
-        window.clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
-    }
+    void runContinuousScanner();
 
     return () => {
-      if (scanIntervalRef.current) {
-        window.clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
+      cancelled = true;
     };
   }, [useWebcam, scanMode, isScanning, scanFrame]);
 
@@ -422,7 +444,7 @@ export function LiveGateCheckinCard() {
                   />
                   <span className="guide-hint">
                     {scanStatus === 'SUCCESS'
-                      ? '✓ NHẬN DIỆN THÀNH CÔNG'
+                      ? (cooldownRemaining ? `✓ ĐÃ ĐIỂM DANH (Tiếp tục sau ${cooldownRemaining}s)` : '✓ NHẬN DIỆN THÀNH CÔNG')
                       : scanStatus === 'SPOOF'
                       ? '⚠️ KHÔNG PHẢI NGƯỜI THẬT'
                       : scanStatus === 'NOT_MATCHED'
@@ -432,7 +454,7 @@ export function LiveGateCheckinCard() {
                       : scanStatus === 'BACKEND_ERROR'
                       ? '⚠️ CHƯA KẾT NỐI BACKEND .NET / CSDL'
                       : scanMode === 'auto'
-                      ? 'Đang liên tục quét khuôn mặt...'
+                      ? 'Đang liên tục quét khuôn mặt (Auto)...'
                       : isScanning
                       ? 'Đang quét đến khi thành công...'
                       : 'Nhấn Bắt đầu quét để chấm công'}
@@ -486,9 +508,14 @@ export function LiveGateCheckinCard() {
                         {result?.identification?.fullName || 'Nhân viên'}
                       </p>
                       {result?.identification?.employeeCode && (
-                        <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8125rem' }}>
+                        <p style={{ margin: '0 0 6px', color: '#94a3b8', fontSize: '0.8125rem' }}>
                           Mã NV: {result.identification.employeeCode}
                         </p>
+                      )}
+                      {cooldownRemaining !== null && (
+                        <div style={{ marginTop: '6px', fontSize: '0.8125rem', color: '#38bdf8', fontWeight: 500 }}>
+                          Sẵn sàng quét người tiếp theo trong <strong>{cooldownRemaining}s</strong>...
+                        </div>
                       )}
                     </div>
                   </div>

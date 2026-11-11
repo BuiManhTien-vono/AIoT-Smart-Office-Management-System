@@ -21,6 +21,14 @@ public sealed record CreateEmployeeRequest(
     Guid? DefaultShiftId,
     string? AvatarObjectKey);
 
+public sealed record UpdateEmployeeRequest(
+    string FullName,
+    string? Email,
+    string? PhoneNumber,
+    Guid DepartmentId,
+    Guid? DefaultShiftId = null,
+    bool? IsActive = null);
+
 public sealed record EmployeeResponse(
     Guid Id,
     string EmployeeCode,

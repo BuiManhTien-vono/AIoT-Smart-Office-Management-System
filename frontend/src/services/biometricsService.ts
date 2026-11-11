@@ -85,6 +85,44 @@ export async function deactivateEmployee(
   );
 }
 
+export async function updateEmployee(
+  token: string,
+  id: string,
+  input: import('../types/biometrics.types').UpdateEmployeeInput,
+  signal?: AbortSignal
+): Promise<Employee> {
+  return apiRequest<Employee>(`/biometrics/employees/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    token,
+    body: JSON.stringify(input),
+    signal,
+  });
+}
+
+export async function deleteEmployeePermanently(
+  token: string,
+  id: string,
+  signal?: AbortSignal
+): Promise<void> {
+  return apiRequest<void>(`/biometrics/employees/${encodeURIComponent(id)}/permanent`, {
+    method: 'DELETE',
+    token,
+    signal,
+  });
+}
+
+export async function reactivateEmployee(
+  token: string,
+  id: string,
+  signal?: AbortSignal
+): Promise<void> {
+  return apiRequest<void>(`/biometrics/employees/${encodeURIComponent(id)}/reactivate`, {
+    method: 'POST',
+    token,
+    signal,
+  });
+}
+
 export async function registerBiometricVector(
   token: string,
   employeeId: string,

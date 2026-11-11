@@ -37,6 +37,15 @@ export interface CreateEmployeeInput {
   avatarObjectKey?: string
 }
 
+export interface UpdateEmployeeInput {
+  fullName: string
+  email?: string
+  phoneNumber?: string
+  departmentId: string
+  defaultShiftId?: string | null
+  isActive?: boolean
+}
+
 export type BiometricPose = 'FRONTAL' | 'LEFT' | 'RIGHT'
 
 export const POSE_OPTIONS: { value: BiometricPose; label: string }[] = [

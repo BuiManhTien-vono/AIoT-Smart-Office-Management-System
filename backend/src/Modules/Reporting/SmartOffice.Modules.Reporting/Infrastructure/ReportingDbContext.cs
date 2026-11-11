@@ -53,4 +53,17 @@ public sealed class ReportingDbContext(DbContextOptions<ReportingDbContext> opti
             entity.HasIndex(x => new { x.SummaryDate, x.DepartmentId }).IsUnique();
         });
     }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<DailyDepartmentSummary>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
 }

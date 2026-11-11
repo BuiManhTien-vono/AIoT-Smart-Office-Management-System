@@ -59,10 +59,59 @@ public sealed class BiometricsController(IBiometricsService biometricsService) :
         return CreatedAtAction(nameof(GetEmployeeById), new { id = result.Value.Id }, result.Value);
     }
 
-    [HttpDelete("employees/{id:guid}")]
-    public async Task<IActionResult> DeactivateEmployee(Guid id, CancellationToken ct)
+    [HttpPut("employees/{id:guid}")]
+    public async Task<IActionResult> UpdateEmployee(
+        Guid id,
+        [FromBody] UpdateEmployeeRequest request,
+        CancellationToken ct)
     {
-        var result = await biometricsService.DeactivateEmployeeAsync(id, ct);
+        var result = await biometricsService.UpdateEmployeeAsync(id, request, ct);
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == "EMPLOYEE_NOT_FOUND")
+            {
+                return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+            }
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
+    [HttpDelete("employees/{id:guid}")]
+    public async Task<IActionResult> DeactivateEmployee(
+        Guid id,
+        [FromQuery] bool permanent = false,
+        CancellationToken ct = default)
+    {
+        var result = permanent
+            ? await biometricsService.DeleteEmployeePermanentlyAsync(id, ct)
+            : await biometricsService.DeactivateEmployeeAsync(id, ct);
+
+        if (result.IsFailure)
+        {
+            return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return NoContent();
+    }
+
+    [HttpDelete("employees/{id:guid}/permanent")]
+    public async Task<IActionResult> DeleteEmployeePermanently(Guid id, CancellationToken ct)
+    {
+        var result = await biometricsService.DeleteEmployeePermanentlyAsync(id, ct);
+        if (result.IsFailure)
+        {
+            return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return NoContent();
+    }
+
+    [HttpPost("employees/{id:guid}/reactivate")]
+    public async Task<IActionResult> ReactivateEmployee(Guid id, CancellationToken ct)
+    {
+        var result = await biometricsService.ReactivateEmployeeAsync(id, ct);
         if (result.IsFailure)
         {
             return NotFound(new { code = result.Error.Code, message = result.Error.Message });

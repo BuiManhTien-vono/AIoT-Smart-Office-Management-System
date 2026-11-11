@@ -11,7 +11,10 @@ public interface IBiometricsService
     Task<Result<EmployeeResponse>> CreateEmployeeAsync(CreateEmployeeRequest request, CancellationToken ct = default);
     Task<IReadOnlyList<EmployeeResponse>> GetEmployeesAsync(Guid? departmentId = null, CancellationToken ct = default);
     Task<Result<EmployeeResponse>> GetEmployeeByIdAsync(Guid id, CancellationToken ct = default);
+    Task<Result<EmployeeResponse>> UpdateEmployeeAsync(Guid id, UpdateEmployeeRequest request, CancellationToken ct = default);
     Task<Result> DeactivateEmployeeAsync(Guid id, CancellationToken ct = default);
+    Task<Result> ReactivateEmployeeAsync(Guid id, CancellationToken ct = default);
+    Task<Result> DeleteEmployeePermanentlyAsync(Guid id, CancellationToken ct = default);
 
     Task<Result<BiometricMediaUploadResponse>> UploadEmployeeAvatarAsync(
         Guid employeeId,

@@ -159,15 +159,15 @@ _detector_instance: Optional[Any] = None
 
 
 def get_head_detector():
-    """Lấy hoặc khởi tạo singleton detector RT-DETR."""
+    """Lấy hoặc khởi tạo singleton detector HybridOccupancyDetector (SCRFD siêu tốc + RT-DETR)."""
     global _detector_instance
     if _detector_instance is None:
-        from modules.occupancy.detector import RTDETRHeadDetector
+        from modules.occupancy.detector import HybridOccupancyDetector
         model_file = settings.occupancy.ensure_model_exists()
-        _detector_instance = RTDETRHeadDetector(
-            model_path=model_file,
+        _detector_instance = HybridOccupancyDetector(
+            rtdetr_model_path=model_file,
             conf_threshold=settings.confidence_threshold,
-            imgsz=settings.imgsz
+            rtdetr_imgsz=settings.imgsz
         )
     return _detector_instance
 
@@ -340,7 +340,8 @@ async def detect_preview(
                 "bbox_normalized": [float(v) for v in det.bbox_normalized],
                 "center_normalized": [float(det.center_normalized[0]), float(det.center_normalized[1])],
                 "confidence": round(float(det.confidence), 3),
-                "matched_seat_id": matched_id
+                "matched_seat_id": matched_id,
+                "is_in_zone": matched_id is not None
             })
 
         # Tự động đẩy đồng bộ trạng thái FSM sang Backend .NET để kích hoạt SignalR thời gian thực
