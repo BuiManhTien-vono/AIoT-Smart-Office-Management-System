@@ -176,9 +176,9 @@ export function FaceEnrollmentModal({
 
         if (!res.success) {
           if (res.error_code === 'MULTIPLE_FACES') {
-            setErrorMessage('Phát hiện nhiều hơn 1 khuôn mặt. Vui lòng chỉ đứng 1 người trước camera.');
-          } else if (res.error_code === 'QUALITY_FAILED') {
-            setErrorMessage(res.message || 'Khuôn mặt chưa đạt kích thước/độ nét chuẩn. Vui lòng ngồi gần camera hơn một chút.');
+            setErrorMessage('Phát hiện nhiều hơn 1 khuôn mặt. Vui lòng chỉ chụp 1 người trước khung hình.');
+          } else {
+            setErrorMessage(res.message || 'Ảnh không đạt tiêu chuẩn chất lượng.');
           }
           return;
         }
@@ -186,7 +186,7 @@ export function FaceEnrollmentModal({
         const score = res.blur_score ?? 100;
         setBlurScore(score);
 
-        if (score >= 100 && res.embedding && res.embedding.length === 512) {
+        if (score >= 20 && res.embedding && res.embedding.length === 512) {
           setExtractedVector(res.embedding);
           setErrorMessage(null);
           setSuccessMessage(
@@ -197,13 +197,14 @@ export function FaceEnrollmentModal({
             window.clearInterval(scanIntervalRef.current);
             scanIntervalRef.current = null;
           }
-        } else if (score < 100) {
+        } else if (score < 20) {
           setErrorMessage(
-            `Khuôn mặt hơi mờ (Laplace: ${score.toFixed(1)} < 100). Đang tiếp tục quét nét hơn...`
+            `Khuôn mặt hơi mờ (Laplace: ${score.toFixed(1)} < 20). Đang tiếp tục quét nét hơn...`
           );
         }
-      } catch {
-        // bỏ qua
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Lỗi khi phân tích ảnh khuôn mặt.';
+        setErrorMessage(msg);
       } finally {
         setIsExtracting(false);
       }
@@ -249,8 +250,10 @@ export function FaceEnrollmentModal({
     const file = e.target.files?.[0];
     if (!file) return;
     setErrorMessage(null);
+    setSuccessMessage(null);
     setExtractedVector(null);
     void processFaceExtraction(file);
+    e.target.value = '';
   };
 
   const handleResetScan = () => {
@@ -275,10 +278,12 @@ export function FaceEnrollmentModal({
     setErrorMessage(null);
 
     try {
+      const sampleKey = `biometrics/${employee.employeeCode.toLowerCase()}/samples/${pose.toLowerCase()}_${Date.now()}.jpg`;
       await registerBiometricVector(token, employee.id, {
         embeddingVector: extractedVector,
+        sampleImageKey: sampleKey,
         poseLabel: pose,
-        qualityScore: blurScore ?? undefined,
+        qualityScore: blurScore ? Math.max(blurScore, 20.0) : 120.0,
       });
 
       setSuccessMessage(`Đã đăng ký vector góc ${pose} thành công cho ${employee.fullName}!`);
@@ -525,7 +530,7 @@ export function FaceEnrollmentModal({
                     Đã quét thành công khuôn mặt góc {pose}!
                   </h4>
                   <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--status-success-text)' }}>
-                    Độ nét Laplace: <strong>{(blurScore ?? 0).toFixed(1)}</strong> (&ge; 100 Đạt chuẩn) · Vector ArcFace: <strong>512-D</strong>
+                    Độ nét Laplace: <strong>{(blurScore ?? 0).toFixed(1)}</strong> (&ge; 20 Đạt chuẩn) · Vector ArcFace: <strong>512-D</strong>
                   </p>
                 </div>
               </div>

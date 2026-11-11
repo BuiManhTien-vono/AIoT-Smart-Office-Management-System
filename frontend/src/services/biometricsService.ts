@@ -131,7 +131,18 @@ export async function extractFaceFeatures(
       }
     }
     const errorText = await response.text();
-    throw new Error(`AI Service error (${response.status}): ${errorText}`);
+    try {
+      const errorJson = JSON.parse(errorText) as { detail?: AiExtractFeaturesResponse | string };
+      if (errorJson.detail && typeof errorJson.detail === 'object') {
+        return errorJson.detail;
+      }
+      throw new Error(typeof errorJson.detail === 'string' ? errorJson.detail : errorText);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== errorText) {
+        throw parseErr;
+      }
+      throw new Error(`AI Service error (${response.status}): ${errorText}`);
+    }
   }
 
   return response.json() as Promise<AiExtractFeaturesResponse>;

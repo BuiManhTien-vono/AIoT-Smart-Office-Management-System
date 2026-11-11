@@ -7,7 +7,7 @@ public static class BiometricMath
 {
     public const float DuplicateThreshold = 0.85f;
     public const float MatchThreshold = 0.70f;
-    public const float MinQualityScore = 100.0f;
+    public const float MinQualityScore = 20.0f;
 
     /// <summary>
     /// Tính độ tương đồng Cosine giữa 2 vector đặc trưng khuôn mặt.

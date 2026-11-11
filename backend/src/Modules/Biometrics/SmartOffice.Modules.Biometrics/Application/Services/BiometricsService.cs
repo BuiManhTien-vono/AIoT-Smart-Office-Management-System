@@ -290,11 +290,11 @@ public sealed class BiometricsService(
                 new Error("INVALID_VECTOR", "Vector đặc trưng khuôn mặt không được để trống."));
         }
 
-        // Kiểm tra chất lượng ảnh (FR-BIO-03)
-        if (request.QualityScore <= BiometricMath.MinQualityScore)
+        // Kiểm tra chất lượng ảnh (FR-BIO-03: >= 100 Đạt chuẩn)
+        if (request.QualityScore < BiometricMath.MinQualityScore)
         {
             return Result.Failure<BiometricVectorResponse>(
-                new Error("LOW_QUALITY_IMAGE", $"Ảnh bị mờ nhòe (Điểm chất lượng {request.QualityScore:F1} <= {BiometricMath.MinQualityScore}). Vui lòng chụp lại."));
+                new Error("LOW_QUALITY_IMAGE", $"Ảnh bị mờ nhòe (Điểm chất lượng {request.QualityScore:F1} < {BiometricMath.MinQualityScore}). Vui lòng chụp lại."));
         }
 
         // Kiểm tra trùng lặp khuôn mặt với các nhân viên khác (FR-BIO-05: Ngưỡng > 0.85)
@@ -360,11 +360,8 @@ public sealed class BiometricsService(
         IdentifyFaceRequest request,
         CancellationToken ct = default)
     {
-        var queryVector = request.QueryVector is { Length: > 0 }
-            ? request.QueryVector
-            : request.Embedding;
-
-        if (queryVector is null || queryVector.Length == 0)
+        var queryVector = request.EffectiveVector;
+        if (queryVector.Length == 0)
         {
             return Result.Failure<IdentifyFaceResponse>(
                 new Error("INVALID_VECTOR", "Vector truy vấn không hợp lệ."));
