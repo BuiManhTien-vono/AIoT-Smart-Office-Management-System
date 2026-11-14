@@ -4,6 +4,7 @@ import { KpiStatCards } from '../../components/common/KpiStatCards'
 import type { KpiStat } from '../../components/common/KpiStatCards'
 import { useQuery } from '../../components/common/useQuery'
 import { dailySummaries, formatDateTime, officeDate, onTimeCount } from '../../services/reportingService'
+import { signalrService } from '../../services/signalrService'
 import type { Session } from '../../types/auth.types'
 import './reporting.css'
 
@@ -30,6 +31,27 @@ export function DashboardPage({ session }: { session: Session }) {
     const timer = window.setInterval(() => setNow(new Date()), 30_000)
     return () => window.clearInterval(timer)
   }, [])
+
+  const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    const unsub = signalrService.onAttendanceRecorded(evt => {
+      query.refresh()
+      const timeStr = new Date().toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+      const isAbsent = evt.status === 'ABSENT'
+      const label = isAbsent
+        ? `Đã chốt vắng mặt (${evt.employeeCode})`
+        : `Vừa ghi nhận chấm công (${evt.employeeCode} - ${evt.status})`
+      setRealtimeNotice(`⚡ ${label} lúc ${timeStr}. Số liệu đã tự động cập nhật!`)
+      const timer = setTimeout(() => setRealtimeNotice(null), 5000)
+      return () => clearTimeout(timer)
+    })
+    return unsub
+  }, [query])
 
   const sourceTimes = (rows ?? []).map(row => Date.parse(row.updatedAt)).filter(Number.isFinite)
   const sourceTime = sourceTimes.length ? Math.max(...sourceTimes) : null
@@ -62,6 +84,13 @@ export function DashboardPage({ session }: { session: Session }) {
         </div>
       </header>
 
+      {realtimeNotice && (
+        <div className="report-realtime-alert" role="status" aria-live="polite">
+          <span className="realtime-pulse-dot" />
+          <span>{realtimeNotice}</span>
+        </div>
+      )}
+
       <section className="panel dashboard-update-bar" aria-label="Cập nhật dữ liệu tổng quan">
         <div>
           <span className={`badge ${query.error || stale ? 'badge-warning' : 'badge-neutral'}`}>
@@ -90,7 +119,7 @@ export function DashboardPage({ session }: { session: Session }) {
             <p className="eyebrow">HOẠT ĐỘNG TRONG NGÀY</p>
             <h2 id="daily-summary-title">{securityOnly ? 'Tổng hợp cảnh báo an ninh' : 'Chuyên cần theo phòng ban'}</h2>
           </div>
-          {!securityOnly && <a className="report-link" href="#/reports/monthly">Xem báo cáo tháng <ArrowRight size={16} aria-hidden="true" /></a>}
+          {!securityOnly && <a className="report-link" href="#/reports/hub">Xem báo cáo tổng hợp <ArrowRight size={16} aria-hidden="true" /></a>}
         </div>
         {query.loading && !rows ? <p className="empty-state" role="status">Đang tải số liệu tổng hợp…</p>
           : !hasRecords ? <div className="empty-state"><h3>Chưa có dữ liệu trong ngày</h3><p>Dữ liệu xuất hiện khi các phân hệ ghi nhận và tổng hợp hoạt động.</p></div>

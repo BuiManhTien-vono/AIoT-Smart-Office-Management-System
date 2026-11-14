@@ -17,6 +17,7 @@ import {
   markDailyAbsent,
 } from '../../services/attendanceService';
 import { listEmployees } from '../../services/biometricsService';
+import { signalrService } from '../../services/signalrService';
 import { ShiftManagementModal } from '../../components/attendance/ShiftManagementModal';
 import { LeaveRequestModal } from '../../components/attendance/LeaveRequestModal';
 import './attendance.css';
@@ -80,6 +81,14 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
     const controller = new AbortController();
     void fetchData(controller.signal);
     return () => controller.abort();
+  }, [fetchData]);
+
+  // Lắng nghe sự kiện điểm danh thời gian thực qua SignalR
+  useEffect(() => {
+    const unsub = signalrService.onAttendanceRecorded(() => {
+      void fetchData();
+    });
+    return unsub;
   }, [fetchData]);
 
   // KPIs

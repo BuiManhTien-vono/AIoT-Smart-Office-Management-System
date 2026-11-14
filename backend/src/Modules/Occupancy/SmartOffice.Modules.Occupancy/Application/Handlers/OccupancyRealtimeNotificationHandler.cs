@@ -82,3 +82,76 @@ public sealed class WrongSeatRealtimeHandler(IHubContext<OccupancyHub>? hubConte
     }
 }
 
+/// <summary>
+/// Đẩy sự kiện chấm công vào/ra ca thời gian thực tới toàn bộ máy trạm (Dashboard, Báo cáo Hub, Chấm công).
+/// Giúp các biểu đồ và chỉ số KPI tự động làm mới tức thời mà không cần reload trang.
+/// </summary>
+public sealed class AttendanceCheckedRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+    : IIntegrationEventHandler<AttendanceCheckedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceCheckedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (hubContext is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients.All
+            .SendAsync("AttendanceRecorded", integrationEvent, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Đẩy sự kiện chốt vắng mặt không phép cuối ngày tới các client đang theo dõi.
+/// </summary>
+public sealed class AttendanceAbsentMarkedRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+    : IIntegrationEventHandler<AttendanceAbsentMarkedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceAbsentMarkedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (hubContext is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients.All
+            .SendAsync("AttendanceRecorded", new
+            {
+                integrationEvent.EventId,
+                integrationEvent.OccurredOnUtc,
+                integrationEvent.AttendanceLogId,
+                integrationEvent.EmployeeId,
+                integrationEvent.EmployeeCode,
+                integrationEvent.DepartmentId,
+                integrationEvent.WorkDate,
+                Status = "ABSENT",
+                LateMinutes = 0,
+                IsFirstCheckInOfDay = false
+            }, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Đẩy thông báo sự cố an ninh ngoài giờ thời gian thực tới Dashboard và trang An ninh SOC.
+/// </summary>
+public sealed class SecurityIncidentRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+    : IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        SecurityIncidentDetectedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (hubContext is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients.All
+            .SendAsync("SecurityAlert", integrationEvent, cancellationToken);
+    }
+}
+

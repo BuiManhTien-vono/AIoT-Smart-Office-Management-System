@@ -230,6 +230,19 @@ public sealed class AttendanceService(
 
         await dbContext.SaveChangesAsync(ct);
 
+        // Phát sự kiện tích hợp khi nhân viên check-out ra ca để đồng bộ thời gian thực
+        await eventBus.PublishAsync(new AttendanceCheckedIntegrationEvent(
+            Guid.NewGuid(),
+            nowUtc,
+            existingLog.Id,
+            employee.EmployeeId,
+            employee.EmployeeCode,
+            employee.DepartmentId,
+            workDate,
+            existingLog.Status,
+            existingLog.LateMinutes,
+            IsFirstCheckInOfDay: false), ct);
+
         return Result.Success(await MapAttendanceRecordResponseAsync(
             existingLog,
             employee.FullName,

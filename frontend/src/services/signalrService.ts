@@ -25,12 +25,41 @@ export type SeatStateListener = (event: SeatStateChangedEvent) => void
 export type ProlongedAbsenceListener = (event: ProlongedAbsenceAlertEvent) => void
 export type WrongSeatListener = (event: WrongSeatAlertEvent) => void
 
+export interface AttendanceRecordedEvent {
+  eventId: string
+  occurredOnUtc: string
+  attendanceLogId: string
+  employeeId: string
+  employeeCode: string
+  departmentId: string
+  workDate: string
+  status: string
+  lateMinutes: number
+  isFirstCheckInOfDay: boolean
+}
+export type AttendanceRecordedListener = (event: AttendanceRecordedEvent) => void
+
+export interface SecurityAlertEvent {
+  eventId: string
+  occurredOnUtc: string
+  incidentId: string
+  cameraId: string
+  departmentId?: string
+  detectedEmployeeId?: string
+  alertLevel: string
+  incidentType?: string
+  description?: string
+}
+export type SecurityAlertListener = (event: SecurityAlertEvent) => void
+
 export class OccupancySignalRService {
   private connection: HubConnection | null = null
   private stateListeners = new Set<ConnectionStateListener>()
   private seatStateListeners = new Set<SeatStateListener>()
   private prolongedAbsenceListeners = new Set<ProlongedAbsenceListener>()
   private wrongSeatListeners = new Set<WrongSeatListener>()
+  private attendanceRecordedListeners = new Set<AttendanceRecordedListener>()
+  private securityAlertListeners = new Set<SecurityAlertListener>()
   private activeToken: string | null = null
 
   public getConnectionState(): HubConnectionState {
@@ -101,6 +130,28 @@ export class OccupancySignalRService {
           listener(event)
         } catch (err) {
           console.error('[SignalR] Error in wrongSeatListener', err)
+        }
+      })
+    })
+
+    // Lắng nghe sự kiện AttendanceRecorded (Chấm công vào/ra ca, chốt vắng mặt)
+    this.connection.on('AttendanceRecorded', (event: AttendanceRecordedEvent) => {
+      this.attendanceRecordedListeners.forEach(listener => {
+        try {
+          listener(event)
+        } catch (err) {
+          console.error('[SignalR] Error in attendanceRecordedListener', err)
+        }
+      })
+    })
+
+    // Lắng nghe sự kiện SecurityAlert (Cảnh báo an ninh SOC)
+    this.connection.on('SecurityAlert', (event: SecurityAlertEvent) => {
+      this.securityAlertListeners.forEach(listener => {
+        try {
+          listener(event)
+        } catch (err) {
+          console.error('[SignalR] Error in securityAlertListener', err)
         }
       })
     })
@@ -177,6 +228,16 @@ export class OccupancySignalRService {
   public onWrongSeat(listener: WrongSeatListener): () => void {
     this.wrongSeatListeners.add(listener)
     return () => this.wrongSeatListeners.delete(listener)
+  }
+
+  public onAttendanceRecorded(listener: AttendanceRecordedListener): () => void {
+    this.attendanceRecordedListeners.add(listener)
+    return () => this.attendanceRecordedListeners.delete(listener)
+  }
+
+  public onSecurityAlert(listener: SecurityAlertListener): () => void {
+    this.securityAlertListeners.add(listener)
+    return () => this.securityAlertListeners.delete(listener)
   }
 
   private notifyState(state: HubConnectionState): void {

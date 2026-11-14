@@ -3,13 +3,15 @@ import { MainLayout } from './components/common/MainLayout'
 import { RouteGuard } from './components/common/RouteGuard'
 import { LoginPage } from './pages/auth/LoginPage'
 import { DashboardPage } from './pages/reporting/DashboardPage'
-import { MonthlyReportPage } from './pages/reporting/MonthlyReportPage'
+import { ReportingHubPage } from './pages/reporting/ReportingHubPage'
 import { UserManagementPage } from './pages/reporting/UserManagementPage'
 import { EmployeeDirectoryPage } from './pages/biometrics/EmployeeDirectoryPage'
 import { DailyAttendancePage } from './pages/attendance/DailyAttendancePage'
 import { ZoneEditorPage } from './pages/occupancy/ZoneEditorPage'
 import { LiveSeatMapPage } from './pages/occupancy/LiveSeatMapPage'
+import { SecuritySocPage } from './pages/security/SecuritySocPage'
 import { unauthorizedEvent } from './services/apiClient'
+import { signalrService } from './services/signalrService'
 import { readSession, saveSession } from './services/sessionStore'
 import { roles } from './types/auth.types'
 import type { Role, Session } from './types/auth.types'
@@ -21,7 +23,8 @@ const routes = [
   { path: '/attendance/daily', label: 'Chấm công & Ca làm', icon: 'calendar' as const, allowed: roles, Page: DailyAttendancePage },
   { path: '/occupancy/seat-map', label: 'Sơ đồ chỗ ngồi', icon: 'seatMap' as const, allowed: roles, Page: LiveSeatMapPage },
   { path: '/occupancy/zones', label: 'Camera và giám sát', icon: 'camera' as const, allowed: ['ADMIN'] as const, Page: ZoneEditorPage },
-  { path: '/reports/monthly', label: 'Báo cáo tháng', icon: 'reports' as const, allowed: ['ADMIN', 'HR', 'DEPT_LEAD'] as const, Page: MonthlyReportPage },
+  { path: '/reports/hub', label: 'Báo cáo tổng hợp', icon: 'reports' as const, allowed: ['ADMIN', 'HR', 'DEPT_LEAD'] as const, Page: ReportingHubPage },
+  { path: '/security/soc', label: 'An ninh & Sự cố', icon: 'shieldCheck' as const, allowed: ['ADMIN', 'SECURITY', 'HR'] as const, Page: SecuritySocPage },
   { path: '/admin/users', label: 'Tài khoản', icon: 'users' as const, allowed: ['ADMIN'] as const, Page: UserManagementPage },
 ]
 
@@ -30,7 +33,11 @@ function subscribePath(listener: () => void) {
   return () => window.removeEventListener('hashchange', listener)
 }
 
-const readPath = () => window.location.hash.slice(1) || '/dashboard'
+const readPath = () => {
+  const hash = window.location.hash.slice(1) || '/dashboard'
+  if (hash === '/reports/monthly') return '/reports/hub'
+  return hash
+}
 
 export default function App() {
   const [session, setSession] = useState(readSession)
@@ -62,6 +69,28 @@ export default function App() {
       window.removeEventListener('focus', checkExpiry)
     }
   }, [session, logout])
+
+  useEffect(() => {
+    if (!session) {
+      void signalrService.stop()
+      return
+    }
+
+    let isMounted = true
+    void signalrService.start(session.accessToken).then(() => {
+      if (!isMounted) return
+      void signalrService.joinOverviewGroup(session.user.role)
+      if (session.user.departmentId) {
+        void signalrService.joinDepartmentGroup(session.user.departmentId)
+      }
+    }).catch(err => {
+      console.warn('[SignalR App] Failed to connect:', err)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [session])
 
   function login(next: Session) {
     saveSession(next)
