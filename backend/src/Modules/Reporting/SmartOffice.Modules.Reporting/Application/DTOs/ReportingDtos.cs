@@ -60,3 +60,17 @@ public sealed record MonthlyDepartmentReportDto(
     int TotalSecurityAlerts,
     IReadOnlyList<DailyDepartmentSummaryDto> DailyBreakdown);
 
+public sealed record WeeklyDepartmentReportDto(
+    DateOnly StartDate,
+    DateOnly EndDate,
+    int WeekNumber,
+    int Year,
+    Guid? DepartmentId,
+    int TotalDaysRecorded,
+    int TotalPresentManDays,
+    int TotalLateEvents,
+    int TotalAbsentManDays,
+    int TotalProlongedAwayEvents,
+    int TotalSecurityAlerts,
+    IReadOnlyList<DailyDepartmentSummaryDto> DailyBreakdown);
+

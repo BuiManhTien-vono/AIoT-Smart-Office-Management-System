@@ -4,6 +4,7 @@ import type {
   DailyDepartmentSummary,
   DepartmentAttendance,
   MonthlyDepartmentReport,
+  WeeklyDepartmentReport,
   ReportFilters,
 } from '../types/reporting.types'
 
@@ -76,6 +77,34 @@ export async function monthlyReport(
   const period = `${String(filters.year).padStart(4, '0')}-${String(filters.month).padStart(2, '0')}-`
   const rows = report.dailyBreakdown.filter(row => row.summaryDate.startsWith(period)
     && (!departmentId || row.departmentId === departmentId))
+  return {
+    ...report,
+    dailyBreakdown: rows,
+    totalDaysRecorded: new Set(rows.map(row => row.summaryDate)).size,
+    totalPresentManDays: rows.reduce((sum, row) => sum + row.presentCount, 0),
+    totalLateEvents: rows.reduce((sum, row) => sum + row.lateCount, 0),
+    totalAbsentManDays: rows.reduce((sum, row) => sum + row.absentCount, 0),
+    totalProlongedAwayEvents: rows.reduce((sum, row) => sum + row.prolongedAwayEvents, 0),
+    totalSecurityAlerts: rows.reduce((sum, row) => sum + row.securityAlertsCount, 0),
+  }
+}
+
+export async function weeklyReport(
+  session: Session,
+  date?: string,
+  departmentId?: string,
+  signal?: AbortSignal,
+): Promise<WeeklyDepartmentReport> {
+  const params = new URLSearchParams()
+  if (date) params.set('date', date)
+  const scopedDept = departmentScope(session) ?? departmentId
+  if (scopedDept) params.set('departmentId', scopedDept)
+  const report = await apiRequest<WeeklyDepartmentReport>(`reporting/weekly-report?${params}`, {
+    token: session.accessToken,
+    signal,
+  })
+  const filterDept = scopedDept
+  const rows = report.dailyBreakdown.filter(row => !filterDept || row.departmentId === filterDept)
   return {
     ...report,
     dailyBreakdown: rows,

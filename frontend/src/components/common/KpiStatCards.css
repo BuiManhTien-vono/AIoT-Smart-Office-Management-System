@@ -1,0 +1,178 @@
+/* =============================================================================
+   KPI STAT CARDS - Chuẩn font Inter, bố cục thông thoáng, chống dồn ép
+   ============================================================================= */
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* Khi có từ 5-6 chỉ số trở lên (ví dụ Báo cáo ngày): xếp 3 cột cân xứng */
+.kpi-grid.kpi-grid-6 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kpi-grid.kpi-grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .kpi-grid.kpi-grid-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .kpi-grid,
+  .kpi-grid.kpi-grid-6,
+  .kpi-grid.kpi-grid-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Thẻ KPI đơn lẻ */
+.kpi-stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 20px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  border-radius: var(--radius-panel, 12px);
+  box-shadow: 0 2px 8px rgba(16, 35, 59, 0.05);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  min-height: 128px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.kpi-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px -4px rgba(16, 35, 59, 0.1), 0 6px 12px -4px rgba(16, 35, 59, 0.06);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.kpi-stat-card:hover .kpi-stat-icon {
+  transform: scale(1.1) rotate(-4deg);
+}
+
+/* Viền trên định vị tone màu tinh tế */
+.kpi-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.kpi-stat-card.tone-info::before    { background: var(--status-info, #2563eb); }
+.kpi-stat-card.tone-success::before { background: var(--status-success, #10b981); }
+.kpi-stat-card.tone-warning::before { background: var(--status-warning, #f59e0b); }
+.kpi-stat-card.tone-danger::before  { background: var(--status-danger, #ef4444); }
+
+/* Hàng tiêu đề & Icon */
+.kpi-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.kpi-stat-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kpi-stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tone-info .kpi-stat-icon {
+  background: var(--status-info-soft, #eff6ff);
+  color: var(--status-info-text, #1e40af);
+}
+
+.tone-success .kpi-stat-icon {
+  background: var(--status-success-soft, #ecfdf5);
+  color: var(--status-success-text, #166534);
+}
+
+.tone-warning .kpi-stat-icon {
+  background: var(--status-warning-soft, #fffbeb);
+  color: var(--status-warning-text, #92400e);
+}
+
+.tone-danger .kpi-stat-icon {
+  background: var(--status-danger-soft, #fef2f2);
+  color: var(--status-danger-text, #991b1b);
+}
+
+.kpi-stat-label {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-muted-foreground, #52647a);
+  letter-spacing: 0.1px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hàng giá trị số lớn & đơn vị */
+.kpi-stat-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.kpi-stat-number {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--color-foreground, #1b2c43);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+
+.tone-info .kpi-stat-number    { color: #1e3a8a; }
+.tone-success .kpi-stat-number { color: #14532d; }
+.tone-warning .kpi-stat-number { color: #854d0e; }
+.tone-danger .kpi-stat-number  { color: #991b1b; }
+
+.kpi-stat-unit {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-muted-foreground, #52647a);
+}
+
+/* Chú thích phía dưới */
+.kpi-stat-note {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 12px;
+  color: var(--color-muted-foreground, #52647a);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

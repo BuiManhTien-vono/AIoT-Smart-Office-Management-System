@@ -49,6 +49,16 @@ public sealed class ReportingController(IReportingService reportingService) : Co
         return Ok(summaries);
     }
 
+    [HttpGet("weekly-report")]
+    public async Task<IActionResult> GetWeeklyReport(
+        [FromQuery] DateOnly? date,
+        [FromQuery] Guid? departmentId,
+        CancellationToken ct)
+    {
+        var report = await reportingService.GetWeeklyReportAsync(date, departmentId, ct);
+        return Ok(report);
+    }
+
     [HttpGet("monthly-report")]
     public async Task<IActionResult> GetMonthlyReport(
         [FromQuery] int? year,

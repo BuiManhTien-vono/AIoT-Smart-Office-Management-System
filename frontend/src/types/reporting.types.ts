@@ -26,6 +26,21 @@ export interface MonthlyDepartmentReport {
   dailyBreakdown: DailyDepartmentSummary[]
 }
 
+export interface WeeklyDepartmentReport {
+  startDate: string
+  endDate: string
+  weekNumber: number
+  year: number
+  departmentId: string | null
+  totalDaysRecorded: number
+  totalPresentManDays: number
+  totalLateEvents: number
+  totalAbsentManDays: number
+  totalProlongedAwayEvents: number
+  totalSecurityAlerts: number
+  dailyBreakdown: DailyDepartmentSummary[]
+}
+
 export interface ReportFilters {
   year: number
   month: number

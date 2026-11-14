@@ -28,6 +28,11 @@ public interface IReportingService
         Guid? departmentId = null,
         CancellationToken ct = default);
 
+    Task<WeeklyDepartmentReportDto> GetWeeklyReportAsync(
+        DateOnly? date = null,
+        Guid? departmentId = null,
+        CancellationToken ct = default);
+
     Task<byte[]> ExportMonthlyReportCsvAsync(
         int year,
         int month,

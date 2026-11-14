@@ -180,6 +180,51 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
             DailyBreakdown: dtos);
     }
 
+    public async Task<WeeklyDepartmentReportDto> GetWeeklyReportAsync(
+        DateOnly? date = null,
+        Guid? departmentId = null,
+        CancellationToken ct = default)
+    {
+        var targetDate = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var dayOfWeek = (int)targetDate.DayOfWeek;
+        // Chuẩn tuần: Thứ 2 là ngày bắt đầu tuần, Chủ nhật là ngày kết thúc
+        var daysFromMonday = dayOfWeek == 0 ? 6 : dayOfWeek - 1;
+        var startDate = targetDate.AddDays(-daysFromMonday);
+        var endDate = startDate.AddDays(6);
+
+        var weekNumber = System.Globalization.ISOWeek.GetWeekOfYear(startDate.ToDateTime(TimeOnly.MinValue));
+        var weekYear = System.Globalization.ISOWeek.GetYear(startDate.ToDateTime(TimeOnly.MinValue));
+
+        var query = dbContext.DailyDepartmentSummaries
+            .Where(x => x.SummaryDate >= startDate && x.SummaryDate <= endDate);
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(x => x.DepartmentId == departmentId.Value);
+        }
+
+        var items = await query
+            .OrderBy(x => x.SummaryDate)
+            .ThenBy(x => x.DepartmentCode)
+            .ToListAsync(ct);
+
+        var dtos = items.Select(MapSummary).ToList();
+
+        return new WeeklyDepartmentReportDto(
+            StartDate: startDate,
+            EndDate: endDate,
+            WeekNumber: weekNumber,
+            Year: weekYear,
+            DepartmentId: departmentId,
+            TotalDaysRecorded: dtos.Select(x => x.SummaryDate).Distinct().Count(),
+            TotalPresentManDays: dtos.Sum(x => x.PresentCount),
+            TotalLateEvents: dtos.Sum(x => x.LateCount),
+            TotalAbsentManDays: dtos.Sum(x => x.AbsentCount),
+            TotalProlongedAwayEvents: dtos.Sum(x => x.ProlongedAwayEvents),
+            TotalSecurityAlerts: dtos.Sum(x => x.SecurityAlertsCount),
+            DailyBreakdown: dtos);
+    }
+
     public async Task<byte[]> ExportMonthlyReportCsvAsync(
         int year,
         int month,
