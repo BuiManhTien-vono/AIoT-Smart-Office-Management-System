@@ -113,6 +113,18 @@ public sealed class OccupancyController(IOccupancyService occupancyService) : Co
         return Ok(seats);
     }
 
+    [HttpPost("seats/batch-action")]
+    public async Task<IActionResult> BatchSeatAction([FromBody] BatchSeatActionRequest request, CancellationToken ct)
+    {
+        var result = await occupancyService.BatchUpdateSeatsAsync(request, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
     [HttpPost("seats")]
     public async Task<IActionResult> CreateSeat([FromBody] CreateSeatRequest request, CancellationToken ct)
     {

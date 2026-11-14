@@ -61,5 +61,9 @@ public interface IOccupancyService
     Task<Result<int>> ResetCameraSeatsAsync(
         string cameraCode,
         CancellationToken ct = default);
+
+    Task<Result<BatchSeatActionResult>> BatchUpdateSeatsAsync(
+        BatchSeatActionRequest request,
+        CancellationToken ct = default);
 }
 

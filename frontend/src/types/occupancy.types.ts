@@ -145,3 +145,16 @@ export interface WrongSeatAlertEvent {
   detectedEmployeeId: string
 }
 
+export interface BatchSeatActionInput {
+  seatIds: string[]
+  action: 'SET_STATE' | 'UNASSIGN_EMPLOYEE' | 'CHANGE_ZONE_TYPE' | 'DELETE'
+  newState?: SeatState
+  zoneType?: ZoneType
+}
+
+export interface BatchSeatActionResult {
+  processedCount: number
+  action: string
+  message: string
+}
+

@@ -6,16 +6,23 @@ import {
   Warning,
   Armchair,
   X,
+  Television,
+  SquaresFour,
+  Table,
 } from '@phosphor-icons/react'
 import { LiveSeatMapGrid } from '../../components/seat-map/LiveSeatMapGrid'
-import { getSeatMap } from '../../services/occupancyService'
+import { MultiCameraMonitorView } from '../../components/seat-map/MultiCameraMonitorView'
+import { BatchSeatManagerView } from '../../components/seat-map/BatchSeatManagerView'
+import { getSeatMap, listCameras, resetCameraSeats, batchSeatAction } from '../../services/occupancyService'
 import { listDepartments } from '../../services/biometricsService'
 import { signalrService } from '../../services/signalrService'
 import type { Session, Department } from '../../types/auth.types'
 import type {
   Seat,
+  Camera,
   SeatStateChangedEvent,
   ProlongedAbsenceAlertEvent,
+  BatchSeatActionInput,
 } from '../../types/occupancy.types'
 import './seat-map.css'
 
@@ -29,8 +36,12 @@ interface AlertToast {
   timestamp: Date
 }
 
+export type SeatMapViewMode = 'multi-camera' | 'batch-manager' | 'classic-grid'
+
 export function LiveSeatMapPage({ session }: Props) {
+  const [viewMode, setViewMode] = useState<SeatMapViewMode>('multi-camera')
   const [departments, setDepartments] = useState<Department[]>([])
+  const [cameras, setCameras] = useState<Camera[]>([])
   const [selectedDeptId, setSelectedDeptId] = useState<string>(
     session.user.departmentId || 'ALL'
   )
@@ -48,15 +59,21 @@ export function LiveSeatMapPage({ session }: Props) {
     activeDeptRef.current = selectedDeptId
   }, [selectedDeptId])
 
-  // 1. Tải danh sách phòng ban
+  // 1. Tải danh sách phòng ban & camera
   useEffect(() => {
     let isMounted = true
-    listDepartments(session.accessToken)
-      .then(depts => {
-        if (isMounted) setDepartments(depts)
+    Promise.all([
+      listDepartments(session.accessToken),
+      listCameras(session.accessToken),
+    ])
+      .then(([depts, cams]) => {
+        if (isMounted) {
+          setDepartments(depts)
+          setCameras(cams)
+        }
       })
       .catch(err => {
-        console.warn('Không tải được danh sách phòng ban:', err)
+        console.warn('Không tải được danh mục ban đầu:', err)
       })
     return () => {
       isMounted = false
@@ -69,8 +86,12 @@ export function LiveSeatMapPage({ session }: Props) {
     setError(null)
     try {
       const deptId = selectedDeptId === 'ALL' ? undefined : selectedDeptId
-      const data = await getSeatMap(session.accessToken, deptId)
-      setSeats(data)
+      const [seatData, camData] = await Promise.all([
+        getSeatMap(session.accessToken, deptId),
+        listCameras(session.accessToken, deptId),
+      ])
+      setSeats(seatData)
+      setCameras(camData)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Lỗi khi tải sơ đồ chỗ ngồi.'
       setError(msg)
@@ -85,12 +106,10 @@ export function LiveSeatMapPage({ session }: Props) {
 
   // 3. Khởi tạo kết nối SignalR & Lắng nghe sự kiện đẩy thời gian thực
   useEffect(() => {
-    // Lắng nghe trạng thái kết nối
     const unsubState = signalrService.onConnectionState(state => {
       setSignalrState(state)
     })
 
-    // Lắng nghe sự kiện chuyển đổi trạng thái FSM của ghế
     const unsubSeatState = signalrService.onSeatStateChanged(
       (event: SeatStateChangedEvent) => {
         setSeats(prevSeats => {
@@ -113,7 +132,6 @@ export function LiveSeatMapPage({ session }: Props) {
       }
     )
 
-    // Lắng nghe sự kiện cảnh báo rời chỗ quá hạn (Prolonged Absence)
     const unsubAlert = signalrService.onProlongedAbsence(
       (event: ProlongedAbsenceAlertEvent) => {
         const awayMinutes = Math.round(event.awayDurationSeconds / 60)
@@ -122,11 +140,10 @@ export function LiveSeatMapPage({ session }: Props) {
           message: `Bàn [${event.seatCode}] đã vắng mặt hơn ${awayMinutes} phút mà chưa trở lại.`,
           timestamp: new Date(),
         }
-        setAlerts(prev => [newAlert, ...prev.slice(0, 4)]) // Giữ tối đa 5 thông báo mới nhất
+        setAlerts(prev => [newAlert, ...prev.slice(0, 4)])
       }
     )
 
-    // Bắt đầu kết nối
     signalrService
       .start(session.accessToken)
       .then(() => {
@@ -148,7 +165,7 @@ export function LiveSeatMapPage({ session }: Props) {
     }
   }, [session.accessToken, session.user.role, selectedDeptId])
 
-  // Xử lý chuyển đổi phòng ban (Tham gia nhóm SignalR tương ứng)
+  // Xử lý chuyển đổi phòng ban
   const handleDepartmentChange = (newDeptId: string) => {
     if (activeDeptRef.current !== 'ALL') {
       void signalrService.leaveDepartmentGroup(activeDeptRef.current)
@@ -161,6 +178,18 @@ export function LiveSeatMapPage({ session }: Props) {
 
   const dismissAlert = (id: string) => {
     setAlerts(prev => prev.filter(a => a.id !== id))
+  }
+
+  // Xử lý Reset toàn bộ bàn của 1 camera
+  const handleResetCamera = async (cameraCode: string) => {
+    await resetCameraSeats(cameraCode, session.accessToken)
+    await loadSeatMap()
+  }
+
+  // Xử lý thao tác hàng loạt trên nhiều bàn
+  const handleBatchAction = async (input: BatchSeatActionInput) => {
+    await batchSeatAction(session.accessToken, input)
+    await loadSeatMap()
   }
 
   // Nhãn trạng thái SignalR
@@ -180,7 +209,7 @@ export function LiveSeatMapPage({ session }: Props) {
       <div className="seat-map-header">
         <div className="seat-map-title-wrap">
           <p className="eyebrow">HIỆN DIỆN &amp; KHÔNG GIAN</p>
-          <h1>Sơ đồ Chỗ ngồi Thời gian thực</h1>
+          <h1>Sơ đồ Chỗ ngồi &amp; Giám sát Đa Camera</h1>
         </div>
 
         <div className="seat-map-actions-wrap">
@@ -222,7 +251,37 @@ export function LiveSeatMapPage({ session }: Props) {
         </div>
       </div>
 
-      {/* 2. Dải Thông báo Cảnh báo Rời chỗ quá hạn nổi (Realtime Alert Toasts) */}
+      {/* 2. Thanh Tabs Chế độ xem: Đa màn hình Camera | Quản lý nhiều bàn | Lưới truyền thống */}
+      <nav className="seat-map-view-tabs" aria-label="Chế độ giám sát chỗ ngồi">
+        <button
+          type="button"
+          className={`view-tab-btn ${viewMode === 'multi-camera' ? 'active' : ''}`}
+          onClick={() => setViewMode('multi-camera')}
+        >
+          <Television size={18} weight="bold" />
+          <span>Đa màn hình Camera ({cameras.length} camera)</span>
+        </button>
+
+        <button
+          type="button"
+          className={`view-tab-btn ${viewMode === 'batch-manager' ? 'active' : ''}`}
+          onClick={() => setViewMode('batch-manager')}
+        >
+          <Table size={18} weight="bold" />
+          <span>Quản lý nhiều bàn cùng lúc</span>
+        </button>
+
+        <button
+          type="button"
+          className={`view-tab-btn ${viewMode === 'classic-grid' ? 'active' : ''}`}
+          onClick={() => setViewMode('classic-grid')}
+        >
+          <SquaresFour size={18} weight="bold" />
+          <span>Lưới chi tiết toàn văn phòng ({seats.length} bàn)</span>
+        </button>
+      </nav>
+
+      {/* 3. Dải Thông báo Cảnh báo Rời chỗ quá hạn nổi (Realtime Alert Toasts) */}
       {alerts.length > 0 && (
         <div className="seat-map-alerts-container">
           {alerts.map(alert => (
@@ -244,7 +303,7 @@ export function LiveSeatMapPage({ session }: Props) {
         </div>
       )}
 
-      {/* 3. Lỗi nạp dữ liệu */}
+      {/* 4. Lỗi nạp dữ liệu */}
       {error && (
         <div className="alert alert-error">
           <Warning size={20} weight="bold" />
@@ -259,20 +318,42 @@ export function LiveSeatMapPage({ session }: Props) {
         </div>
       )}
 
-      {/* 4. Nội dung Sơ đồ Chỗ ngồi */}
-      {loading && seats.length === 0 ? (
+      {/* 5. Nội dung Chế độ xem tương ứng */}
+      {loading && seats.length === 0 && cameras.length === 0 ? (
         <div className="panel empty-state">
           <ArrowClockwise size={32} className="spin muted" />
-          <p className="muted">Đang tải sơ đồ bố trí chỗ ngồi văn phòng...</p>
+          <p className="muted">Đang tải cấu hình đa camera và sơ đồ chỗ ngồi...</p>
         </div>
       ) : (
-        <LiveSeatMapGrid
-          seats={seats}
-          onSelectSeat={seat => setSelectedSeatDetail(seat)}
-        />
+        <>
+          {viewMode === 'multi-camera' && (
+            <MultiCameraMonitorView
+              cameras={cameras}
+              seats={seats}
+              onSelectSeat={seat => setSelectedSeatDetail(seat)}
+              onResetCamera={handleResetCamera}
+            />
+          )}
+
+          {viewMode === 'batch-manager' && (
+            <BatchSeatManagerView
+              seats={seats}
+              cameras={cameras}
+              onSelectSeat={seat => setSelectedSeatDetail(seat)}
+              onBatchAction={handleBatchAction}
+            />
+          )}
+
+          {viewMode === 'classic-grid' && (
+            <LiveSeatMapGrid
+              seats={seats}
+              onSelectSeat={seat => setSelectedSeatDetail(seat)}
+            />
+          )}
+        </>
       )}
 
-      {/* 5. Modal Chi tiết Ghế */}
+      {/* 6. Modal Chi tiết Ghế */}
       {selectedSeatDetail && (
         <div
           className="modal-backdrop"

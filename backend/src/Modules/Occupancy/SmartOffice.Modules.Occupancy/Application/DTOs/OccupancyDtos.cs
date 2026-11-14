@@ -142,3 +142,14 @@ public sealed record SeatOccupancyLogResponse(
     int DurationSeconds,
     DateTimeOffset RecordedAt);
 
+public sealed record BatchSeatActionRequest(
+    IReadOnlyList<Guid> SeatIds,
+    string Action,
+    string? NewState = null,
+    string? ZoneType = null);
+
+public sealed record BatchSeatActionResult(
+    int ProcessedCount,
+    string Action,
+    string Message);
+

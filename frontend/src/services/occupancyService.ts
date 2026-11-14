@@ -9,6 +9,8 @@ import type {
   UpdateSeatPolygonInput,
   SyncAiZonesResponse,
   DetectPreviewResponse,
+  BatchSeatActionInput,
+  BatchSeatActionResult,
 } from '../types/occupancy.types'
 
 const AI_BASE_URL = (import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000').replace(/\/+$/, '')
@@ -284,6 +286,22 @@ export async function resetAiFsm(): Promise<{ status: string; message: string }>
   }
 
   return { status: 'ok', message: 'FSM reset locally' }
+}
+
+/**
+ * Thao tác hàng loạt trên nhiều bàn làm việc (Đổi trạng thái, hủy gán nhân viên, xóa bàn...).
+ */
+export async function batchSeatAction(
+  token: string,
+  input: BatchSeatActionInput,
+  signal?: AbortSignal
+): Promise<BatchSeatActionResult> {
+  return apiRequest<BatchSeatActionResult>('/occupancy/seats/batch-action', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(input),
+    signal,
+  })
 }
 
 

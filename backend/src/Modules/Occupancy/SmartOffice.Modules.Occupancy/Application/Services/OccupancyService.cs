@@ -738,6 +738,114 @@ public sealed class OccupancyService(
         return Result.Success(resetCount);
     }
 
+    public async Task<Result<BatchSeatActionResult>> BatchUpdateSeatsAsync(
+        BatchSeatActionRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.SeatIds is null || request.SeatIds.Count == 0)
+        {
+            return Result.Failure<BatchSeatActionResult>(
+                new Error("EMPTY_SEAT_IDS", "Danh sách bàn cần thao tác không được để trống."));
+        }
+
+        var seats = await dbContext.Seats
+            .Where(s => request.SeatIds.Contains(s.Id))
+            .ToListAsync(ct);
+
+        if (seats.Count == 0)
+        {
+            return Result.Failure<BatchSeatActionResult>(
+                new Error("SEATS_NOT_FOUND", "Không tìm thấy bàn làm việc nào tương ứng."));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var pendingEvents = new List<SeatStateChangedIntegrationEvent>();
+        var action = request.Action?.Trim().ToUpperInvariant() ?? "SET_STATE";
+        int processedCount = 0;
+
+        switch (action)
+        {
+            case "SET_STATE":
+                var targetState = request.NewState?.Trim().ToUpperInvariant() ?? SeatStateMachine.StateEmpty;
+                foreach (var seat in seats)
+                {
+                    if (seat.CurrentState != targetState)
+                    {
+                        var prevState = seat.CurrentState;
+                        seat.CurrentState = targetState;
+                        seat.StateUpdatedAt = now;
+                        processedCount++;
+
+                        dbContext.SeatOccupancyLogs.Add(new SeatOccupancyLog
+                        {
+                            SeatId = seat.Id,
+                            DetectedEmployeeId = seat.AssignedEmployeeId,
+                            PreviousState = prevState,
+                            NewState = targetState,
+                            DurationSeconds = 0,
+                            RecordedAt = now
+                        });
+
+                        pendingEvents.Add(new SeatStateChangedIntegrationEvent(
+                            Guid.NewGuid(),
+                            now,
+                            seat.Id,
+                            seat.SeatCode,
+                            seat.CameraId,
+                            seat.DepartmentId,
+                            seat.AssignedEmployeeId,
+                            null,
+                            prevState,
+                            targetState,
+                            0,
+                            seat.ActiveSecondsToday));
+                    }
+                }
+                break;
+
+            case "UNASSIGN_EMPLOYEE":
+                foreach (var seat in seats)
+                {
+                    if (seat.AssignedEmployeeId.HasValue)
+                    {
+                        seat.AssignedEmployeeId = null;
+                        processedCount++;
+                    }
+                }
+                break;
+
+            case "CHANGE_ZONE_TYPE":
+                var zoneType = request.ZoneType?.Trim().ToUpperInvariant() ?? "WORK_DESK";
+                foreach (var seat in seats)
+                {
+                    seat.ZoneType = zoneType;
+                    processedCount++;
+                }
+                break;
+
+            case "DELETE":
+                dbContext.Seats.RemoveRange(seats);
+                processedCount = seats.Count;
+                break;
+
+            default:
+                return Result.Failure<BatchSeatActionResult>(
+                    new Error("INVALID_ACTION", $"Hành động '{action}' không hợp lệ."));
+        }
+
+        await dbContext.SaveChangesAsync(ct);
+
+        foreach (var evt in pendingEvents)
+        {
+            await eventBus.PublishAsync(evt, ct);
+        }
+
+        return Result.Success(new BatchSeatActionResult(
+            processedCount,
+            action,
+            $"Thao tác '{action}' thành công trên {processedCount}/{seats.Count} bàn làm việc."));
+    }
+
     private static IReadOnlyList<PolygonPointDto> DeserializePolygon(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

@@ -512,3 +512,498 @@
   text-align: center;
   gap: 12px;
 }
+
+/* =============================================================================
+   CHẾ ĐỘ XEM ĐA MÀN HÌNH CAMERA & QUẢN LÝ NHIỀU BÀN CÙNG LÚC
+   ============================================================================= */
+
+/* 1. Thanh Tab Chế độ xem */
+.seat-map-view-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  overflow-x: auto;
+}
+
+.view-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease-in-out;
+}
+
+.view-tab-btn:hover {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+.view-tab-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+/* 2. Toolbar Đa màn hình Camera */
+.multi-camera-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--panel-padding);
+  flex-wrap: wrap;
+}
+
+.camera-type-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.layout-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-background);
+  padding: 2px 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+}
+
+.layout-switcher .button-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+}
+
+.layout-switcher .button-icon:hover {
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+
+.layout-switcher .button-icon.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+/* 3. Lưới các Khung Màn Hình Camera (CCTV Grid) */
+.camera-monitor-grid {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.camera-monitor-grid.layout-auto {
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+}
+
+.camera-monitor-grid.layout-1x1 {
+  grid-template-columns: 1fr;
+}
+
+.camera-monitor-grid.layout-1x2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.camera-monitor-grid.layout-2x2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.camera-monitor-grid.layout-3x3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Thẻ Màn Hình Camera */
+.camera-screen-card {
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  border: 2px solid #334155;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.camera-screen-focused {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+}
+
+.camera-screen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.screen-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.camera-code-tag {
+  background: #0f172a;
+  color: #38bdf8;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.screen-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button-icon-screen {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #cbd5e1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.button-icon-screen:hover {
+  background: #334155;
+  color: #fff;
+  border-color: #64748b;
+}
+
+/* Thống kê bàn trên màn hình camera */
+.camera-screen-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.stat-pill.stat-present { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+.stat-pill.stat-away { background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+.stat-pill.stat-alert { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.stat-pill.stat-empty { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+
+/* Khung video / Trực quan hóa bàn */
+.camera-video-frame {
+  position: relative;
+  min-height: 220px;
+  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.video-stream-overlay {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.no-seats-in-cam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 10px;
+  gap: 12px;
+}
+
+.camera-desk-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.desk-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  transition: transform 0.15s, box-shadow 0.15s;
+  min-height: 72px;
+}
+
+.desk-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.desk-cell.state-empty {
+  background: #334155;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
+.desk-cell.state-present {
+  background: #14532d;
+  border-color: #22c55e;
+  color: #bbf7d0;
+}
+
+.desk-cell.state-away {
+  background: #713f12;
+  border-color: #eab308;
+  color: #fef08a;
+}
+
+.desk-cell.state-alert {
+  background: #7f1d1d;
+  border-color: #ef4444;
+  color: #fecaca;
+  animation: pulseAlert 1.5s infinite;
+}
+
+@keyframes pulseAlert {
+  0%, 100% { border-color: #ef4444; }
+  50% { border-color: #fca5a5; }
+}
+
+.desk-code {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.desk-user {
+  font-size: 11px;
+  margin: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.muted-name {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.desk-state-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* =============================================================================
+   CHẾ ĐỘ QUẢN LÝ NHIỀU BÀN CÙNG LÚC (BATCH SEAT MANAGER)
+   ============================================================================= */
+
+.batch-seat-manager {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.batch-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--panel-padding);
+  flex-wrap: wrap;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+}
+
+.search-wrap .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted-foreground);
+}
+
+.search-wrap input {
+  padding-left: 36px;
+  width: 100%;
+}
+
+.filter-selects {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.selection-helper-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 4px;
+  flex-wrap: wrap;
+}
+
+.selection-quick-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.selection-counter {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.selection-counter strong {
+  color: var(--color-primary);
+}
+
+/* Floating Batch Bar */
+.floating-batch-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.15);
+  flex-wrap: wrap;
+  animation: slideInDown 0.2s ease;
+}
+
+.batch-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.batch-hint {
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+.batch-actions-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.batch-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-group-label {
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  margin-right: 4px;
+}
+
+.row-selected {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+@media (max-width: 900px) {
+  .camera-monitor-grid.layout-2x2,
+  .camera-monitor-grid.layout-3x3,
+  .camera-monitor-grid.layout-1x2 {
+    grid-template-columns: 1fr;
+  }
+  .floating-batch-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .batch-actions-cluster {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .batch-btn-group {
+    flex-wrap: wrap;
+  }
+}
+
