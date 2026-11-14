@@ -1,0 +1,544 @@
+/* =============================================================================
+   SECURITY OPERATIONS CENTER (SOC) & OT MANAGEMENT STYLES
+   Chuẩn font Inter, bề mặt glassmorphism, tương phản cao và trực quan
+   ============================================================================= */
+
+.security-soc-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  padding-bottom: 32px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.security-soc-page * {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* 1. Header Trang & Trạng thái Trực đêm */
+.soc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.soc-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.soc-title-wrap h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.soc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Dải trạng thái Chế độ Trực đêm (Night Guard Banner) */
+.night-guard-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-radius: var(--radius-panel, 12px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  box-shadow: var(--shadow-panel);
+}
+
+.night-guard-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.guard-pulse-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.guard-pulse-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: guard-pulse 2s infinite;
+}
+
+.guard-pulse-dot.inactive {
+  background: #94a3b8;
+}
+
+@keyframes guard-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.night-guard-text strong {
+  font-size: 14px;
+  color: var(--color-foreground, #1b2c43);
+  margin-right: 8px;
+}
+
+.night-guard-text span {
+  font-size: 13px;
+  color: var(--color-muted-foreground, #52647a);
+}
+
+/* 2. Thanh Tabs Phân Hệ: Sự cố An ninh | Đăng ký Làm thêm ngoài giờ (OT) */
+.soc-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  border-radius: var(--radius-panel, 12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.soc-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control, 8px);
+  background: transparent;
+  color: var(--color-muted-foreground, #52647a);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.soc-tab-btn:hover {
+  background: var(--color-background, #f5f7fb);
+  color: var(--color-foreground, #1b2c43);
+}
+
+.soc-tab-btn.active {
+  background: var(--color-primary, #2563eb);
+  color: #ffffff;
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+/* 3. Lưới Thống kê KPI An ninh */
+.soc-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.soc-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-radius: var(--radius-panel, 12px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  box-shadow: var(--shadow-panel);
+}
+
+.soc-kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.soc-kpi-icon.icon-danger  { background: #fee2e2; color: #dc2626; }
+.soc-kpi-icon.icon-warning { background: #fef3c7; color: #d97706; }
+.soc-kpi-icon.icon-success { background: #dcfce7; color: #16a34a; }
+.soc-kpi-icon.icon-info    { background: #eff6ff; color: #2563eb; }
+
+.soc-kpi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.soc-kpi-label {
+  font-size: 12.5px;
+  color: var(--color-muted-foreground, #52647a);
+  font-weight: 500;
+}
+
+.soc-kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-foreground, #1b2c43);
+  line-height: 1.2;
+}
+
+/* 4. Thanh Bộ Lọc & Tìm Kiếm */
+.soc-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius-panel, 12px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  flex-wrap: wrap;
+}
+
+.filter-left-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-chip-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #dce4ee);
+  background: var(--color-surface, #ffffff);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted-foreground, #52647a);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: var(--color-background, #f5f7fb);
+  color: var(--color-foreground, #1b2c43);
+}
+
+.filter-chip.active {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #1e293b;
+}
+
+/* 5. Thẻ Báo động & Sự cố An ninh */
+.incident-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.incident-card {
+  display: flex;
+  border-radius: var(--radius-panel, 12px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(16, 35, 59, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.incident-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 35, 59, 0.09);
+}
+
+.incident-level-strip {
+  width: 6px;
+  flex-shrink: 0;
+}
+
+.strip-level-3   { background: #ef4444; }
+.strip-spoofing  { background: #8b5cf6; }
+.strip-level-2   { background: #f59e0b; }
+.strip-level-1   { background: #10b981; }
+
+.incident-card-content {
+  flex: 1;
+  display: flex;
+  gap: 18px;
+  padding: 16px 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Ảnh Snapshot Hiện Trường */
+.incident-snapshot-wrap {
+  position: relative;
+  width: 110px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0f172a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.incident-snapshot-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.incident-snapshot-wrap:hover .incident-snapshot-img {
+  transform: scale(1.06);
+}
+
+.snapshot-zoom-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.incident-snapshot-wrap:hover .snapshot-zoom-hint {
+  opacity: 1;
+}
+
+.no-snapshot-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 11px;
+  gap: 4px;
+}
+
+/* Chi tiết Sự cố */
+.incident-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.incident-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.incident-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-foreground, #1b2c43);
+  margin: 0;
+}
+
+.badge-level-3  { background: #fee2e2; color: #991b1b; font-weight: 600; }
+.badge-spoofing { background: #ede9fe; color: #5b21b6; font-weight: 600; }
+.badge-level-2  { background: #fef3c7; color: #92400e; font-weight: 600; }
+.badge-level-1  { background: #dcfce7; color: #166534; font-weight: 600; }
+
+.incident-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--color-muted-foreground, #52647a);
+  flex-wrap: wrap;
+}
+
+.incident-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.incident-action-summary {
+  font-size: 13px;
+  color: var(--color-foreground, #1b2c43);
+  background: var(--color-background, #f5f7fb);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #dce4ee);
+  margin: 2px 0 0;
+}
+
+.incident-resolution-info {
+  font-size: 12.5px;
+  color: #166534;
+  background: #ecfdf5;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #bbf7d0;
+  margin: 2px 0 0;
+}
+
+/* Nút Hành động Sự cố */
+.incident-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  min-width: 140px;
+}
+
+.button-ack {
+  background: #16a34a;
+  color: #ffffff;
+  border-color: #16a34a;
+}
+.button-ack:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.button-false-alarm {
+  background: #64748b;
+  color: #ffffff;
+  border-color: #64748b;
+}
+.button-false-alarm:hover:not(:disabled) {
+  background: #475569;
+}
+
+/* 6. Modal Dialog Xử lý Ticket */
+.soc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.soc-modal-dialog {
+  background: var(--color-surface, #ffffff);
+  border-radius: var(--radius-panel, 14px);
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--color-border, #dce4ee);
+  overflow: hidden;
+  animation: modal-pop 0.18s ease-out;
+}
+
+@keyframes modal-pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.soc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border, #dce4ee);
+}
+
+.soc-modal-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.soc-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.soc-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--color-background, #f5f7fb);
+  border-top: 1px solid var(--color-border, #dce4ee);
+}
+
+/* Modal Phóng to Snapshot */
+.snapshot-lightbox {
+  max-width: 800px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+}
+
+.snapshot-lightbox .soc-modal-header {
+  border-bottom-color: #334155;
+}
+
+.lightbox-image {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* 7. Bảng Quản lý Đăng ký OT */
+.ot-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dce4ee);
+  border-radius: var(--radius-panel, 12px);
+  flex-wrap: wrap;
+}
+
+.ot-badge-approved { background: #dcfce7; color: #166534; font-weight: 600; }
+.ot-badge-pending  { background: #fef3c7; color: #92400e; font-weight: 600; }
+.ot-badge-rejected { background: #fee2e2; color: #991b1b; font-weight: 600; }
+
+@media (max-width: 768px) {
+  .incident-card-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .incident-snapshot-wrap {
+    width: 100%;
+    height: 140px;
+  }
+  .incident-actions {
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}
