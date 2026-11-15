@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowsOutSimple,
   VideoCamera,
@@ -14,6 +14,14 @@ interface Props {
   onInspectCamera: (camera: Camera) => void
 }
 
+function getEffectiveStreamUrl(source: string): string {
+  const s = source.trim()
+  if (!s) return ''
+  if (/^https?:\/\/[^/]+:8080\/?$/i.test(s)) return s.replace(/\/?$/, '/video')
+  if (/^https?:\/\/[^/]+:4747\/?$/i.test(s)) return s.replace(/\/?$/, '/video')
+  return s
+}
+
 function LiveGridCard({
   camera,
   cameraSeats,
@@ -26,29 +34,89 @@ function LiveGridCard({
   onInspect: () => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const webcamVideoRef = useRef<HTMLVideoElement>(null)
+  const webcamStreamRef = useRef<MediaStream | null>(null)
+  const [webcamError, setWebcamError] = useState(false)
 
-  function getEffectiveStreamUrl(source: string): string {
-    const s = source.trim()
-    if (!s) return ''
-    if (/^https?:\/\/[^/]+:8080\/?$/i.test(s)) return s.replace(/\/?$/, '/video')
-    if (/^https?:\/\/[^/]+:4747\/?$/i.test(s)) return s.replace(/\/?$/, '/video')
-    return s
-  }
+  const rawSource = (camera.streamSource || '').trim()
+  const effectiveSource = getEffectiveStreamUrl(rawSource)
 
-  const effectiveSource = getEffectiveStreamUrl(camera.streamSource || '')
+  const isWebcam =
+    rawSource === '0' ||
+    rawSource === '1' ||
+    rawSource === '2' ||
+    rawSource.toLowerCase().includes('webcam')
+
   const isVideoFile =
     !!effectiveSource &&
     (effectiveSource.endsWith('.mp4') ||
       effectiveSource.endsWith('.webm') ||
       effectiveSource.includes('demo'))
 
+  const isRtspSource = effectiveSource.toLowerCase().startsWith('rtsp://')
+
   const videoSrc = isVideoFile
     ? effectiveSource.startsWith('http') || effectiveSource.startsWith('/')
       ? effectiveSource
       : `/${effectiveSource}`
-    : null
+    : isRtspSource && !camera.calibrationFramePresignedUrl
+      ? '/demo.mp4'
+      : null
 
-  const isLiveStream = !!effectiveSource && !isVideoFile && effectiveSource !== '0'
+  const isLiveStream =
+    !!effectiveSource &&
+    !isVideoFile &&
+    !isWebcam &&
+    !isRtspSource &&
+    (effectiveSource.startsWith('http://') || effectiveSource.startsWith('https://'))
+
+  // Kết nối Webcam trình duyệt khi streamSource là '0' / 'webcam'
+  useEffect(() => {
+    if (!camera.isOnline || !isWebcam) {
+      if (webcamStreamRef.current) {
+        webcamStreamRef.current.getTracks().forEach(t => t.stop())
+        webcamStreamRef.current = null
+      }
+      return
+    }
+
+    let isMounted = true
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setTimeout(() => {
+        if (isMounted) setWebcamError(true)
+      }, 0)
+      return
+    }
+
+    navigator.mediaDevices
+      .getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+      .then(stream => {
+        if (!isMounted) {
+          stream.getTracks().forEach(t => t.stop())
+          return
+        }
+        webcamStreamRef.current = stream
+        setWebcamError(false)
+        if (webcamVideoRef.current) {
+          webcamVideoRef.current.srcObject = stream
+          void webcamVideoRef.current.play().catch(() => {})
+        }
+      })
+      .catch(() => {
+        if (isMounted) setWebcamError(true)
+      })
+
+    return () => {
+      isMounted = false
+      if (webcamStreamRef.current) {
+        webcamStreamRef.current.getTracks().forEach(t => t.stop())
+        webcamStreamRef.current = null
+      }
+    }
+  }, [camera.isOnline, isWebcam])
 
   // Vẽ các đa giác bàn đã lưu lên canvas mini overlay
   useEffect(() => {
@@ -150,7 +218,15 @@ function LiveGridCard({
       </div>
 
       <div className="live-grid-media-wrap">
-        {videoSrc ? (
+        {isWebcam && camera.isOnline && !webcamError ? (
+          <video
+            ref={webcamVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="live-grid-media"
+          />
+        ) : videoSrc ? (
           <video
             src={videoSrc}
             autoPlay
@@ -195,7 +271,7 @@ function LiveGridCard({
         />
 
         {/* Huy hiệu luồng trực tiếp */}
-        {(videoSrc || isLiveStream) && (
+        {(videoSrc || isLiveStream || (isWebcam && camera.isOnline && !webcamError)) && (
           <div className="live-grid-tag">
             <span className="live-dot" />
             <Broadcast size={11} aria-hidden="true" />
