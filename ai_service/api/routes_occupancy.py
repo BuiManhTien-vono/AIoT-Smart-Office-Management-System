@@ -173,7 +173,7 @@ def get_head_detector():
 
 
 @router.post("/detect-preview")
-async def detect_preview(
+def detect_preview(
     file: Optional[UploadFile] = File(None),
     stream_url: Optional[str] = Form(None),
     seats_json: Optional[str] = Form(None),
@@ -186,6 +186,7 @@ async def detect_preview(
     """
     Chạy thử nghiệm mô hình RT-DETR trên 1 khung hình chụp từ Canvas (Phương án 1)
     hoặc kéo trực tiếp từ luồng stream_url của IP Camera/Điện thoại để vượt qua rào cản CORS trình duyệt.
+    Chạy trên Worker ThreadPool (def) để không khóa Event Loop chính của FastAPI.
     """
     try:
         frame = None
@@ -193,7 +194,7 @@ async def detect_preview(
         # 1. Giải mã từ tệp tải lên nếu có
         if file is not None:
             try:
-                contents = await file.read()
+                contents = file.file.read()
                 if len(contents) > 0:
                     nparr = np.frombuffer(contents, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)

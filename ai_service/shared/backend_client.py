@@ -326,6 +326,21 @@ class BackendSyncClient:
             content_type="image/jpeg"
         )
 
+    def upload_attendance_snapshot_async(
+        self,
+        attendance_log_id: str,
+        image_bytes: bytes,
+        filename: str = "checkin.jpg"
+    ) -> None:
+        """Đẩy ảnh chấm công lên R2/S3 ở luồng ngầm (Background Thread) để không làm chậm phản hồi Kiosk."""
+        def _worker():
+            try:
+                self.upload_attendance_snapshot(attendance_log_id, image_bytes, filename)
+            except Exception as exc:
+                self.last_sync_error = f"Upload attendance snapshot failed: {exc}"
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     # =========================================================================
     # 3. MODULE SECURITY: Báo cáo sự cố trực đêm & Giả mạo sinh trắc học
     # =========================================================================
@@ -387,4 +402,19 @@ class BackendSyncClient:
             filename="clip10s.mp4" if is_video else "incident_snapshot.jpg",
             content_type="video/mp4" if is_video else "image/jpeg"
         )
+
+    def upload_security_incident_evidence_async(
+        self,
+        incident_id: str,
+        file_bytes: bytes,
+        evidence_type: str = "SNAPSHOT"
+    ) -> None:
+        """Đẩy bằng chứng sự cố an ninh lên R2/S3 ở luồng ngầm."""
+        def _worker():
+            try:
+                self.upload_security_incident_evidence(incident_id, file_bytes, evidence_type)
+            except Exception as exc:
+                self.last_sync_error = f"Upload incident evidence failed: {exc}"
+
+        threading.Thread(target=_worker, daemon=True).start()
 

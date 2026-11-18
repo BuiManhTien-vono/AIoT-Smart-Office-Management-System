@@ -12,6 +12,55 @@ import type {
 
 const AI_BASE_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000';
 
+/**
+ * Thu nhỏ và nén ảnh ngay trên trình duyệt (Client-side Image Compression)
+ * nếu kích thước vượt quá maxDimension hoặc dung lượng > 180KB,
+ * giúp tốc độ tải ảnh từ Điện thoại/Webcam lên VPS nhanh gấp 5-10 lần.
+ */
+export async function compressImageBlob(
+  fileOrBlob: File | Blob,
+  maxDimension = 960,
+  quality = 0.85
+): Promise<Blob> {
+  if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') {
+    return fileOrBlob;
+  }
+  if (fileOrBlob.size <= 140 * 1024 && fileOrBlob.type === 'image/jpeg') {
+    return fileOrBlob;
+  }
+
+  try {
+    const bitmap = await createImageBitmap(fileOrBlob);
+    const { width, height } = bitmap;
+    const maxSide = Math.max(width, height);
+    const scale = maxSide > maxDimension ? maxDimension / maxSide : 1;
+    const targetW = Math.max(1, Math.round(width * scale));
+    const targetH = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return fileOrBlob;
+    }
+
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+    bitmap.close();
+
+    return await new Promise<Blob>((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob || fileOrBlob),
+        'image/jpeg',
+        quality
+      );
+    });
+  } catch {
+    return fileOrBlob;
+  }
+}
+
 export async function listDepartments(token: string, signal?: AbortSignal): Promise<Department[]> {
   return apiRequest<Department[]>('/biometrics/departments', {
     method: 'GET',
@@ -147,8 +196,9 @@ export async function uploadEmployeeAvatar(
   file: File | Blob,
   signal?: AbortSignal
 ): Promise<BiometricMediaUploadResponse> {
+  const compressed = await compressImageBlob(file, 720, 0.85);
   const formData = new FormData();
-  formData.append('file', file, 'avatar.jpg');
+  formData.append('file', compressed, 'avatar.jpg');
 
   const response = await apiFetch(
     `/biometrics/employees/${encodeURIComponent(employeeId)}/avatar`,
@@ -170,8 +220,9 @@ export async function uploadBiometricSampleImage(
   poseLabel: string = 'FRONTAL',
   signal?: AbortSignal
 ): Promise<BiometricMediaUploadResponse> {
+  const compressed = await compressImageBlob(file, 960, 0.85);
   const formData = new FormData();
-  formData.append('file', file, `${poseLabel.toLowerCase()}_sample.jpg`);
+  formData.append('file', compressed, `${poseLabel.toLowerCase()}_sample.jpg`);
 
   const response = await apiFetch(
     `/biometrics/employees/${encodeURIComponent(employeeId)}/sample-image?poseLabel=${encodeURIComponent(poseLabel)}`,
@@ -194,8 +245,9 @@ export async function extractFaceFeatures(
   file: File | Blob,
   signal?: AbortSignal
 ): Promise<AiExtractFeaturesResponse> {
+  const compressed = await compressImageBlob(file, 960, 0.85);
   const formData = new FormData();
-  formData.append('file', file, 'face.jpg');
+  formData.append('file', compressed, 'face.jpg');
 
   const response = await fetch(`${AI_BASE_URL}/api/v1/face/extract-features`, {
     method: 'POST',
@@ -262,8 +314,9 @@ export async function testGateCheckin(
   gateCameraId = 'GATE_MAIN_CAM_01',
   signal?: AbortSignal
 ): Promise<AiGateCheckinResponse> {
+  const compressed = await compressImageBlob(file, 720, 0.82);
   const formData = new FormData();
-  formData.append('file', file, 'checkin.jpg');
+  formData.append('file', compressed, 'checkin.jpg');
   formData.append('camera_id', gateCameraId);
 
   const response = await fetch(`${AI_BASE_URL}/api/v1/face/gate-checkin`, {
