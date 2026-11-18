@@ -196,7 +196,7 @@ public sealed class S3ObjectStorageService(
             $"{signedHeaders}\n" +
             $"UNSIGNED-PAYLOAD";
 
-        var signature = ComputeAwsV4Signature(options.SecretKey, dateStamp, region, "s3", canonicalRequest);
+        var signature = ComputeAwsV4Signature(options.SecretKey, dateStamp, amzDate, region, "s3", canonicalRequest);
 
         var presignedUrl =
             $"{endpoint}/{bucket}/{normalizedKey}" +
@@ -238,7 +238,7 @@ public sealed class S3ObjectStorageService(
                 $"{signedHeaders}\n" +
                 $"{payloadSha256Hex}";
 
-            var signature = ComputeAwsV4Signature(options.SecretKey, dateStamp, region, "s3", canonicalRequest);
+            var signature = ComputeAwsV4Signature(options.SecretKey, dateStamp, amzDate, region, "s3", canonicalRequest);
             var credentialScope = $"{dateStamp}/{region}/s3/aws4_request";
             var authorizationHeader =
                 $"AWS4-HMAC-SHA256 Credential={options.AccessKey}/{credentialScope}, SignedHeaders={signedHeaders}, Signature={signature}";
@@ -262,6 +262,7 @@ public sealed class S3ObjectStorageService(
     private static string ComputeAwsV4Signature(
         string secretKey,
         string dateStamp,
+        string amzDate,
         string region,
         string service,
         string canonicalRequest)
@@ -273,7 +274,7 @@ public sealed class S3ObjectStorageService(
         var kSigning = HMACSHA256.HashData(kService, Encoding.UTF8.GetBytes("aws4_request"));
 
         var requestHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRequest)));
-        var stringToSign = $"AWS4-HMAC-SHA256\n{dateStamp}\n{dateStamp}/{region}/{service}/aws4_request\n{requestHash}";
+        var stringToSign = $"AWS4-HMAC-SHA256\n{amzDate}\n{dateStamp}/{region}/{service}/aws4_request\n{requestHash}";
         var signatureBytes = HMACSHA256.HashData(kSigning, Encoding.UTF8.GetBytes(stringToSign));
 
         return Convert.ToHexStringLower(signatureBytes);
