@@ -29,6 +29,13 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
 
   // Active view tab: 'directory' (Đăng ký & Quản lý nhân viên) or 'gate_test' (Quét mặt Chấm công)
   const [activeTab, setActiveTab] = useState<'directory' | 'gate_test'>('directory');
+  const [tabSlideDir, setTabSlideDir] = useState<'subtab-slide-right' | 'subtab-slide-left'>('subtab-slide-right');
+
+  const handleTabChange = (nextTab: 'directory' | 'gate_test') => {
+    if (nextTab === activeTab) return;
+    setTabSlideDir(nextTab === 'gate_test' ? 'subtab-slide-right' : 'subtab-slide-left');
+    setActiveTab(nextTab);
+  };
 
   // Modals state
   const [showAddDeptModal, setShowAddDeptModal] = useState<boolean>(false);
@@ -169,203 +176,175 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
         <button
           type="button"
           className={`subnav-tab ${activeTab === 'directory' ? 'active' : ''}`}
-          onClick={() => setActiveTab('directory')}
+          onClick={() => handleTabChange('directory')}
         >
           <Icon name="users" size={18} /> 1. Đăng ký & Danh bạ nhân viên ({filteredEmployees.length})
         </button>
         <button
           type="button"
           className={`subnav-tab ${activeTab === 'gate_test' ? 'active' : ''}`}
-          onClick={() => setActiveTab('gate_test')}
+          onClick={() => handleTabChange('gate_test')}
         >
           <Icon name="camera" size={18} /> 2. Quét mặt Chấm công (Camera Kiosk)
         </button>
       </div>
 
-      {/* Tab 2: Chấm công quét mặt */}
-      {activeTab === 'gate_test' ? (
-        <LiveGateCheckinCard />
-      ) : (
-        <>
-          {/* Filters Bar */}
-          <div className="panel biometrics-filter-toolbar">
-            <label className="field" style={{ minWidth: '220px' }}>
-              <span className="field-caption">PHÒNG BAN</span>
-              <select
-                value={selectedDeptId}
-                onChange={(e) => setSelectedDeptId(e.target.value)}
+      {/* Nội dung Tab có hiệu ứng chuyển cảnh theo hướng */}
+      <div key={`${activeTab}-${selectedDeptId}`} className={`subtab-stage ${tabSlideDir}`}>
+        {activeTab === 'gate_test' ? (
+          <LiveGateCheckinCard />
+        ) : (
+          <>
+            {/* Filters Bar */}
+            <div className="panel biometrics-filter-toolbar">
+              <label className="field" style={{ minWidth: '220px' }}>
+                <span className="field-caption">PHÒNG BAN</span>
+                <select
+                  value={selectedDeptId}
+                  onChange={(e) => setSelectedDeptId(e.target.value)}
+                >
+                  <option value="">Tất cả phòng ban ({departments.length})</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.departmentName} ({dept.departmentCode})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field" style={{ flex: 1, minWidth: '260px' }}>
+                <span className="field-caption">TÌM KIẾM NHÂN VIÊN</span>
+                <input
+                  type="search"
+                  placeholder="Nhập tên, mã nhân viên, email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </label>
+
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => void fetchData()}
+                title="Tải lại danh sách"
               >
-                <option value="">Tất cả phòng ban ({departments.length})</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.departmentName} ({dept.departmentCode})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field" style={{ flex: 1, minWidth: '260px' }}>
-              <span className="field-caption">TÌM KIẾM NHÂN VIÊN</span>
-              <input
-                type="search"
-                placeholder="Nhập tên, mã nhân viên, email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </label>
-
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => void fetchData()}
-              title="Tải lại danh sách"
-            >
-              <Icon name="refresh" size={16} /> Làm mới
-            </button>
-          </div>
-
-          {/* Error Banner */}
-          {error && (
-            <div className="alert alert-error" style={{ marginBottom: '16px' }}>
-              <Icon name="warning" size={18} />
-              <span>{error}</span>
+                <Icon name="refresh" size={16} /> Làm mới
+              </button>
             </div>
-          )}
 
-          {/* Table Container */}
-          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-            <div className="table-wrap">
-              {loading ? (
-                <div className="empty-state">
-                  <p>Đang tải dữ liệu nhân viên...</p>
-                </div>
-              ) : filteredEmployees.length === 0 ? (
-                <div className="empty-state">
-                  <Icon name="users" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
-                  <p>Không tìm thấy nhân viên nào phù hợp tiêu chí lọc.</p>
-                </div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Mã NV</th>
-                      <th>Họ và tên</th>
-                      <th>Phòng ban</th>
-                      <th>Liên hệ</th>
-                      <th>Dữ liệu Sinh trắc khuôn mặt</th>
-                      <th>Trạng thái</th>
-                      <th style={{ textAlign: 'right' }}>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEmployees.map((emp) => {
-                      const deptObj = departments.find((d) => d.id === emp.departmentId);
-                      const deptDisplay = deptObj
-                        ? `${deptObj.departmentName} (${deptObj.departmentCode})`
-                        : emp.departmentCode || '---';
-                      const vectorCount = emp.registeredVectorCount || 0;
+            {/* Error Banner */}
+            {error && (
+              <div className="alert alert-error" style={{ marginBottom: '16px' }}>
+                <Icon name="warning" size={18} />
+                <span>{error}</span>
+              </div>
+            )}
 
-                      return (
-                        <tr key={emp.id}>
-                          <td>
-                            <strong>{emp.employeeCode}</strong>
-                          </td>
-                          <td>
-                            <div className="emp-name-cell">
-                              <span className="emp-avatar" style={{ overflow: 'hidden' }}>
-                                {emp.avatarPresignedUrl ? (
-                                  <img
-                                    src={emp.avatarPresignedUrl}
-                                    alt={emp.fullName}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                  />
-                                ) : (
-                                  emp.fullName.charAt(0).toUpperCase()
-                                )}
-                              </span>
-                              <span style={{ fontWeight: 600 }}>{emp.fullName}</span>
-                            </div>
-                          </td>
-                          <td>{deptDisplay}</td>
-                          <td>
-                            <div style={{ fontSize: '0.875rem' }}>{emp.email || '---'}</div>
-                            {emp.phoneNumber && (
-                              <div className="muted" style={{ fontSize: '0.75rem' }}>{emp.phoneNumber}</div>
-                            )}
-                          </td>
-                          <td>
-                            {vectorCount > 0 ? (
-                              <span className="badge badge-success">
-                                <Icon name="check" size={14} /> {vectorCount} góc đã lưu trong DB
-                              </span>
-                            ) : (
-                              <span className="badge badge-warning">Chưa nạp khuôn mặt</span>
-                            )}
-                          </td>
-                          <td>
-                            <span
-                              className={`badge ${
-                                emp.isActive ? 'badge-success' : 'badge-danger'
-                              }`}
-                            >
-                              {emp.isActive ? 'Đang làm việc' : 'Ngưng hoạt động'}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
-                              {/* Nút Sửa thông tin */}
-                              <button
-                                type="button"
-                                className="button button-secondary"
-                                style={{ minHeight: '32px', padding: '4px 8px', fontSize: '0.8125rem' }}
-                                onClick={() => setEditingEmployee(emp)}
-                                title="Chỉnh sửa thông tin nhân viên"
+            {/* Table Container */}
+            <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="table-wrap">
+                {loading ? (
+                  <div className="empty-state">
+                    <p>Đang tải dữ liệu nhân viên...</p>
+                  </div>
+                ) : filteredEmployees.length === 0 ? (
+                  <div className="empty-state">
+                    <Icon name="users" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
+                    <p>Không tìm thấy nhân viên nào phù hợp tiêu chí lọc.</p>
+                  </div>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Mã NV</th>
+                        <th>Họ và tên</th>
+                        <th>Phòng ban</th>
+                        <th>Liên hệ</th>
+                        <th>Dữ liệu Sinh trắc khuôn mặt</th>
+                        <th>Trạng thái</th>
+                        <th style={{ textAlign: 'right' }}>Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEmployees.map((emp) => {
+                        const deptObj = departments.find((d) => d.id === emp.departmentId);
+                        const deptDisplay = deptObj
+                          ? `${deptObj.departmentName} (${deptObj.departmentCode})`
+                          : emp.departmentCode || '---';
+                        const vectorCount = emp.registeredVectorCount || 0;
+
+                        return (
+                          <tr key={emp.id}>
+                            <td>
+                              <strong>{emp.employeeCode}</strong>
+                            </td>
+                            <td>
+                              <div className="emp-name-cell">
+                                <span className="emp-avatar" style={{ overflow: 'hidden' }}>
+                                  {emp.avatarPresignedUrl ? (
+                                    <img
+                                      src={emp.avatarPresignedUrl}
+                                      alt={emp.fullName}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                  ) : (
+                                    emp.fullName.charAt(0).toUpperCase()
+                                  )}
+                                </span>
+                                <span style={{ fontWeight: 600 }}>{emp.fullName}</span>
+                              </div>
+                            </td>
+                            <td>{deptDisplay}</td>
+                            <td>
+                              <div style={{ fontSize: '0.875rem' }}>{emp.email || '---'}</div>
+                              {emp.phoneNumber && (
+                                <div className="muted" style={{ fontSize: '0.75rem' }}>{emp.phoneNumber}</div>
+                              )}
+                            </td>
+                            <td>
+                              {vectorCount > 0 ? (
+                                <span className="badge badge-success">
+                                  <Icon name="check" size={14} /> {vectorCount} góc đã lưu trong DB
+                                </span>
+                              ) : (
+                                <span className="badge badge-warning">Chưa nạp khuôn mặt</span>
+                              )}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  emp.isActive ? 'badge-success' : 'badge-danger'
+                                }`}
                               >
-                                <Icon name="edit" size={14} /> Sửa
-                              </button>
-
-                              {/* Nút Quét thêm góc */}
-                              <button
-                                type="button"
-                                className="button button-secondary"
-                                style={{ minHeight: '32px', padding: '4px 8px', fontSize: '0.8125rem' }}
-                                onClick={() => setEnrollingEmployee(emp)}
-                                title="Quét thêm góc mặt (Chính diện / Trái / Phải)"
-                              >
-                                <Icon name="camera" size={14} /> Quét mặt
-                              </button>
-
-                              {/* Hành động trạng thái & xóa */}
-                              {emp.isActive ? (
+                                {emp.isActive ? 'Đang làm việc' : 'Ngưng hoạt động'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                                {/* Nút Sửa thông tin */}
                                 <button
                                   type="button"
                                   className="button button-secondary"
-                                  style={{
-                                    minHeight: '32px',
-                                    padding: '4px 8px',
-                                    color: 'var(--status-danger-text)',
-                                  }}
-                                  onClick={() => setDeletingEmployee(emp)}
-                                  title="Ngưng hoạt động hoặc xóa vĩnh viễn"
+                                  style={{ minHeight: '32px', padding: '4px 8px', fontSize: '0.8125rem' }}
+                                  onClick={() => setEditingEmployee(emp)}
+                                  title="Chỉnh sửa thông tin nhân viên"
                                 >
-                                  <Icon name="trash" size={14} />
+                                  <Icon name="edit" size={14} /> Sửa
                                 </button>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="button button-secondary"
-                                    style={{
-                                      minHeight: '32px',
-                                      padding: '4px 8px',
-                                      color: 'var(--status-success-text, #10b981)',
-                                      borderColor: 'rgba(16, 185, 129, 0.4)',
-                                    }}
-                                    onClick={() => void handleQuickReactivate(emp)}
-                                    title="Kích hoạt lại nhân viên"
-                                  >
-                                    <Icon name="check" size={14} /> Kích hoạt lại
-                                  </button>
+
+                                {/* Nút Quét thêm góc */}
+                                <button
+                                  type="button"
+                                  className="button button-secondary"
+                                  style={{ minHeight: '32px', padding: '4px 8px', fontSize: '0.8125rem' }}
+                                  onClick={() => setEnrollingEmployee(emp)}
+                                  title="Quét thêm góc mặt (Chính diện / Trái / Phải)"
+                                >
+                                  <Icon name="camera" size={14} /> Quét mặt
+                                </button>
+
+                                {/* Hành động trạng thái & xóa */}
+                                {emp.isActive ? (
                                   <button
                                     type="button"
                                     className="button button-secondary"
@@ -375,24 +354,54 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
                                       color: 'var(--status-danger-text)',
                                     }}
                                     onClick={() => setDeletingEmployee(emp)}
-                                    title="Xóa vĩnh viễn khỏi CSDL"
+                                    title="Ngưng hoạt động hoặc xóa vĩnh viễn"
                                   >
                                     <Icon name="trash" size={14} />
                                   </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="button button-secondary"
+                                      style={{
+                                        minHeight: '32px',
+                                        padding: '4px 8px',
+                                        color: 'var(--status-success-text, #10b981)',
+                                        borderColor: 'rgba(16, 185, 129, 0.4)',
+                                      }}
+                                      onClick={() => void handleQuickReactivate(emp)}
+                                      title="Kích hoạt lại nhân viên"
+                                    >
+                                      <Icon name="check" size={14} /> Kích hoạt lại
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button button-secondary"
+                                      style={{
+                                        minHeight: '32px',
+                                        padding: '4px 8px',
+                                        color: 'var(--status-danger-text)',
+                                      }}
+                                      onClick={() => setDeletingEmployee(emp)}
+                                      title="Xóa vĩnh viễn khỏi CSDL"
+                                    >
+                                      <Icon name="trash" size={14} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Modal Đăng ký nhân viên 2 bước (Thông tin + Quét mặt AI lưu DB) */}
       <CreateEmployeeWithBiometricsModal
