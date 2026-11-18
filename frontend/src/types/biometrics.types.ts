@@ -22,9 +22,19 @@ export interface Employee {
   departmentCode: string
   defaultShiftId?: string | null
   avatarObjectKey?: string | null
+  avatarPresignedUrl?: string | null
   isActive: boolean
   registeredVectorCount: number
   createdAt: string
+}
+
+export interface BiometricMediaUploadResponse {
+  employeeId: string
+  employeeCode: string
+  objectKey: string
+  presignedViewUrl: string
+  presignedUploadUrl: string
+  expiryMinutes: number
 }
 
 export interface CreateEmployeeInput {

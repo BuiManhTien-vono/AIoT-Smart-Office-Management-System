@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../common/Icon';
 import type { Employee, BiometricPose } from '../../types/biometrics.types';
 import { POSE_OPTIONS } from '../../types/biometrics.types';
-import { extractFaceFeatures, registerBiometricVector } from '../../services/biometricsService';
+import {
+  extractFaceFeatures,
+  registerBiometricVector,
+  uploadBiometricSampleImage,
+  uploadEmployeeAvatar,
+} from '../../services/biometricsService';
 
 interface FaceEnrollmentModalProps {
   isOpen: boolean;
@@ -36,6 +41,7 @@ export function FaceEnrollmentModal({
   const [pose, setPose] = useState<BiometricPose>('FRONTAL');
   const [blurScore, setBlurScore] = useState<number | null>(null);
   const [extractedVector, setExtractedVector] = useState<number[] | null>(null);
+  const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [_detectedBbox, setDetectedBbox] = useState<[number, number, number, number] | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -188,6 +194,7 @@ export function FaceEnrollmentModal({
 
         if (score >= 20 && res.embedding && res.embedding.length === 512) {
           setExtractedVector(res.embedding);
+          setCapturedBlob(payload);
           setErrorMessage(null);
           setSuccessMessage(
             `Đã quét khuôn mặt thành công (độ nét: ${score.toFixed(1)})! Bạn có thể nhấn Lưu vector sinh trắc học.`
@@ -258,6 +265,7 @@ export function FaceEnrollmentModal({
 
   const handleResetScan = () => {
     setExtractedVector(null);
+    setCapturedBlob(null);
     setBlurScore(null);
     setDetectedBbox(null);
     setErrorMessage(null);
@@ -278,7 +286,26 @@ export function FaceEnrollmentModal({
     setErrorMessage(null);
 
     try {
-      const sampleKey = `biometrics/${employee.employeeCode.toLowerCase()}/samples/${pose.toLowerCase()}_${Date.now()}.jpg`;
+      let sampleKey = `biometrics/${employee.employeeCode.toLowerCase()}/samples/${pose.toLowerCase()}_${Date.now()}.jpg`;
+      if (capturedBlob) {
+        try {
+          const sampleUpload = await uploadBiometricSampleImage(
+            token,
+            employee.id,
+            capturedBlob,
+            pose
+          );
+          if (sampleUpload?.objectKey) {
+            sampleKey = sampleUpload.objectKey;
+          }
+          if (pose === 'FRONTAL' || !employee.avatarObjectKey) {
+            await uploadEmployeeAvatar(token, employee.id, capturedBlob);
+          }
+        } catch (uploadErr) {
+          console.warn('Không thể tải ảnh mẫu lên kho lưu trữ R2:', uploadErr);
+        }
+      }
+
       await registerBiometricVector(token, employee.id, {
         embeddingVector: extractedVector,
         sampleImageKey: sampleKey,

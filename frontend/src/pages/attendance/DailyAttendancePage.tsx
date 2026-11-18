@@ -371,8 +371,16 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
                           </td>
                           <td>
                             <div className="emp-name-cell">
-                              <span className="emp-avatar">
-                                {(r.employeeFullName || 'N').charAt(0).toUpperCase()}
+                              <span className="emp-avatar" style={{ overflow: 'hidden' }}>
+                                {r.checkinSnapshotPresignedUrl ? (
+                                  <img
+                                    src={r.checkinSnapshotPresignedUrl}
+                                    alt={r.employeeFullName || 'Snapshot'}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  (r.employeeFullName || 'N').charAt(0).toUpperCase()
+                                )}
                               </span>
                               <span>{r.employeeFullName || 'Nhân viên'}</span>
                             </div>
