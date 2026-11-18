@@ -1,9 +1,10 @@
-import { apiRequest } from './apiClient';
+import { apiRequest, apiFetch } from './apiClient';
 import type {
   Department,
   Employee,
   CreateEmployeeInput,
   RegisterBiometricVectorInput,
+  BiometricMediaUploadResponse,
   AiExtractFeaturesResponse,
   AiVerifyDuplicateResponse,
   AiGateCheckinResponse,
@@ -138,6 +139,51 @@ export async function registerBiometricVector(
       signal,
     }
   );
+}
+
+export async function uploadEmployeeAvatar(
+  token: string,
+  employeeId: string,
+  file: File | Blob,
+  signal?: AbortSignal
+): Promise<BiometricMediaUploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file, 'avatar.jpg');
+
+  const response = await apiFetch(
+    `/biometrics/employees/${encodeURIComponent(employeeId)}/avatar`,
+    {
+      method: 'POST',
+      token,
+      body: formData,
+      signal,
+    }
+  );
+
+  return response.json() as Promise<BiometricMediaUploadResponse>;
+}
+
+export async function uploadBiometricSampleImage(
+  token: string,
+  employeeId: string,
+  file: File | Blob,
+  poseLabel: string = 'FRONTAL',
+  signal?: AbortSignal
+): Promise<BiometricMediaUploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file, `${poseLabel.toLowerCase()}_sample.jpg`);
+
+  const response = await apiFetch(
+    `/biometrics/employees/${encodeURIComponent(employeeId)}/sample-image?poseLabel=${encodeURIComponent(poseLabel)}`,
+    {
+      method: 'POST',
+      token,
+      body: formData,
+      signal,
+    }
+  );
+
+  return response.json() as Promise<BiometricMediaUploadResponse>;
 }
 
 // ==========================================

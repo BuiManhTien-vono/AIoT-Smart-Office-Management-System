@@ -140,6 +140,14 @@ async def gate_camera_checkin(
                 is_spoofing_attempt=True,
                 snapshot_object_key=snapshot_object_key
             )
+            inc_id = incident.get("id") if isinstance(incident, dict) else None
+            if inc_id and contents:
+                try:
+                    ev_res = backend_client.upload_security_incident_evidence(str(inc_id), contents, "SNAPSHOT")
+                    incident["snapshotObjectKey"] = ev_res.get("objectKey")
+                    incident["snapshotPresignedUrl"] = ev_res.get("presignedViewUrl")
+                except Exception:
+                    pass
         except Exception as exc:
             incident = {"error": str(exc)}
 
@@ -181,6 +189,14 @@ async def gate_camera_checkin(
             gate_camera_id=effective_camera_id,
             snapshot_object_key=snapshot_object_key
         )
+        log_id = attendance_res.get("id") if isinstance(attendance_res, dict) else None
+        if log_id and contents and not attendance_res.get("isDebounced", False):
+            try:
+                snap_res = backend_client.upload_attendance_snapshot(str(log_id), contents)
+                attendance_res["checkinSnapshotKey"] = snap_res.get("objectKey")
+                attendance_res["checkinSnapshotPresignedUrl"] = snap_res.get("presignedViewUrl")
+            except Exception:
+                pass
         return {
             "success": True,
             "status": "CHECKED_IN_OUT",

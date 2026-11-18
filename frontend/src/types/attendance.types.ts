@@ -38,6 +38,8 @@ export interface AttendanceRecord {
   matchConfidence: number
   isDebounced: boolean
   message: string
+  checkinSnapshotKey?: string | null
+  checkinSnapshotPresignedUrl?: string | null
 }
 
 export type LeaveType = 'ANNUAL_LEAVE' | 'SICK_LEAVE' | 'PERSONAL_LEAVE' | 'UNPAID_LEAVE'

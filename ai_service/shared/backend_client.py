@@ -84,6 +84,35 @@ class BackendSyncClient:
         except urllib.error.URLError as url_err:
             raise RuntimeError(f"Không thể kết nối tới Backend ({url}): {url_err.reason}")
 
+    def _upload_multipart_file(
+        self,
+        relative_path: str,
+        file_bytes: bytes,
+        filename: str = "snapshot.jpg",
+        content_type: str = "image/jpeg"
+    ) -> Dict[str, Any]:
+        url = f"{self.base_api_url}/{relative_path.lstrip('/')}"
+        boundary = f"----SmartOfficeBoundary{uuid.uuid4().hex}"
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "User-Agent": "SmartOffice-AIService/1.0"
+        }
+
+        req = urllib.request.Request(url=url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=max(self.timeout_sec, 10.0)) as resp:
+            raw_body = resp.read().decode("utf-8")
+            if not raw_body:
+                return {"success": True, "status_code": resp.status}
+            parsed = json.loads(raw_body)
+            return parsed if isinstance(parsed, dict) else {"data": parsed}
+
     # =========================================================================
     # 1. MODULE OCCUPANCY: Kéo cấu hình đa giác vùng bàn & Đẩy State-Sync
     # =========================================================================
@@ -283,6 +312,20 @@ class BackendSyncClient:
         }
         return self._request_json("POST", "attendance/check", payload)
 
+    def upload_attendance_snapshot(
+        self,
+        attendance_log_id: str,
+        image_bytes: bytes,
+        filename: str = "checkin.jpg"
+    ) -> Dict[str, Any]:
+        """Gọi POST /api/v1/attendance/logs/{id}/snapshot để đẩy ảnh chấm công lên R2/S3."""
+        return self._upload_multipart_file(
+            f"attendance/logs/{attendance_log_id}/snapshot",
+            image_bytes,
+            filename=filename,
+            content_type="image/jpeg"
+        )
+
     # =========================================================================
     # 3. MODULE SECURITY: Báo cáo sự cố trực đêm & Giả mạo sinh trắc học
     # =========================================================================
@@ -329,4 +372,19 @@ class BackendSyncClient:
             "detectedAtUtc": detected_at_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         }
         return self._request_json("POST", "security/incidents", payload)
+
+    def upload_security_incident_evidence(
+        self,
+        incident_id: str,
+        file_bytes: bytes,
+        evidence_type: str = "SNAPSHOT"
+    ) -> Dict[str, Any]:
+        """Gọi POST /api/v1/security/incidents/{id}/evidence để đẩy bằng chứng sự cố lên R2/S3."""
+        is_video = evidence_type.upper() == "VIDEO_CLIP"
+        return self._upload_multipart_file(
+            f"security/incidents/{incident_id}/evidence?evidenceType={evidence_type}",
+            file_bytes,
+            filename="clip10s.mp4" if is_video else "incident_snapshot.jpg",
+            content_type="video/mp4" if is_video else "image/jpeg"
+        )
 

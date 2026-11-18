@@ -272,8 +272,16 @@ export function EmployeeDirectoryPage({ session }: EmployeeDirectoryPageProps) {
                           </td>
                           <td>
                             <div className="emp-name-cell">
-                              <span className="emp-avatar">
-                                {emp.fullName.charAt(0).toUpperCase()}
+                              <span className="emp-avatar" style={{ overflow: 'hidden' }}>
+                                {emp.avatarPresignedUrl ? (
+                                  <img
+                                    src={emp.avatarPresignedUrl}
+                                    alt={emp.fullName}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  emp.fullName.charAt(0).toUpperCase()
+                                )}
                               </span>
                               <span style={{ fontWeight: 600 }}>{emp.fullName}</span>
                             </div>
