@@ -9,7 +9,11 @@ public interface IAttendanceService
     Task<IReadOnlyList<ShiftResponse>> GetShiftsAsync(CancellationToken ct = default);
 
     Task<Result<AttendanceRecordResponse>> ProcessCheckInOutAsync(CheckAttendanceRequest request, CancellationToken ct = default);
-    Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(DateOnly? workDate = null, CancellationToken ct = default);
+    Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(
+        DateOnly? workDate = null,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        CancellationToken ct = default);
 
     Task<Result<AttendanceSnapshotUploadResponse>> UploadAttendanceSnapshotAsync(
         Guid attendanceLogId,

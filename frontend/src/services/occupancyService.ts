@@ -11,6 +11,7 @@ import type {
   DetectPreviewResponse,
   BatchSeatActionInput,
   BatchSeatActionResult,
+  SeatOccupancyLog,
 } from '../types/occupancy.types'
 
 const AI_BASE_URL = (import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000').replace(/\/+$/, '')
@@ -300,6 +301,24 @@ export async function batchSeatAction(
     method: 'POST',
     token,
     body: JSON.stringify(input),
+    signal,
+  })
+}
+
+/**
+ * Lấy nhật ký chuyển trạng thái chỗ ngồi từ module Occupancy.
+ */
+export async function listOccupancyLogs(
+  token: string,
+  limit = 100,
+  seatId?: string,
+  signal?: AbortSignal
+): Promise<SeatOccupancyLog[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (seatId) params.set('seatId', seatId)
+  return apiRequest<SeatOccupancyLog[]>(`/occupancy/logs?${params.toString()}`, {
+    method: 'GET',
+    token,
     signal,
   })
 }

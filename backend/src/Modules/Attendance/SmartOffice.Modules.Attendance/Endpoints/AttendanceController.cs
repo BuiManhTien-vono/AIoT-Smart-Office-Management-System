@@ -41,9 +41,13 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
     }
 
     [HttpGet("logs")]
-    public async Task<IActionResult> GetDailyLogs([FromQuery] DateOnly? date, CancellationToken ct)
+    public async Task<IActionResult> GetDailyLogs(
+        [FromQuery] DateOnly? date,
+        [FromQuery] DateOnly? fromDate,
+        [FromQuery] DateOnly? toDate,
+        CancellationToken ct)
     {
-        var logs = await attendanceService.GetDailyAttendanceLogsAsync(date, ct);
+        var logs = await attendanceService.GetDailyAttendanceLogsAsync(date, fromDate, toDate, ct);
         return Ok(logs);
     }
 
