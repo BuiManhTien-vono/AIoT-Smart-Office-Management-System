@@ -55,4 +55,5 @@ jobs:
             git pull origin main
             cd deploy
             docker compose up -d --build
+            docker exec smartoffice_gateway nginx -s reload || true
             docker compose ps
