@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import officeBackground from '../../assets/background.png'
-import { authenticate, demoAccounts } from '../../services/authService'
+import { authenticate } from '../../services/authService'
 import type { Session } from '../../types/auth.types'
 import './auth.css'
 
@@ -12,7 +12,6 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [showDemoModal, setShowDemoModal] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const sending = useRef(false)
   const errorBox = useRef<HTMLDivElement>(null)
@@ -58,13 +57,6 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
       return
     }
     void signIn(username, password)
-  }
-
-  function fillDemoAccount(user: string, pass: string) {
-    setUsername(user)
-    setPassword(pass)
-    setShowDemoModal(false)
-    setError('')
   }
 
   return (
@@ -279,66 +271,14 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
             </button>
           </form>
 
-          {/* CHÂN FORM: THÔNG TIN HỖ TRỢ VÀ TÀI KHOẢN THỬ NGHIỆM */}
+          {/* CHÂN FORM: THÔNG TIN HỖ TRỢ */}
           <div className="auth-card-footer">
             <p className="auth-footer-note">
               © 2026 Smart Office AIoT. Truy cập được bảo vệ và mã hóa theo tiêu chuẩn an ninh thông tin.
             </p>
-            <button
-              type="button"
-              className="auth-demo-hint-btn"
-              onClick={() => setShowDemoModal(true)}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              <span>Xem tài khoản mẫu kiểm thử</span>
-            </button>
           </div>
         </div>
       </section>
-
-      {/* POPUP HỖ TRỢ ĐIỀN TÀI KHOẢN MẪU (CHỈ ĐIỀN FORM, KHÔNG ĐĂNG NHẬP TỰ ĐỘNG) */}
-      {showDemoModal && (
-        <div className="auth-modal-overlay" onClick={() => setShowDemoModal(false)}>
-          <div className="auth-modal" onClick={e => e.stopPropagation()}>
-            <div className="auth-modal-header">
-              <div>
-                <h3>Danh sách tài khoản mẫu</h3>
-                <p>Chọn tài khoản để tự động điền vào form đăng nhập.</p>
-              </div>
-              <button
-                type="button"
-                className="auth-modal-close"
-                onClick={() => setShowDemoModal(false)}
-                aria-label="Đóng"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="auth-modal-list">
-              {demoAccounts.map(acc => (
-                <div key={acc.role} className="auth-modal-item">
-                  <div className="auth-modal-item-info">
-                    <strong>{acc.label} <small>({acc.roleTitle})</small></strong>
-                    <code>{acc.username}</code>
-                    <p>{acc.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="auth-modal-fill-btn"
-                    onClick={() => fillDemoAccount(acc.username, acc.defaultPassword)}
-                  >
-                    Điền tài khoản này
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   )
 }
