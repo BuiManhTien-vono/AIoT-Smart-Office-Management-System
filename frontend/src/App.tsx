@@ -43,6 +43,23 @@ export default function App() {
   const [session, setSession] = useState(readSession)
   const path = useSyncExternalStore(subscribePath, readPath)
   const [visitedPaths, setVisitedPaths] = useState<string[]>(() => [readPath()])
+  const [routeNav, setRouteNav] = useState<{
+    currentPath: string
+    dir: 'route-enter-down' | 'route-enter-up'
+  }>(() => ({
+    currentPath: readPath(),
+    dir: 'route-enter-down',
+  }))
+
+  if (path !== routeNav.currentPath) {
+    const prevIdx = routes.findIndex(item => item.path === routeNav.currentPath)
+    const nextIdx = routes.findIndex(item => item.path === path)
+    const nextDir = prevIdx === -1 || nextIdx === -1 || nextIdx >= prevIdx
+      ? 'route-enter-down'
+      : 'route-enter-up'
+    setRouteNav({ currentPath: path, dir: nextDir })
+  }
+  const routeAnimClass = routeNav.dir
 
   const logout = useCallback(() => {
     saveSession(null)
@@ -110,7 +127,7 @@ export default function App() {
         return (
           <div
             key={`${session.user.id}:${r.path}`}
-            style={{ display: isCurrent ? 'contents' : 'none' }}
+            className={`route-view-wrapper ${isCurrent ? `route-view-active ${routeAnimClass}` : 'route-view-hidden'}`}
             aria-hidden={!isCurrent}
           >
             <RouteGuard session={session} allowedRoles={r.allowed}>

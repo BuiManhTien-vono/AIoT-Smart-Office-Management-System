@@ -38,6 +38,13 @@ import './security-soc.css'
 
 export function SecuritySocPage({ session }: { session: Session }) {
   const [activeTab, setActiveTab] = useState<'incidents' | 'ot'>('incidents')
+  const [tabSlideDir, setTabSlideDir] = useState<'subtab-slide-right' | 'subtab-slide-left'>('subtab-slide-right')
+
+  const handleTabChange = (nextTab: 'incidents' | 'ot') => {
+    if (nextTab === activeTab) return
+    setTabSlideDir(nextTab === 'ot' ? 'subtab-slide-right' : 'subtab-slide-left')
+    setActiveTab(nextTab)
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -413,7 +420,7 @@ export function SecuritySocPage({ session }: { session: Session }) {
         <button
           type="button"
           className={`soc-tab-btn ${activeTab === 'incidents' ? 'active' : ''}`}
-          onClick={() => setActiveTab('incidents')}
+          onClick={() => handleTabChange('incidents')}
         >
           <ShieldWarning size={18} weight="bold" />
           <span>Sự cố &amp; Báo động an ninh ({incidents.length})</span>
@@ -422,7 +429,7 @@ export function SecuritySocPage({ session }: { session: Session }) {
         <button
           type="button"
           className={`soc-tab-btn ${activeTab === 'ot' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ot')}
+          onClick={() => handleTabChange('ot')}
         >
           <Clock size={18} weight="bold" />
           <span>Đăng ký &amp; Phê duyệt ca làm thêm (OT) ({otList.length})</span>
@@ -435,6 +442,12 @@ export function SecuritySocPage({ session }: { session: Session }) {
           <span>{error}</span>
         </div>
       )}
+
+      {/* Nội dung Tab có hiệu ứng chuyển cảnh theo hướng */}
+      <div
+        key={`${activeTab}-${ticketStatusFilter}-${alertLevelFilter}-${otDateFilter}`}
+        className={`subtab-stage ${tabSlideDir}`}
+      >
 
       {/* ========================================================================= */}
       {/* TAB 1: DANH SÁCH SỰ CỐ & BÁO ĐỘNG AN NINH */}
@@ -807,6 +820,7 @@ export function SecuritySocPage({ session }: { session: Session }) {
           </div>
         </>
       )}
+      </div>
 
       {/* ========================================================================= */}
       {/* MODAL 1: XỬ LÝ TICKET SỰ CỐ */}

@@ -6,6 +6,8 @@ import {
   extractFaceFeatures,
   listEmployees,
   registerBiometricVector,
+  uploadBiometricSampleImage,
+  uploadEmployeeAvatar,
 } from '../../services/biometricsService';
 import { ApiError } from '../../services/apiClient';
 
@@ -59,6 +61,7 @@ export function CreateEmployeeWithBiometricsModal({
 
   const [blurScore, setBlurScore] = useState<number | null>(null);
   const [extractedVector, setExtractedVector] = useState<number[] | null>(null);
+  const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
 
   // Global submit state
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -234,6 +237,7 @@ export function CreateEmployeeWithBiometricsModal({
         // KIỂM ĐỊNH THÀNH CÔNG: Đúng 1 mặt, độ nét Laplace >= 20
         if (score >= 20 && res.embedding && res.embedding.length === 512) {
           setExtractedVector(res.embedding);
+          setCapturedBlob(payload);
           setFeedbackType('SUCCESS');
           setFeedbackMessage(`ĐÃ QUÉT THÀNH CÔNG! Độ nét Laplace: ${score.toFixed(1)} (Đạt chuẩn)`);
           setError(null);
@@ -313,6 +317,7 @@ export function CreateEmployeeWithBiometricsModal({
   // Reset face scan to re-scan
   const handleResetScan = () => {
     setExtractedVector(null);
+    setCapturedBlob(null);
     setBlurScore(null);
     setError(null);
     clearOverlay();
@@ -397,9 +402,26 @@ export function CreateEmployeeWithBiometricsModal({
         }
       }
 
-      // 2. Tự động lưu Vector khuôn mặt chính diện 512-D vào DB
+      // 2. Đẩy ảnh mẫu & ảnh đại diện lên Cloudflare R2 rồi lưu Vector khuôn mặt chính diện 512-D vào DB
       if (extractedVector) {
-        const sampleKey = `biometrics/${targetEmp.employeeCode.toLowerCase()}/samples/frontal_${Date.now()}.jpg`;
+        let sampleKey = `biometrics/${targetEmp.employeeCode.toLowerCase()}/samples/frontal_${Date.now()}.jpg`;
+        if (capturedBlob) {
+          try {
+            const sampleUpload = await uploadBiometricSampleImage(
+              token,
+              targetEmp.id,
+              capturedBlob,
+              'FRONTAL'
+            );
+            if (sampleUpload?.objectKey) {
+              sampleKey = sampleUpload.objectKey;
+            }
+            await uploadEmployeeAvatar(token, targetEmp.id, capturedBlob);
+          } catch (uploadErr) {
+            console.warn('Không thể tải ảnh mẫu lên kho lưu trữ R2:', uploadErr);
+          }
+        }
+
         await registerBiometricVector(token, targetEmp.id, {
           embeddingVector: extractedVector,
           sampleImageKey: sampleKey,

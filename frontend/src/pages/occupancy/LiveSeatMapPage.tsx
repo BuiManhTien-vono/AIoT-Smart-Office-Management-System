@@ -38,8 +38,19 @@ interface AlertToast {
 
 export type SeatMapViewMode = 'multi-camera' | 'batch-manager' | 'classic-grid'
 
+const VIEW_MODE_ORDER: SeatMapViewMode[] = ['multi-camera', 'batch-manager', 'classic-grid']
+
 export function LiveSeatMapPage({ session }: Props) {
   const [viewMode, setViewMode] = useState<SeatMapViewMode>('multi-camera')
+  const [viewSlideDir, setViewSlideDir] = useState<'subtab-slide-right' | 'subtab-slide-left'>('subtab-slide-right')
+
+  const handleViewModeChange = (nextMode: SeatMapViewMode) => {
+    if (nextMode === viewMode) return
+    const prevIdx = VIEW_MODE_ORDER.indexOf(viewMode)
+    const nextIdx = VIEW_MODE_ORDER.indexOf(nextMode)
+    setViewSlideDir(nextIdx >= prevIdx ? 'subtab-slide-right' : 'subtab-slide-left')
+    setViewMode(nextMode)
+  }
   const [departments, setDepartments] = useState<Department[]>([])
   const [cameras, setCameras] = useState<Camera[]>([])
   const [selectedDeptId, setSelectedDeptId] = useState<string>(
@@ -258,7 +269,7 @@ export function LiveSeatMapPage({ session }: Props) {
         <button
           type="button"
           className={`view-tab-btn ${viewMode === 'multi-camera' ? 'active' : ''}`}
-          onClick={() => setViewMode('multi-camera')}
+          onClick={() => handleViewModeChange('multi-camera')}
         >
           <Television size={18} weight="bold" />
           <span>Đa màn hình Camera ({cameras.length} camera)</span>
@@ -267,7 +278,7 @@ export function LiveSeatMapPage({ session }: Props) {
         <button
           type="button"
           className={`view-tab-btn ${viewMode === 'batch-manager' ? 'active' : ''}`}
-          onClick={() => setViewMode('batch-manager')}
+          onClick={() => handleViewModeChange('batch-manager')}
         >
           <Table size={18} weight="bold" />
           <span>Quản lý nhiều bàn cùng lúc</span>
@@ -276,7 +287,7 @@ export function LiveSeatMapPage({ session }: Props) {
         <button
           type="button"
           className={`view-tab-btn ${viewMode === 'classic-grid' ? 'active' : ''}`}
-          onClick={() => setViewMode('classic-grid')}
+          onClick={() => handleViewModeChange('classic-grid')}
         >
           <SquaresFour size={18} weight="bold" />
           <span>Lưới chi tiết toàn văn phòng ({seats.length} bàn)</span>
@@ -327,7 +338,7 @@ export function LiveSeatMapPage({ session }: Props) {
           <p className="muted">Đang tải cấu hình đa camera và sơ đồ chỗ ngồi...</p>
         </div>
       ) : (
-        <>
+        <div key={`${viewMode}-${selectedDeptId}`} className={`subtab-stage ${viewSlideDir}`}>
           {viewMode === 'multi-camera' && (
             <MultiCameraMonitorView
               cameras={cameras}
@@ -352,7 +363,7 @@ export function LiveSeatMapPage({ session }: Props) {
               onSelectSeat={seat => setSelectedSeatDetail(seat)}
             />
           )}
-        </>
+        </div>
       )}
 
       {/* 6. Modal Chi tiết Ghế */}

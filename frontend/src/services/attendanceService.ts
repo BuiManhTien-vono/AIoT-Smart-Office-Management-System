@@ -32,9 +32,17 @@ export async function createShift(
 export async function listAttendanceLogs(
   token: string,
   date?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  range?: { fromDate: string; toDate: string }
 ): Promise<AttendanceRecord[]> {
-  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  const params = new URLSearchParams();
+  if (range) {
+    params.set('fromDate', range.fromDate);
+    params.set('toDate', range.toDate);
+  } else if (date) {
+    params.set('date', date);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
   return apiRequest<AttendanceRecord[]>(`/attendance/logs${query}`, {
     method: 'GET',
     token,

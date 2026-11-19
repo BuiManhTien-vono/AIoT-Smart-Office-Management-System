@@ -31,6 +31,13 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
     () => new Date().toISOString().split('T')[0]
   );
   const [activeTab, setActiveTab] = useState<'attendance' | 'leaves'>('attendance');
+  const [tabSlideDir, setTabSlideDir] = useState<'subtab-slide-right' | 'subtab-slide-left'>('subtab-slide-right');
+
+  const handleTabChange = (nextTab: 'attendance' | 'leaves') => {
+    if (nextTab === activeTab) return;
+    setTabSlideDir(nextTab === 'leaves' ? 'subtab-slide-right' : 'subtab-slide-left');
+    setActiveTab(nextTab);
+  };
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -283,14 +290,14 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
         <button
           type="button"
           className={`subnav-tab ${activeTab === 'attendance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('attendance')}
+          onClick={() => handleTabChange('attendance')}
         >
           <Icon name="calendar" size={18} /> Nhật ký chấm công ngày ({filteredRecords.length})
         </button>
         <button
           type="button"
           className={`subnav-tab ${activeTab === 'leaves' ? 'active' : ''}`}
-          onClick={() => setActiveTab('leaves')}
+          onClick={() => handleTabChange('leaves')}
         >
           <Icon name="clock" size={18} /> Đơn xin nghỉ phép ({leaves.length})
         </button>
@@ -303,46 +310,146 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
         </div>
       )}
 
-      {/* Tab 1: Attendance Logs */}
-      {activeTab === 'attendance' && (
-        <>
-          <div className="panel attendance-filter-toolbar">
-            <label className="field" style={{ minWidth: '180px' }}>
-              <span className="field-caption">TRẠNG THÁI</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="ALL">Tất cả trạng thái</option>
-                {Object.entries(attendanceStatusLabels).map(([k, meta]) => (
-                  <option key={k} value={k}>
-                    {meta.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+      {/* Nội dung Tab có hiệu ứng chuyển cảnh theo hướng */}
+      <div key={`${activeTab}-${selectedDate}-${statusFilter}`} className={`subtab-stage ${tabSlideDir}`}>
+        {/* Tab 1: Attendance Logs */}
+        {activeTab === 'attendance' && (
+          <>
+            <div className="panel attendance-filter-toolbar">
+              <label className="field" style={{ minWidth: '180px' }}>
+                <span className="field-caption">TRẠNG THÁI</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="ALL">Tất cả trạng thái</option>
+                  {Object.entries(attendanceStatusLabels).map(([k, meta]) => (
+                    <option key={k} value={k}>
+                      {meta.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label className="field" style={{ flex: 1, minWidth: '260px' }}>
-              <span className="field-caption">TÌM KIẾM</span>
-              <input
-                type="search"
-                placeholder="Nhập tên nhân viên, mã nhân viên..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </label>
-          </div>
+              <label className="field" style={{ flex: 1, minWidth: '260px' }}>
+                <span className="field-caption">TÌM KIẾM</span>
+                <input
+                  type="search"
+                  placeholder="Nhập tên nhân viên, mã nhân viên..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </label>
+            </div>
 
+            <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="table-wrap">
+                {loading ? (
+                  <div className="empty-state">
+                    <p>Đang tải dữ liệu chấm công...</p>
+                  </div>
+                ) : filteredRecords.length === 0 ? (
+                  <div className="empty-state">
+                    <Icon name="calendar" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
+                    <p>Không có lượt chấm công nào trong ngày này.</p>
+                  </div>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Mã NV</th>
+                        <th>Họ và tên</th>
+                        <th>Giờ vào (Check-in)</th>
+                        <th>Giờ ra (Check-out)</th>
+                        <th>Đi muộn / Về sớm</th>
+                        <th>Trạng thái</th>
+                        <th>Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecords.map((r) => {
+                        const statusKey = r.status as AttendanceStatus;
+                        const meta = attendanceStatusLabels[statusKey] || {
+                          label: r.status,
+                          class: 'badge-info',
+                        };
+                        return (
+                          <tr key={r.id}>
+                            <td>
+                              <strong>{r.employeeCode || '---'}</strong>
+                            </td>
+                            <td>
+                              <div className="emp-name-cell">
+                                <span className="emp-avatar" style={{ overflow: 'hidden' }}>
+                                  {r.checkinSnapshotPresignedUrl ? (
+                                    <img
+                                      src={r.checkinSnapshotPresignedUrl}
+                                      alt={r.employeeFullName || 'Snapshot'}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                  ) : (
+                                    (r.employeeFullName || 'N').charAt(0).toUpperCase()
+                                  )}
+                                </span>
+                                <span>{r.employeeFullName || 'Nhân viên'}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="time-mono">
+                                {formatTime(r.checkInTime)}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="time-mono">
+                                {formatTime(r.checkOutTime)}
+                              </span>
+                            </td>
+                            <td>
+                              {r.lateMinutes > 0 && (
+                                <span className="badge badge-warning" style={{ marginRight: '6px' }}>
+                                  Muộn {r.lateMinutes}p
+                                </span>
+                              )}
+                              {r.earlyLeaveMinutes > 0 && (
+                                <span className="badge badge-special">
+                                  Sớm {r.earlyLeaveMinutes}p
+                                </span>
+                              )}
+                              {r.lateMinutes === 0 && r.earlyLeaveMinutes === 0 && (
+                                <span className="muted">---</span>
+                              )}
+                            </td>
+                            <td>
+                              <span className={`badge ${meta.class}`}>{meta.label}</span>
+                            </td>
+                            <td>
+                              <span className="muted" style={{ fontSize: '0.8125rem' }}>
+                                {r.message || (r.isDebounced ? 'Đã debounce' : '---')}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Tab 2: Leaves List */}
+        {activeTab === 'leaves' && (
           <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
             <div className="table-wrap">
               {loading ? (
                 <div className="empty-state">
-                  <p>Đang tải dữ liệu chấm công...</p>
+                  <p>Đang tải danh sách đơn nghỉ phép...</p>
                 </div>
-              ) : filteredRecords.length === 0 ? (
+              ) : leaves.length === 0 ? (
                 <div className="empty-state">
                   <Icon name="calendar" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
-                  <p>Không có lượt chấm công nào trong ngày này.</p>
+                  <p>Không có đơn xin nghỉ phép nào cho khoảng thời gian này.</p>
                 </div>
               ) : (
                 <table>
@@ -350,148 +457,59 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
                     <tr>
                       <th>Mã NV</th>
                       <th>Họ và tên</th>
-                      <th>Giờ vào (Check-in)</th>
-                      <th>Giờ ra (Check-out)</th>
-                      <th>Đi muộn / Về sớm</th>
+                      <th>Loại nghỉ phép</th>
+                      <th>Thời gian nghỉ</th>
+                      <th>Lý do</th>
                       <th>Trạng thái</th>
-                      <th>Ghi chú</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRecords.map((r) => {
-                      const statusKey = r.status as AttendanceStatus;
-                      const meta = attendanceStatusLabels[statusKey] || {
-                        label: r.status,
-                        class: 'badge-info',
-                      };
-                      return (
-                        <tr key={r.id}>
-                          <td>
-                            <strong>{r.employeeCode || '---'}</strong>
-                          </td>
-                          <td>
-                            <div className="emp-name-cell">
-                              <span className="emp-avatar">
-                                {(r.employeeFullName || 'N').charAt(0).toUpperCase()}
-                              </span>
-                              <span>{r.employeeFullName || 'Nhân viên'}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="time-mono">
-                              {formatTime(r.checkInTime)}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="time-mono">
-                              {formatTime(r.checkOutTime)}
-                            </span>
-                          </td>
-                          <td>
-                            {r.lateMinutes > 0 && (
-                              <span className="badge badge-warning" style={{ marginRight: '6px' }}>
-                                Muộn {r.lateMinutes}p
-                              </span>
-                            )}
-                            {r.earlyLeaveMinutes > 0 && (
-                              <span className="badge badge-special">
-                                Sớm {r.earlyLeaveMinutes}p
-                              </span>
-                            )}
-                            {r.lateMinutes === 0 && r.earlyLeaveMinutes === 0 && (
-                              <span className="muted">---</span>
-                            )}
-                          </td>
-                          <td>
-                            <span className={`badge ${meta.class}`}>{meta.label}</span>
-                          </td>
-                          <td>
-                            <span className="muted" style={{ fontSize: '0.8125rem' }}>
-                              {r.message || (r.isDebounced ? 'Đã debounce' : '---')}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {leaves.map((lv) => (
+                      <tr key={lv.id}>
+                        <td>
+                          <strong>{lv.employeeCode || '---'}</strong>
+                        </td>
+                        <td>{lv.employeeName || 'Nhân viên'}</td>
+                        <td>
+                          <span className="badge badge-info">
+                            {leaveTypeLabels[lv.leaveType] || lv.leaveType}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.875rem' }}>
+                            {new Date(lv.startDate).toLocaleDateString('vi-VN')} -{' '}
+                            {new Date(lv.endDate).toLocaleDateString('vi-VN')}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="muted" style={{ fontSize: '0.875rem' }}>{lv.reason || '---'}</span>
+                        </td>
+                        <td>
+                          <span
+                            className={`badge ${
+                              lv.approvalStatus === 'APPROVED'
+                                ? 'badge-success'
+                                : lv.approvalStatus === 'REJECTED'
+                                ? 'badge-danger'
+                                : 'badge-warning'
+                            }`}
+                          >
+                            {lv.approvalStatus === 'APPROVED'
+                              ? 'Đã duyệt'
+                              : lv.approvalStatus === 'REJECTED'
+                              ? 'Từ chối'
+                              : 'Chờ duyệt'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
             </div>
           </div>
-        </>
-      )}
-
-      {/* Tab 2: Leaves List */}
-      {activeTab === 'leaves' && (
-        <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="table-wrap">
-            {loading ? (
-              <div className="empty-state">
-                <p>Đang tải danh sách đơn nghỉ phép...</p>
-              </div>
-            ) : leaves.length === 0 ? (
-              <div className="empty-state">
-                <Icon name="calendar" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
-                <p>Không có đơn xin nghỉ phép nào cho khoảng thời gian này.</p>
-              </div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Mã NV</th>
-                    <th>Họ và tên</th>
-                    <th>Loại nghỉ phép</th>
-                    <th>Thời gian nghỉ</th>
-                    <th>Lý do</th>
-                    <th>Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaves.map((lv) => (
-                    <tr key={lv.id}>
-                      <td>
-                        <strong>{lv.employeeCode || '---'}</strong>
-                      </td>
-                      <td>{lv.employeeName || 'Nhân viên'}</td>
-                      <td>
-                        <span className="badge badge-info">
-                          {leaveTypeLabels[lv.leaveType] || lv.leaveType}
-                        </span>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '0.875rem' }}>
-                          {new Date(lv.startDate).toLocaleDateString('vi-VN')} -{' '}
-                          {new Date(lv.endDate).toLocaleDateString('vi-VN')}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="muted" style={{ fontSize: '0.875rem' }}>{lv.reason || '---'}</span>
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            lv.approvalStatus === 'APPROVED'
-                              ? 'badge-success'
-                              : lv.approvalStatus === 'REJECTED'
-                              ? 'badge-danger'
-                              : 'badge-warning'
-                          }`}
-                        >
-                          {lv.approvalStatus === 'APPROVED'
-                            ? 'Đã duyệt'
-                            : lv.approvalStatus === 'REJECTED'
-                            ? 'Từ chối'
-                            : 'Chờ duyệt'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Shift Management Modal */}
       <ShiftManagementModal

@@ -158,3 +158,14 @@ export interface BatchSeatActionResult {
   message: string
 }
 
+export interface SeatOccupancyLog {
+  id: string
+  seatId: string
+  seatCode: string
+  detectedEmployeeId?: string | null
+  previousState: SeatState | string
+  newState: SeatState | string
+  durationSeconds: number
+  recordedAt: string
+}
+

@@ -144,3 +144,334 @@ tbody tr:hover { background: var(--color-primary-soft); }
 @media (max-width: 767px) {
   .page-heading { gap: var(--space-3); margin-bottom: var(--space-4); }
 }
+
+/* =============================================================================
+   HỆ THỐNG CHUYỂN ĐỘNG TOÀN CỤC (MULTI-LAYERED MOTION SYSTEM - ALL 8 ROUTES)
+   ============================================================================= */
+
+.route-view-hidden {
+  display: none;
+}
+
+.route-view-active {
+  display: block;
+  min-width: 0;
+  will-change: transform, opacity;
+}
+
+.route-view-active.route-enter-down {
+  animation: appRouteEnterDown 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.route-view-active.route-enter-up {
+  animation: appRouteEnterUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.subtab-stage {
+  min-width: 0;
+  will-change: transform, opacity;
+}
+
+.subtab-stage.subtab-slide-right {
+  animation: subtabSlideFromRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.subtab-stage.subtab-slide-left {
+  animation: subtabSlideFromLeft 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.subtab-stage.subtab-fade-scale {
+  animation: subtabFadeScale 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes appRouteEnterDown {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes appRouteEnterUp {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes subtabSlideFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(22px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes subtabSlideFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-22px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes subtabFadeScale {
+  from {
+    opacity: 0;
+    transform: scale(0.985) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes appCascadeFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes appCardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes appTableRowCascade {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes appModalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes appBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 1. Tầng Tiêu đề trang & Thanh điều hướng phụ */
+:where(.route-view-active) :where(.page-heading, .seat-map-header) {
+  animation: appCascadeFadeUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.02s both;
+}
+
+:where(.route-view-active) :where(
+  .subnav-tabs,
+  .seat-map-view-tabs,
+  .soc-tabs-bar,
+  .night-guard-banner,
+  .dashboard-update-bar,
+  .attendance-toolbar,
+  .biometrics-filter-toolbar,
+  .soc-filter-bar,
+  .ot-toolbar,
+  .seat-filter-bar,
+  .multi-camera-toolbar,
+  .report-filter-panel,
+  .report-tabs-bar
+) {
+  animation: appCascadeFadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+}
+
+:where(.subtab-stage) :where(
+  .biometrics-filter-toolbar,
+  .attendance-filter-toolbar,
+  .soc-filter-bar,
+  .ot-toolbar,
+  .seat-filter-bar,
+  .multi-camera-toolbar
+) {
+  animation: appCascadeFadeUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.03s both;
+}
+
+/* 2. Tầng Panel & Vùng làm việc (specificity thấp via :where để không xung đột print/chart/reporting) */
+:where(.route-view-active, .subtab-stage) :where(.panel:not(.report-tab-pane .panel)) {
+  animation: appCascadeFadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+
+/* 3. Tầng Thẻ KPI & Thẻ lưới xuất hiện nối tiếp (Staggered Cascade) */
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > * {
+  animation: appCardReveal 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > *:nth-child(1) { animation-delay: 0.04s; }
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > *:nth-child(2) { animation-delay: 0.08s; }
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > *:nth-child(3) { animation-delay: 0.12s; }
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > *:nth-child(4) { animation-delay: 0.16s; }
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > *:nth-child(5) { animation-delay: 0.20s; }
+:where(.route-view-active, .subtab-stage) :where(.kpi-grid:not(.report-tab-pane *), .soc-kpi-grid, .seat-kpi-strip) > *:nth-child(6) { animation-delay: 0.24s; }
+
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item) {
+  animation: appCardReveal 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(1) { animation-delay: 0.04s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(2) { animation-delay: 0.08s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(3) { animation-delay: 0.12s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(4) { animation-delay: 0.16s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(5) { animation-delay: 0.20s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(6) { animation-delay: 0.24s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(7) { animation-delay: 0.28s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(8) { animation-delay: 0.32s; }
+:where(.route-view-active, .subtab-stage) :where(.incident-card, .camera-screen-card, .live-grid-card, .seat-card, .camera-item):nth-child(n+9) { animation-delay: 0.34s; }
+
+/* 4. Tầng Bảng dữ liệu: từng dòng xuất hiện tuần tự & hover mượt */
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr) {
+  animation: appTableRowCascade 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(1) { animation-delay: 0.02s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(2) { animation-delay: 0.04s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(3) { animation-delay: 0.06s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(4) { animation-delay: 0.08s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(5) { animation-delay: 0.10s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(6) { animation-delay: 0.12s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(7) { animation-delay: 0.14s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(8) { animation-delay: 0.16s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(9) { animation-delay: 0.18s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(10) { animation-delay: 0.20s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(11) { animation-delay: 0.22s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(12) { animation-delay: 0.24s; }
+:where(.route-view-active, .subtab-stage) :where(table:not(.report-tab-pane table) tbody tr):nth-child(n+13) { animation-delay: 0.26s; }
+
+/* 5. Vi tương tác (Micro-interactions) & Hộp thoại */
+.button {
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.24);
+}
+
+.button-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(18, 40, 68, 0.08);
+}
+
+.soc-kpi-card,
+.seat-kpi-item {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.2s ease;
+}
+
+.soc-kpi-card:hover,
+.seat-kpi-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(16, 35, 59, 0.1);
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.subnav-tab:active {
+  transform: scale(0.98);
+}
+
+dialog[open].app-dialog,
+dialog[open].user-dialog {
+  animation: appModalPopIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+dialog[open].app-dialog::backdrop,
+dialog[open].user-dialog::backdrop {
+  animation: appBackdropFadeIn 0.2s ease both;
+}
+
+.modal-backdrop,
+.soc-modal-backdrop {
+  animation: appBackdropFadeIn 0.2s ease both;
+}
+
+.modal-backdrop > .app-dialog,
+.soc-modal-backdrop > .soc-modal-dialog {
+  animation: appModalPopIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.alert,
+.user-success {
+  animation: appCascadeFadeUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-view-active,
+  .subtab-stage,
+  .route-view-active *,
+  .subtab-stage *,
+  .button,
+  .soc-kpi-card,
+  .seat-kpi-item,
+  dialog[open].app-dialog,
+  dialog[open].user-dialog,
+  .modal-backdrop,
+  .soc-modal-backdrop,
+  .modal-backdrop > .app-dialog,
+  .soc-modal-backdrop > .soc-modal-dialog,
+  .alert,
+  .user-success {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+@media print {
+  .route-view-active,
+  .route-view-active *,
+  .subtab-stage,
+  .subtab-stage * {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

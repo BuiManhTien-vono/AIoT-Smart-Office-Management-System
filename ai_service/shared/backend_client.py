@@ -84,6 +84,35 @@ class BackendSyncClient:
         except urllib.error.URLError as url_err:
             raise RuntimeError(f"Không thể kết nối tới Backend ({url}): {url_err.reason}")
 
+    def _upload_multipart_file(
+        self,
+        relative_path: str,
+        file_bytes: bytes,
+        filename: str = "snapshot.jpg",
+        content_type: str = "image/jpeg"
+    ) -> Dict[str, Any]:
+        url = f"{self.base_api_url}/{relative_path.lstrip('/')}"
+        boundary = f"----SmartOfficeBoundary{uuid.uuid4().hex}"
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "User-Agent": "SmartOffice-AIService/1.0"
+        }
+
+        req = urllib.request.Request(url=url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=max(self.timeout_sec, 10.0)) as resp:
+            raw_body = resp.read().decode("utf-8")
+            if not raw_body:
+                return {"success": True, "status_code": resp.status}
+            parsed = json.loads(raw_body)
+            return parsed if isinstance(parsed, dict) else {"data": parsed}
+
     # =========================================================================
     # 1. MODULE OCCUPANCY: Kéo cấu hình đa giác vùng bàn & Đẩy State-Sync
     # =========================================================================
@@ -293,6 +322,35 @@ class BackendSyncClient:
         }
         return self._request_json("POST", "attendance/check", payload)
 
+    def upload_attendance_snapshot(
+        self,
+        attendance_log_id: str,
+        image_bytes: bytes,
+        filename: str = "checkin.jpg"
+    ) -> Dict[str, Any]:
+        """Gọi POST /api/v1/attendance/logs/{id}/snapshot để đẩy ảnh chấm công lên R2/S3."""
+        return self._upload_multipart_file(
+            f"attendance/logs/{attendance_log_id}/snapshot",
+            image_bytes,
+            filename=filename,
+            content_type="image/jpeg"
+        )
+
+    def upload_attendance_snapshot_async(
+        self,
+        attendance_log_id: str,
+        image_bytes: bytes,
+        filename: str = "checkin.jpg"
+    ) -> None:
+        """Đẩy ảnh chấm công lên R2/S3 ở luồng ngầm (Background Thread) để không làm chậm phản hồi Kiosk."""
+        def _worker():
+            try:
+                self.upload_attendance_snapshot(attendance_log_id, image_bytes, filename)
+            except Exception as exc:
+                self.last_sync_error = f"Upload attendance snapshot failed: {exc}"
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     # =========================================================================
     # 3. MODULE SECURITY: Báo cáo sự cố trực đêm & Giả mạo sinh trắc học
     # =========================================================================
@@ -346,6 +404,21 @@ class BackendSyncClient:
         }
         return self._request_json("POST", "security/incidents", payload)
 
+    def upload_security_incident_evidence(
+        self,
+        incident_id: str,
+        file_bytes: bytes,
+        evidence_type: str = "SNAPSHOT"
+    ) -> Dict[str, Any]:
+        """Gọi POST /api/v1/security/incidents/{id}/evidence để đẩy bằng chứng sự cố lên R2/S3."""
+        is_video = evidence_type.upper() == "VIDEO_CLIP"
+        return self._upload_multipart_file(
+            f"security/incidents/{incident_id}/evidence?evidenceType={evidence_type}",
+            file_bytes,
+            filename="clip10s.mp4" if is_video else "incident_snapshot.jpg",
+            content_type="video/mp4" if is_video else "image/jpeg"
+        )
+
     def upload_incident_evidence(
         self,
         incident_id: str,
@@ -354,34 +427,20 @@ class BackendSyncClient:
         content_type: str = "image/jpeg"
     ) -> Dict[str, Any]:
         """Tải tệp ảnh hiện trường lên POST /api/v1/security/incidents/{id}/evidence"""
-        import uuid
-        try:
-            valid_id = str(uuid.UUID(str(incident_id)))
-        except (ValueError, AttributeError):
-            valid_id = str(incident_id)
+        return self.upload_security_incident_evidence(incident_id, image_bytes, evidence_type)
 
-        boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
-        filename = "snapshot.jpg" if evidence_type == "SNAPSHOT" else "evidence.bin"
+    def upload_security_incident_evidence_async(
+        self,
+        incident_id: str,
+        file_bytes: bytes,
+        evidence_type: str = "SNAPSHOT"
+    ) -> None:
+        """Đẩy bằng chứng sự cố an ninh lên R2/S3 ở luồng ngầm."""
+        def _worker():
+            try:
+                self.upload_security_incident_evidence(incident_id, file_bytes, evidence_type)
+            except Exception as exc:
+                self.last_sync_error = f"Upload incident evidence failed: {exc}"
 
-        body = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-            f"Content-Type: {content_type}\r\n\r\n"
-        ).encode("utf-8") + image_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
-
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-            "User-Agent": "SmartOffice-AIService/1.0"
-        }
-
-        url = f"{self.base_api_url}/security/incidents/{valid_id}/evidence?evidenceType={evidence_type}"
-        req = urllib.request.Request(url=url, data=body, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
-                raw_body = resp.read().decode("utf-8")
-                return json.loads(raw_body) if raw_body else {"success": True}
-        except Exception as exc:
-            return {"error": str(exc)}
-
+        threading.Thread(target=_worker, daemon=True).start()
 

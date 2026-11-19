@@ -154,10 +154,38 @@
   color: var(--sidebar-text);
   font-size: 14px;
   font-weight: 500;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.2s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s ease;
 }
 
-.shell-navigation a:hover { background: var(--sidebar-surface); color: var(--sidebar-mark); }
-.shell-navigation a[aria-current='page'] { background: var(--sidebar-active); color: var(--sidebar-mark); box-shadow: inset 3px 0 var(--color-primary); }
+.shell-navigation a svg {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shell-navigation a:hover {
+  background: var(--sidebar-surface);
+  color: var(--sidebar-mark);
+  transform: translateX(3px);
+}
+
+.shell-navigation a:hover svg {
+  transform: scale(1.08);
+}
+
+.shell-navigation a[aria-current='page'] {
+  background: var(--sidebar-active);
+  color: var(--sidebar-mark);
+  box-shadow: inset 3px 0 var(--color-primary), 0 4px 12px rgb(10 24 44 / 22%);
+  transform: translateX(2px);
+}
+
+.workspace-compact .workspace-sidebar .shell-navigation a:hover,
+.workspace-compact .workspace-sidebar .shell-navigation a[aria-current='page'] {
+  transform: none;
+}
+
 .shell-nav-tooltip { display: none; }
 
 .sidebar-note {
@@ -239,7 +267,11 @@
 
 .topbar-leading { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .shell-breadcrumb { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; color: var(--color-muted-foreground); font-size: 12px; }
-.shell-breadcrumb strong { color: var(--color-foreground); font-weight: 600; }
+.shell-breadcrumb strong {
+  color: var(--color-foreground);
+  font-weight: 600;
+  animation: layoutBreadcrumbIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .shell-breadcrumb.dashboard-page-label { color: var(--color-primary); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
 .dashboard-page-label strong { color: inherit; font-weight: inherit; }
 .topbar-utilities { display: flex; gap: var(--space-3); align-items: center; min-width: 0; }
@@ -262,7 +294,40 @@
 .notification-button { position: relative; display: grid; place-items: center; background: var(--color-surface); color: var(--color-foreground); border: 1px solid var(--color-border); border-radius: var(--radius-control); width: 36px; height: 36px; }
 .notification-button:hover { background: var(--color-background); }
 .notification-count { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; min-width: 18px; height: 18px; border-radius: 10px; font-size: 12px; font-weight: 600; padding: 0 var(--space-1); background: var(--color-background); border: 1px solid var(--color-border); color: var(--color-muted-foreground); }
-.notifications-panel { position: absolute; right: 0; top: calc(100% + var(--space-3)); z-index: 20; width: min(320px, calc(100vw - 24px)); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-panel); box-shadow: var(--shadow-panel); }
+.notifications-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-3));
+  z-index: 20;
+  width: min(320px, calc(100vw - 24px));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  animation: layoutPopoverDrop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes layoutBreadcrumbIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes layoutPopoverDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 .notifications-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--panel-padding); border-bottom: 1px solid var(--color-border); }
 .notifications-heading h2 { margin: 0; font-size: 14px; }
 .notifications-heading span { font-size: 12px; color: var(--color-muted-foreground); }
@@ -280,7 +345,25 @@
 .notifications-footnote { margin: 0; padding: var(--panel-padding); border-top: 1px solid var(--color-border); font-size: 12px; color: var(--color-muted-foreground); }
 .workspace-content { flex: 1; width: 100%; max-width: 1600px; margin-inline: auto; padding: 20px var(--page-gutter); min-width: 0; }
 .workspace-content:focus { outline: none; }
-.workspace-footer { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-6) var(--page-gutter); color: var(--color-muted-foreground); background: rgb(255 255 255 / 46%); -webkit-backdrop-filter: var(--glass-backdrop); backdrop-filter: var(--glass-backdrop); font-size: 12px; }
+.workspace-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 18;
+  margin-top: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 10px var(--page-gutter);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  background: rgb(255 255 255 / 84%);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
+  box-shadow: 0 -4px 16px rgb(18 40 68 / 6%);
+  font-size: 12px;
+}
 .workspace-footer span span { margin-inline: var(--space-2); }
 .navigation-drawer { display: none; }
 .mobile-menu-button.button { display: none; }
@@ -314,7 +397,7 @@
   .health-pill-group { flex-wrap: wrap; }
   .health-pill > span:last-child { flex-wrap: wrap; }
   .office-clock { border: 0; padding: 0; }
-  .workspace-footer { flex-direction: column; gap: var(--space-1); }
+  .workspace-footer { flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -327,5 +410,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workspace-shell { transition: none; }
+  .workspace-shell,
+  .shell-navigation a,
+  .shell-navigation a svg { transition: none; transform: none; }
+  .shell-breadcrumb strong,
+  .notifications-panel { animation: none; }
 }

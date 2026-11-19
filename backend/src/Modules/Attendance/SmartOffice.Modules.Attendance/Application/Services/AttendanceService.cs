@@ -254,18 +254,46 @@ public sealed class AttendanceService(
 
     public async Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(
         DateOnly? workDate = null,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
         CancellationToken ct = default)
     {
-        var targetDate = workDate ?? VietnamDateTime.Today;
-        var logs = await dbContext.AttendanceLogs
-            .Where(x => x.WorkDate == targetDate)
-            .OrderByDescending(x => x.CheckInTime)
-            .ToListAsync(ct);
+        IQueryable<AttendanceLog> query = dbContext.AttendanceLogs;
 
+        if (fromDate.HasValue || toDate.HasValue)
+        {
+            var start = fromDate ?? toDate!.Value;
+            var end = toDate ?? fromDate!.Value;
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            query = query
+                .Where(x => x.WorkDate >= start && x.WorkDate <= end)
+                .OrderByDescending(x => x.WorkDate)
+                .ThenByDescending(x => x.CheckInTime);
+        }
+        else
+        {
+            var targetDate = workDate ?? VietnamDateTime.Today;
+            query = query
+                .Where(x => x.WorkDate == targetDate)
+                .OrderByDescending(x => x.CheckInTime);
+        }
+
+        var logs = await query.ToListAsync(ct);
+
+        var employeeCache = new Dictionary<Guid, EmployeeContractDto?>();
         var responses = new List<AttendanceRecordResponse>(logs.Count);
         foreach (var log in logs)
         {
-            var emp = await employeeLookup.GetByIdAsync(log.EmployeeId, ct);
+            if (!employeeCache.TryGetValue(log.EmployeeId, out var emp))
+            {
+                emp = await employeeLookup.GetByIdAsync(log.EmployeeId, ct);
+                employeeCache[log.EmployeeId] = emp;
+            }
+
             responses.Add(await MapAttendanceRecordResponseAsync(
                 log,
                 emp?.FullName ?? log.EmployeeCode,

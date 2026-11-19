@@ -316,7 +316,7 @@ export function MainLayout({ session, links, path, onLogout, children }: {
       <header className="workspace-topbar">
         <div className="topbar-leading">
           <button className="button button-secondary mobile-menu-button" onClick={() => drawer.current?.showModal()} aria-label="Mở điều hướng"><Icon name="menu" /></button>
-          <div className={`shell-breadcrumb${path === '/dashboard' || path === '/reports/monthly' || path === '/admin/users' ? ' dashboard-page-label' : ''}`}><span>{path === '/admin/users' ? 'Thiết lập' : 'Không gian làm việc'}</span><span aria-hidden="true">/</span><strong>{path === '/reports/monthly' ? 'Báo cáo' : path === '/admin/users' ? 'Tài khoản' : current?.label ?? 'Trang ứng dụng'}</strong></div>
+          <div className={`shell-breadcrumb${path === '/dashboard' || path === '/reports/monthly' || path === '/admin/users' ? ' dashboard-page-label' : ''}`}><span>{path === '/admin/users' ? 'Thiết lập' : 'Không gian làm việc'}</span><span aria-hidden="true">/</span><strong key={path}>{path === '/reports/monthly' ? 'Báo cáo' : path === '/admin/users' ? 'Tài khoản' : current?.label ?? 'Trang ứng dụng'}</strong></div>
         </div>
         <div className="topbar-utilities">
           <div className="service-health" aria-label="Trạng thái kết nối dịch vụ" aria-live="polite">

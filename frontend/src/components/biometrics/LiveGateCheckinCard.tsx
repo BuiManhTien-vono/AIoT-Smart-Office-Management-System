@@ -84,21 +84,24 @@ export function LiveGateCheckinCard() {
     };
   }, [useWebcam, startWebcam, stopWebcam]);
 
-  // Grab frame from video as Blob
+  // Grab frame from video as Blob (thu gọn về chuẩn 640px để gửi siêu tốc qua mạng)
   const grabVideoFrame = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
       if (!videoRef.current || videoRef.current.readyState < 2) {
         return resolve(null);
       }
       const video = videoRef.current;
+      const srcW = video.videoWidth || 640;
+      const srcH = video.videoHeight || 480;
+      const scale = srcW > 640 ? 640 / srcW : 1;
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      canvas.width = Math.round(srcW * scale);
+      canvas.height = Math.round(srcH * scale);
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(null);
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9);
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.82);
     });
   }, []);
 

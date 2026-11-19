@@ -5,7 +5,7 @@ kiểm tra thực thể sống (MiniFASNet-V2) và luồng chấm công / trực
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 import cv2
 import numpy as np
@@ -31,15 +31,37 @@ class DuplicateCheckRequest(BaseModel):
     threshold: Optional[float] = None
 
 
-@router.post("/extract-features")
-async def extract_face_features(file: UploadFile = File(...)):
+def _decode_and_downscale(contents: bytes, max_dim: int = 960) -> Tuple[Optional[np.ndarray], bytes]:
     """
-    Nhận diện khuôn mặt & trích xuất vector 512 chiều từ ảnh tải lên (FR-BIO-03, FR-BIO-04).
-    Kiểm tra độ sắc nét và kích thước khuôn mặt.
+    Giải mã ảnh và tự động thu nhỏ nếu độ phân giải quá lớn (VD ảnh 4K từ điện thoại),
+    giúp giảm tải CPU cho SCRFD/MiniFASNet và giảm dung lượng ảnh đẩy lên R2.
     """
-    contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image is None:
+        return None, contents
+
+    h, w = image.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / float(max(h, w))
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        ok, enc = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        if ok:
+            contents = enc.tobytes()
+
+    return image, contents
+
+
+@router.post("/extract-features")
+def extract_face_features(file: UploadFile = File(...)):
+    """
+    Nhận diện khuôn mặt & trích xuất vector 512 chiều từ ảnh tải lên (FR-BIO-03, FR-BIO-04).
+    Chạy trên Worker ThreadPool (def) để không chặn Event Loop chính của FastAPI.
+    """
+    contents = file.file.read()
+    image, _ = _decode_and_downscale(contents, max_dim=960)
 
     if image is None:
         raise HTTPException(status_code=400, detail="Không thể giải mã file ảnh.")
@@ -80,13 +102,12 @@ def verify_duplicate_biometrics(payload: DuplicateCheckRequest):
 
 
 @router.post("/liveness-check")
-async def check_face_liveness(file: UploadFile = File(...)):
+def check_face_liveness(file: UploadFile = File(...)):
     """
     Kiểm tra thực thể sống chống giả mạo bằng MiniFASNet-V2 (FR-ATT-01).
     """
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    contents = file.file.read()
+    image, _ = _decode_and_downscale(contents, max_dim=960)
 
     if image is None:
         raise HTTPException(status_code=400, detail="Không thể giải mã file ảnh.")
@@ -105,7 +126,7 @@ async def check_face_liveness(file: UploadFile = File(...)):
 
 
 @router.post("/gate-checkin")
-async def gate_camera_checkin(
+def gate_camera_checkin(
     file: UploadFile = File(...),
     gate_camera_id: Optional[str] = Form(default=None),
     camera_id: Optional[str] = Form(default=None),
@@ -118,7 +139,7 @@ async def gate_camera_checkin(
     2. Nếu phát hiện giả mạo (Spoofing) -> Gọi POST /api/v1/security/incidents trên Backend .NET (kèm debounce 30s).
     3. Nếu là người thật -> Căn chỉnh Affine 112x112 & Trích xuất vector 512D (ArcFace).
     4. Gọi POST /api/v1/biometrics/identify trên Backend .NET để định danh 1:N.
-    5. Nếu khớp nhân viên -> Tự động gọi POST /api/v1/attendance/check để chấm công!
+    5. Nếu khớp nhân viên -> Tự động gọi POST /api/v1/attendance/check để chấm công và đẩy ảnh lên R2 ở Background Thread!
     6. Nếu là người lạ: CHỈ tạo sự cố khi có thao tác cố tình chấm công (is_checkin_attempt=true),
        tránh trường hợp camera tự quét liên tục hoặc quét góc mờ gây hiểu nhầm thành người lạ chấm công.
     """
@@ -130,9 +151,8 @@ async def gate_camera_checkin(
         val_str = str(is_checkin_attempt).strip().lower()
         is_explicit_attempt = val_str in ("true", "1", "yes")
 
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    raw_contents = file.file.read()
+    image, contents = _decode_and_downscale(raw_contents, max_dim=960)
 
     if image is None:
         raise HTTPException(status_code=400, detail="Không thể giải mã file ảnh.")
@@ -164,7 +184,7 @@ async def gate_camera_checkin(
 
             try:
                 incident = backend_client.report_security_incident(
-                    camera_id=effective_camera_id,
+                    camera_id=effective_camera_id or settings.face.default_gate_camera_id,
                     department_id=settings.face.default_department_id,
                     is_spoofing_attempt=True,
                     incident_type="SPOOFING_ATTEMPT",
@@ -173,7 +193,7 @@ async def gate_camera_checkin(
                 )
                 incident_id = incident.get("id") if isinstance(incident, dict) else None
                 if incident_id:
-                    backend_client.upload_incident_evidence(str(incident_id), snap_bytes)
+                    backend_client.upload_security_incident_evidence_async(str(incident_id), snap_bytes, "SNAPSHOT")
             except Exception as exc:
                 incident = {"error": str(exc)}
 
@@ -245,6 +265,9 @@ async def gate_camera_checkin(
             gate_camera_id=effective_camera_id,
             snapshot_object_key=snapshot_object_key
         )
+        log_id = attendance_res.get("id") if isinstance(attendance_res, dict) else None
+        if log_id and contents and not attendance_res.get("isDebounced", False):
+            backend_client.upload_attendance_snapshot_async(str(log_id), contents)
         return {
             "success": True,
             "status": "CHECKED_IN_OUT",

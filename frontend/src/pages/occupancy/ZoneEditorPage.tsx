@@ -254,52 +254,56 @@ export function ZoneEditorPage({ session }: { session: Session }) {
               </div>
             </div>
 
-            {viewMode === 'GRID' ? (
-              <LiveCameraGrid
-                cameras={cameras}
-                allSeats={allSeats}
-                selectedCameraId={selectedCameraId}
-                onInspectCamera={cam => {
-                  setSelectedCameraId(cam.id)
-                  setViewMode('SINGLE')
-                }}
-              />
-            ) : selectedCamera ? (
-              <InteractiveZoneCanvas
-                cameraCode={selectedCamera.cameraCode}
-                backgroundImageUrl={backgroundUrl}
-                streamSource={selectedCamera.streamSource}
-                existingSeats={seats}
-                selectedSeatId={selectedSeat?.id || null}
-                currentPolygon={currentPolygon}
-                onPolygonChange={setCurrentPolygon}
-                onSelectExistingSeat={handleSelectSeat}
-                onCaptureSnapshot={handleCaptureSnapshot}
-                onSyncZonesToAi={handleSyncZonesToAi}
-                isCapturing={capturingSnapshot}
-              />
-            ) : (
-              <div className="empty-state" style={{ padding: '80px 20px' }}>
-                <VideoCamera size={56} className="muted" aria-hidden="true" />
-                <h3>Vui lòng chọn một camera từ danh sách bên trái</h3>
-                <p>Khung hình hoặc luồng camera sẽ hiển thị toàn màn hình tại đây để bạn vẽ vùng bàn.</p>
-              </div>
-            )}
+            <div key={`${viewMode}-${selectedCameraId ?? 'none'}`} className="subtab-stage subtab-fade-scale">
+              {viewMode === 'GRID' ? (
+                <LiveCameraGrid
+                  cameras={cameras}
+                  allSeats={allSeats}
+                  selectedCameraId={selectedCameraId}
+                  onInspectCamera={cam => {
+                    setSelectedCameraId(cam.id)
+                    setViewMode('SINGLE')
+                  }}
+                />
+              ) : selectedCamera ? (
+                <InteractiveZoneCanvas
+                  cameraCode={selectedCamera.cameraCode}
+                  backgroundImageUrl={backgroundUrl}
+                  streamSource={selectedCamera.streamSource}
+                  existingSeats={seats}
+                  selectedSeatId={selectedSeat?.id || null}
+                  currentPolygon={currentPolygon}
+                  onPolygonChange={setCurrentPolygon}
+                  onSelectExistingSeat={handleSelectSeat}
+                  onCaptureSnapshot={handleCaptureSnapshot}
+                  onSyncZonesToAi={handleSyncZonesToAi}
+                  isCapturing={capturingSnapshot}
+                />
+              ) : (
+                <div className="empty-state" style={{ padding: '80px 20px' }}>
+                  <VideoCamera size={56} className="muted" aria-hidden="true" />
+                  <h3>Vui lòng chọn một camera từ danh sách bên trái</h3>
+                  <p>Khung hình hoặc luồng camera sẽ hiển thị toàn màn hình tại đây để bạn vẽ vùng bàn.</p>
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Phần Cấu hình vùng ảo nằm ngay bên dưới phần góc nhìn tiêu chuẩn (chỉ hiện khi ở chế độ Khung đơn) */}
           {viewMode === 'SINGLE' && selectedCamera && (
-            <SeatConfigSidebar
-              selectedCamera={selectedCamera}
-              seats={seats}
-              allSeats={allSeats}
-              selectedSeat={selectedSeat}
-              currentPolygon={currentPolygon}
-              onSelectSeat={handleSelectSeat}
-              onSeatSaved={fetchSeats}
-              onClearPolygon={() => setCurrentPolygon([])}
-              token={token}
-            />
+            <div key={`seats-${selectedCameraId ?? 'none'}`} className="subtab-stage subtab-fade-scale">
+              <SeatConfigSidebar
+                selectedCamera={selectedCamera}
+                seats={seats}
+                allSeats={allSeats}
+                selectedSeat={selectedSeat}
+                currentPolygon={currentPolygon}
+                onSelectSeat={handleSelectSeat}
+                onSeatSaved={fetchSeats}
+                onClearPolygon={() => setCurrentPolygon([])}
+                token={token}
+              />
+            </div>
           )}
         </div>
       </div>
