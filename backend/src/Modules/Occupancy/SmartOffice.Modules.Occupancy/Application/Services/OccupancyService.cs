@@ -1025,7 +1025,15 @@ public sealed class OccupancyService(
         {
             var dateFolder = capturedAtUtc.ToString("yyyy-MM-dd");
             var objectKey = $"security_evidence/{dateFolder}/incident_{incidentId:N}_snapshot.jpg";
-            var fileBytes = Convert.FromBase64String(snapshotBase64);
+
+            var cleanBase64 = snapshotBase64.Trim();
+            var commaIdx = cleanBase64.IndexOf(',');
+            if (commaIdx >= 0)
+            {
+                cleanBase64 = cleanBase64.Substring(commaIdx + 1);
+            }
+
+            var fileBytes = Convert.FromBase64String(cleanBase64);
 
             var localFilePath = Path.Combine(AppContext.BaseDirectory, "storage", objectKey.Replace('/', Path.DirectorySeparatorChar));
             var dir = Path.GetDirectoryName(localFilePath);
@@ -1035,12 +1043,22 @@ public sealed class OccupancyService(
             }
             await File.WriteAllBytesAsync(localFilePath, fileBytes, ct);
 
-            using var uploadStream = new MemoryStream(fileBytes);
-            await objectStorage.UploadFileAsync(objectKey, uploadStream, "image/jpeg", ct);
+            // Tải lên Object Storage ngầm / không làm đứt chuỗi nếu storage tạm thời chưa sẵn sàng
+            try
+            {
+                using var uploadStream = new MemoryStream(fileBytes);
+                await objectStorage.UploadFileAsync(objectKey, uploadStream, "image/jpeg", ct);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SNAPSHOT-STORAGE-WARN] Chưa đồng bộ lên S3/R2 ({ex.Message}), sự cố sử dụng file local: {localFilePath}");
+            }
+
             return objectKey;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[SNAPSHOT-SAVE-ERROR] Lỗi giải mã Base64 hoặc lưu snapshot: {ex.Message}");
             return string.Empty;
         }
     }
