@@ -694,27 +694,27 @@ public sealed class OccupancyService(
                 outcome.Message));
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        // Phát toàn bộ Integration Events sau khi dữ liệu đã commit thành công xuống DB
+        // Phát toàn bộ Integration Events sau khi dữ liệu đã commit thành công xuống DB (dùng CancellationToken.None để tránh bị ngắt giữa chừng khi xử lý nhiều bàn)
         foreach (var stateEvt in pendingStateEvents)
         {
-            await eventBus.PublishAsync(stateEvt, ct);
+            await eventBus.PublishAsync(stateEvt, CancellationToken.None);
         }
 
         foreach (var prolongedEvt in pendingProlongedEvents)
         {
-            await eventBus.PublishAsync(prolongedEvt, ct);
+            await eventBus.PublishAsync(prolongedEvt, CancellationToken.None);
         }
 
         foreach (var wrongSeatEvt in pendingWrongSeatEvents)
         {
-            await eventBus.PublishAsync(wrongSeatEvt, ct);
+            await eventBus.PublishAsync(wrongSeatEvt, CancellationToken.None);
         }
 
         foreach (var secEvt in pendingSecurityEvents)
         {
-            await eventBus.PublishAsync(secEvt, ct);
+            await eventBus.PublishAsync(secEvt, CancellationToken.None);
         }
 
         return Result.Success(new OccupancyStateSyncResponse(
@@ -1032,18 +1032,21 @@ public sealed class OccupancyService(
             {
                 Directory.CreateDirectory(dir);
             }
-            await File.WriteAllBytesAsync(localFilePath, fileBytes, ct);
+            await File.WriteAllBytesAsync(localFilePath, fileBytes, CancellationToken.None);
 
-            // Tải lên Object Storage ngầm / không làm đứt chuỗi nếu storage tạm thời chưa sẵn sàng
-            try
+            // Tải lên Object Storage (Cloudflare R2) trên luồng nền để không làm chậm vòng lặp xử lý nhiều bàn cùng lúc
+            _ = Task.Run(async () =>
             {
-                using var uploadStream = new MemoryStream(fileBytes);
-                await objectStorage.UploadFileAsync(objectKey, uploadStream, "image/jpeg", ct);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[SNAPSHOT-STORAGE-WARN] Chưa đồng bộ lên S3/R2 ({ex.Message}), sự cố sử dụng file local: {localFilePath}");
-            }
+                try
+                {
+                    using var uploadStream = new MemoryStream(fileBytes);
+                    await objectStorage.UploadFileAsync(objectKey, uploadStream, "image/jpeg", CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SNAPSHOT-STORAGE-WARN] Chưa đồng bộ lên S3/R2 ({ex.Message}), sự cố sử dụng file local: {localFilePath}");
+                }
+            });
 
             return objectKey;
         }

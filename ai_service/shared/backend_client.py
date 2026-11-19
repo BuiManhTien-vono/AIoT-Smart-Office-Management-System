@@ -31,7 +31,7 @@ class BackendSyncClient:
     def __init__(
         self,
         base_api_url: Optional[str] = None,
-        timeout_sec: float = 3.0,
+        timeout_sec: float = 10.0,
         sync_interval_sec: Optional[float] = None
     ):
         raw_url = base_api_url or settings.backend_api_url
