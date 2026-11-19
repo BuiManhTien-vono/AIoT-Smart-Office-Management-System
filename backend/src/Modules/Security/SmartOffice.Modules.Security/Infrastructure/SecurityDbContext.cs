@@ -29,6 +29,7 @@ public sealed class SecurityDbContext(DbContextOptions<SecurityDbContext> option
             entity.Property(x => x.StartTime).HasColumnName("start_time");
             entity.Property(x => x.EndTime).HasColumnName("end_time");
             entity.Property(x => x.Reason).HasColumnName("reason").HasMaxLength(255);
+            entity.Property(x => x.ProjectName).HasColumnName("project_name").HasMaxLength(150);
             entity.Property(x => x.ApprovalStatus).HasColumnName("approval_status").HasMaxLength(20).IsRequired();
             entity.Property(x => x.ApprovedByUserId).HasColumnName("approved_by_user_id");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
@@ -43,6 +44,9 @@ public sealed class SecurityDbContext(DbContextOptions<SecurityDbContext> option
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.CameraId).HasColumnName("camera_id");
             entity.Property(x => x.DetectedEmployeeId).HasColumnName("detected_employee_id");
+            entity.Property(x => x.IncidentType).HasColumnName("incident_type").HasMaxLength(50).IsRequired();
+            entity.Property(x => x.SeatCode).HasColumnName("seat_code").HasMaxLength(50);
+            entity.Property(x => x.Severity).HasColumnName("severity").HasMaxLength(20).IsRequired();
             entity.Property(x => x.AlertLevel).HasColumnName("alert_level").HasMaxLength(30).IsRequired();
             entity.Property(x => x.SnapshotObjectKey).HasColumnName("snapshot_object_key").HasMaxLength(255).IsRequired();
             entity.Property(x => x.VideoClipObjectKey).HasColumnName("video_clip_object_key").HasMaxLength(255);

@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS security.ot_registrations (
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     reason VARCHAR(255),
+    project_name VARCHAR(150),
     approval_status VARCHAR(20) NOT NULL DEFAULT 'APPROVED',
     approved_by_user_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -181,6 +182,9 @@ CREATE TABLE IF NOT EXISTS security.security_incidents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     camera_id UUID NOT NULL,           -- Tham chiếu logic sang occupancy.cameras(id)
     detected_employee_id UUID,         -- NULL nếu là người lạ (UNKNOWN)
+    incident_type VARCHAR(50) NOT NULL DEFAULT 'SECURITY_BREACH',
+    seat_code VARCHAR(50),
+    severity VARCHAR(20) NOT NULL DEFAULT 'MEDIUM',
     alert_level VARCHAR(30) NOT NULL,  -- LEVEL_1_OT, LEVEL_2_UNAUTH, LEVEL_3_BREACH, SPOOFING_ATTEMPT
     snapshot_object_key VARCHAR(255) NOT NULL,
     video_clip_object_key VARCHAR(255),
