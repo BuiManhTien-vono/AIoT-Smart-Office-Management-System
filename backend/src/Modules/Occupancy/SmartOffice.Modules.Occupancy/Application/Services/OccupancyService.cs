@@ -30,6 +30,12 @@ public sealed class OccupancyService(
         PropertyNameCaseInsensitive = true
     };
 
+    // Bộ đệm lưu ảnh Snapshot gần nhất của từng Camera (đảm bảo không bao giờ thiếu ảnh hiện trường khi vắng mặt)
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, string> LatestCameraSnapshots = new();
+
+    // Theo dõi phiên cảnh báo rời chỗ: Mỗi phiên rời chỗ chỉ phát đúng 1 thông báo cho đến khi nhân viên quay lại bàn
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, bool> SeatProlongedAlertEmitted = new();
+
     public static readonly HashSet<string> AllowedCameraTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "DESK",
@@ -451,6 +457,12 @@ public sealed class OccupancyService(
                 new Error("CAMERA_NOT_FOUND", $"Camera '{normalizedCamCode}' chưa được đăng ký trong hệ thống."));
         }
 
+        // Cập nhật bộ đệm ảnh chụp mới nhất của Camera nếu có
+        if (!string.IsNullOrWhiteSpace(request.SnapshotBase64))
+        {
+            LatestCameraSnapshots[camera.Id] = request.SnapshotBase64;
+        }
+
         var capturedAtUtc = request.CapturedAtUtc ?? DateTimeOffset.UtcNow;
         var seatsOnCamera = await dbContext.Seats
             .Where(s => s.CameraId == camera.Id)
@@ -522,16 +534,50 @@ public sealed class OccupancyService(
                     outcome.PreviousStateDurationSeconds,
                     seat.ActiveSecondsToday));
 
+                // Nếu nhân viên đang hoặc quay lại PRESENT -> Reset cờ đã báo vắng mặt cho bàn này
+                if (outcome.NewState == SeatStateMachine.StatePresent)
+                {
+                    SeatProlongedAlertEmitted[seat.Id] = false;
+                }
+
                 if (outcome.ProlongedAbsenceAlertTriggered)
                 {
-                    pendingProlongedEvents.Add(new ProlongedAbsenceDetectedIntegrationEvent(
-                        Guid.NewGuid(),
-                        capturedAtUtc,
-                        seat.Id,
-                        seat.SeatCode,
-                        seat.DepartmentId,
-                        seat.AssignedEmployeeId,
-                        outcome.PreviousStateDurationSeconds));
+                    // Debounce: Mỗi phiên rời bàn chỉ phát đúng 1 cảnh báo cho đến khi nhân viên quay lại bàn
+                    bool alreadyEmitted = SeatProlongedAlertEmitted.TryGetValue(seat.Id, out var emitted) && emitted;
+                    if (!alreadyEmitted)
+                    {
+                        SeatProlongedAlertEmitted[seat.Id] = true;
+
+                        pendingProlongedEvents.Add(new ProlongedAbsenceDetectedIntegrationEvent(
+                            Guid.NewGuid(),
+                            capturedAtUtc,
+                            seat.Id,
+                            seat.SeatCode,
+                            seat.DepartmentId,
+                            seat.AssignedEmployeeId,
+                            outcome.PreviousStateDurationSeconds));
+
+                        // Đưa sự cố ra khỏi chỗ quá thời gian (>10s) vào An ninh & Sự cố (SOC) kèm ảnh chụp hiện trường
+                        var incidentId = Guid.NewGuid();
+                        var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
+                            ? request.SnapshotBase64
+                            : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
+                        string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
+                        var actionSummary = $"Cảnh báo ra khỏi chỗ quá thời gian: Nhân viên rời vị trí tại bàn {seat.SeatCode} quá thời gian quy định ({outcome.PreviousStateDurationSeconds:F0}s >= 10s).";
+
+                        pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
+                            Guid.NewGuid(),
+                            capturedAtUtc,
+                            incidentId,
+                            camera.Id,
+                            seat.DepartmentId,
+                            seat.AssignedEmployeeId,
+                            "LEVEL_2_UNAUTH",
+                            snapshotObjectKey,
+                            IncidentType: "PROLONGED_ABSENCE",
+                            SeatCode: seat.SeatCode,
+                            ActionSummary: actionSummary));
+                    }
                 }
 
                 if (outcome.WrongSeatAlertTriggered &&
@@ -563,7 +609,10 @@ public sealed class OccupancyService(
                         // Kịch bản 1: Người lạ / Chưa check-in vào chỗ làm việc trong khi nhân viên đó chưa chấm công vào công ty
                         var actionSummary = $"Phát hiện người lạ/chưa check-in chiếm chỗ tại bàn {seat.SeatCode} trong khi nhân viên chưa check-in vào công ty.";
                         var incidentId = Guid.NewGuid();
-                        string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, request.SnapshotBase64, ct);
+                        var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
+                            ? request.SnapshotBase64
+                            : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
+                        string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
 
                         pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
                             Guid.NewGuid(),
@@ -593,7 +642,10 @@ public sealed class OccupancyService(
                         {
                             var actionSummary = $"Cảnh báo hiện diện ngoài giờ chưa có đơn OT được duyệt: Nhân viên ngồi tại bàn {seat.SeatCode} ngoài ca hành chính (+20p ân hạn) và chưa có đơn OT phê duyệt.";
                             var incidentId = Guid.NewGuid();
-                            string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, request.SnapshotBase64, ct);
+                            var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
+                                ? request.SnapshotBase64
+                                : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
+                            string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
 
                             pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
                                 Guid.NewGuid(),

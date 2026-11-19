@@ -205,16 +205,19 @@ class BackendSyncClient:
         frame_sequence: int,
         seat_statuses: List[Dict[str, Any]],
         prolonged_absence_threshold_seconds: Optional[int] = None,
-        snapshot_base64: Optional[str] = None
+        snapshot_base64: Optional[str] = None,
+        force_immediate: bool = False
     ) -> bool:
         """
         Đẩy dữ liệu state-sync sang Backend trong một luồng ngầm (non-blocking)
         theo chu kỳ `sync_interval_sec` để giữ nguyên tốc độ 30 FPS cho luồng Video.
+        Nếu `force_immediate=True` (khi có cảnh báo), bỏ qua rate limit để đồng bộ ngay.
         """
         now = time.time()
         with self._lock:
-            if self._is_syncing or (now - self._last_sync_timestamp < self.sync_interval_sec):
-                return False
+            if not force_immediate:
+                if self._is_syncing or (now - self._last_sync_timestamp < self.sync_interval_sec):
+                    return False
             self._is_syncing = True
             self._last_sync_timestamp = now
 

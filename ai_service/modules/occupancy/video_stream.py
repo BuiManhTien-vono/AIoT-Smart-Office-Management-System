@@ -229,10 +229,24 @@ class VideoStreamProcessor:
 
                 # 3. Đẩy đồng bộ State-Sync sang Backend .NET (Non-blocking)
                 if self.sync_backend and self.backend_client:
+                    snapshot_b64 = None
+                    if frame is not None:
+                        try:
+                            import base64
+                            _, enc = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                            snapshot_b64 = base64.b64encode(enc.tobytes()).decode("utf-8")
+                        except Exception:
+                            snapshot_b64 = None
+
+                    has_alerts = any(s.get("is_alert") for s in seat_statuses)
+                    prolonged_thresh = int(self.pipeline.away_alert_sec) if getattr(self.pipeline, "away_alert_sec", None) else None
                     self.backend_client.submit_occupancy_state_async(
                         camera_code=self.camera_code,
                         frame_sequence=frame_count,
-                        seat_statuses=seat_statuses
+                        seat_statuses=seat_statuses,
+                        prolonged_absence_threshold_seconds=prolonged_thresh,
+                        snapshot_base64=snapshot_b64,
+                        force_immediate=has_alerts
                     )
 
                 # 4. Vẽ Dashboard trực quan

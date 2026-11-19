@@ -48,6 +48,7 @@ class PushStateSyncRequest(BaseModel):
     frame_sequence: int = 1
     captured_at_utc: Optional[str] = None
     observations: Optional[List[SimulatedOccupancyObservation]] = None
+    snapshot_base64: Optional[str] = None
 
 
 @router.get("/seats")
@@ -145,7 +146,8 @@ def push_state_sync_to_backend(request: PushStateSyncRequest):
             camera_code=target_cam,
             frame_sequence=request.frame_sequence,
             seat_statuses=seat_statuses,
-            captured_at_utc=request.captured_at_utc
+            captured_at_utc=request.captured_at_utc,
+            snapshot_base64=request.snapshot_base64
         )
         return {
             "status": "success",
@@ -350,9 +352,9 @@ async def detect_preview(
             target_cam = (camera_code or settings.occupancy.default_camera_code).strip().upper()
             prolonged_thresh = int(occupancy_pipeline.away_alert_sec) if occupancy_pipeline.away_alert_sec else None
 
-            # Nén ảnh hiện trường bàn làm việc nếu có ghế đang có người ngồi để đính kèm bằng chứng an ninh
+            # Luôn nén ảnh hiện trường bàn làm việc nếu có frame để sẵn sàng đính kèm bằng chứng an ninh
             snapshot_b64 = None
-            if len(occupied_seat_ids) > 0 and frame is not None:
+            if frame is not None:
                 try:
                     # Nén JPEG chất lượng 80 (~80KB) để gửi kèm trạng thái mà không gây nghẽn mạng
                     _, enc = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
@@ -360,13 +362,15 @@ async def detect_preview(
                 except Exception as enc_err:
                     print(f"[!] Không thể nén ảnh snapshot bàn làm việc: {enc_err}")
 
+            has_alerts = any(res.get("is_alert") for res in pipeline_results)
             try:
                 backend_client.submit_occupancy_state_async(
                     camera_code=target_cam,
                     frame_sequence=int(time.time() * 1000) % 1_000_000,
                     seat_statuses=pipeline_results,
                     prolonged_absence_threshold_seconds=prolonged_thresh,
-                    snapshot_base64=snapshot_b64
+                    snapshot_base64=snapshot_b64,
+                    force_immediate=has_alerts
                 )
             except Exception as exc:
                 print(f"[!] Lỗi đồng bộ state-sync sang backend: {exc}")

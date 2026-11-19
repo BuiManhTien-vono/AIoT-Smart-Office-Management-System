@@ -118,21 +118,23 @@ public static class SeatStateMachine
         }
 
         // 3. Trường hợp KHÔNG CÓ NGƯỜI TẠI BÀN (IsOccupied == false)
-        // 3.1. Nếu bàn chưa gán nhân viên và đang EMPTY -> giữ nguyên EMPTY
-        if (!ctx.AssignedEmployeeId.HasValue && prevState == StateEmpty)
+        // 3.1. Nếu bàn đang EMPTY (chưa có ai ngồi vào bàn trong phiên này) -> Giữ nguyên EMPTY
+        if (prevState == StateEmpty)
         {
             return new StateEvaluationOutcome(
                 PreviousState: StateEmpty,
                 NewState: StateEmpty,
                 StateChanged: false,
                 IsIgnoredOutOfOrder: false,
-                PreviousStateDurationSeconds: elapsedSeconds,
+                PreviousStateDurationSeconds: 0,
                 UpdatedActiveSecondsToday: ctx.CurrentActiveSecondsToday,
-                UpdatedStateTimestampUtc: ctx.StateUpdatedAtUtc,
+                UpdatedStateTimestampUtc: ctx.CapturedAtUtc,
                 IsLunchMuted: isLunchWindow,
                 ProlongedAbsenceAlertTriggered: false,
                 WrongSeatAlertTriggered: false,
-                Message: "Bàn trống chưa phân bổ nhân viên (EMPTY).");
+                Message: ctx.AssignedEmployeeId.HasValue
+                    ? "Bàn làm việc đang trống, nhân viên chưa vào bàn (EMPTY)."
+                    : "Bàn trống chưa phân bổ nhân viên (EMPTY).");
         }
 
         // Tính tổng thời gian vắng mặt liên tục (lấy max giữa dữ liệu đo từ AI và khoảng thời gian từ lần cập nhật trước)

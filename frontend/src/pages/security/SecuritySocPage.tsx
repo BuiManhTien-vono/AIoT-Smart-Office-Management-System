@@ -306,6 +306,8 @@ export function SecuritySocPage({ session }: { session: Session }) {
         return <span className="badge badge-type-stranger-desk">🚨 Người lạ tại bàn {seatCode ? `(${seatCode})` : ''} - Chưa Check-in</span>
       case 'UNREGISTERED_AFTER_HOURS_PRESENCE':
         return <span className="badge badge-type-unregistered">⚠️ Hiện diện ngoài giờ chưa đăng ký OT {seatCode ? `(${seatCode})` : ''}</span>
+      case 'PROLONGED_ABSENCE':
+        return <span className="badge badge-type-prolonged">⏳ Ra khỏi chỗ quá thời gian {seatCode ? `(${seatCode})` : ''}</span>
       case 'SPOOFING_ATTEMPT':
         return <span className="badge badge-type-spoofing">🛡️ Giả mạo khuôn mặt tại Kiosk (Ảnh/ĐT)</span>
       case 'STRANGER_GATE_CHECKIN':
@@ -510,6 +512,7 @@ export function SecuritySocPage({ session }: { session: Session }) {
                 <option value="ALL">Tất cả loại sự cố</option>
                 <option value="STRANGER_AT_UNCHECKED_DESK">🚨 Người lạ tại bàn (chưa check-in)</option>
                 <option value="UNREGISTERED_AFTER_HOURS_PRESENCE">⚠️ Ngoài giờ chưa đăng ký OT</option>
+                <option value="PROLONGED_ABSENCE">⏳ Ra khỏi chỗ quá thời gian</option>
                 <option value="SPOOFING_ATTEMPT">🛡️ Giả mạo sinh trắc học Kiosk</option>
                 <option value="STRANGER_GATE_CHECKIN">👤 Người lạ tại Kiosk</option>
               </select>
@@ -815,6 +818,7 @@ export function SecuritySocPage({ session }: { session: Session }) {
           resolvingIncident.incidentType === 'STRANGER_GATE_CHECKIN' ? 'Người lạ không thuộc công ty chấm công tại Kiosk' :
           resolvingIncident.incidentType === 'STRANGER_AT_UNCHECKED_DESK' ? 'Người lạ ngồi tại bàn chưa check-in công ty' :
           resolvingIncident.incidentType === 'UNREGISTERED_AFTER_HOURS_PRESENCE' ? 'Hiện diện tại bàn làm việc ngoài giờ không phép' :
+          resolvingIncident.incidentType === 'PROLONGED_ABSENCE' ? 'Ra khỏi chỗ quá thời gian quy định (>10s)' :
           resolvingIncident.alertLevel || 'Sự cố an ninh'
         )
 

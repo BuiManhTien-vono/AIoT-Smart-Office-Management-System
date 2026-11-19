@@ -383,4 +383,86 @@ public class Week2OccupancyStorageAndOtTests
         Assert.Contains("clip10s.mp4", evidenceUpload.Value.ObjectKey);
         Assert.Contains("X-Amz-Algorithm=AWS4-HMAC-SHA256", evidenceUpload.Value.PresignedViewUrl);
     }
+
+    [Fact]
+    public void SeatStateMachine_EmptySeat_Should_Remain_Empty_Even_If_Assigned()
+    {
+        var assignedEmpId = Guid.NewGuid();
+        var capturedAt = DateTimeOffset.UtcNow;
+        var stateUpdatedLongAgo = capturedAt.AddHours(-2);
+
+        // Bàn có gán nhân viên nhưng đang EMPTY, không có người ngồi -> Phải giữ nguyên EMPTY, không được báo vắng mặt
+        var ctx = new SeatStateMachine.StateEvaluationContext(
+            CurrentState: SeatStateMachine.StateEmpty,
+            StateUpdatedAtUtc: stateUpdatedLongAgo,
+            CurrentActiveSecondsToday: 0,
+            AssignedEmployeeId: assignedEmpId,
+            IsOccupied: false,
+            UnoccupiedContinuousFrames: 100,
+            UnoccupiedContinuousSeconds: 100,
+            DetectedEmployeeId: null,
+            CapturedAtUtc: capturedAt,
+            ProlongedAbsenceThresholdSeconds: 10);
+
+        var outcome = SeatStateMachine.Evaluate(ctx);
+
+        Assert.Equal(SeatStateMachine.StateEmpty, outcome.NewState);
+        Assert.False(outcome.StateChanged);
+        Assert.False(outcome.ProlongedAbsenceAlertTriggered);
+    }
+
+    [Fact]
+    public void SeatStateMachine_Only_Present_Seat_Leaving_Triggers_Prolonged_Away_Once()
+    {
+        var assignedEmpId = Guid.NewGuid();
+        var t0 = DateTimeOffset.UtcNow;
+
+        // 1. Nhân viên ngồi vào bàn -> PRESENT
+        var ctxPresent = new SeatStateMachine.StateEvaluationContext(
+            CurrentState: SeatStateMachine.StateEmpty,
+            StateUpdatedAtUtc: t0,
+            CurrentActiveSecondsToday: 0,
+            AssignedEmployeeId: assignedEmpId,
+            IsOccupied: true,
+            UnoccupiedContinuousFrames: 0,
+            UnoccupiedContinuousSeconds: 0,
+            DetectedEmployeeId: assignedEmpId,
+            CapturedAtUtc: t0);
+        var outcome1 = SeatStateMachine.Evaluate(ctxPresent);
+        Assert.Equal(SeatStateMachine.StatePresent, outcome1.NewState);
+
+        // 2. Nhân viên rời bàn >= 10s -> PROLONGED_AWAY (kích hoạt cảnh báo lần 1)
+        var tAway = t0.AddSeconds(12);
+        var ctxAway = new SeatStateMachine.StateEvaluationContext(
+            CurrentState: SeatStateMachine.StateTempAway,
+            StateUpdatedAtUtc: t0.AddSeconds(2),
+            CurrentActiveSecondsToday: 2,
+            AssignedEmployeeId: assignedEmpId,
+            IsOccupied: false,
+            UnoccupiedContinuousFrames: 60,
+            UnoccupiedContinuousSeconds: 12,
+            DetectedEmployeeId: null,
+            CapturedAtUtc: tAway,
+            ProlongedAbsenceThresholdSeconds: 10);
+        var outcome2 = SeatStateMachine.Evaluate(ctxAway);
+        Assert.Equal(SeatStateMachine.StateProlongedAway, outcome2.NewState);
+        Assert.True(outcome2.ProlongedAbsenceAlertTriggered);
+
+        // 3. Nhân viên tiếp tục vắng mặt ở giây thứ 20 -> Vẫn giữ PROLONGED_AWAY, KHÔNG được bắn cảnh báo tiếp
+        var tStillAway = t0.AddSeconds(20);
+        var ctxStillAway = new SeatStateMachine.StateEvaluationContext(
+            CurrentState: SeatStateMachine.StateProlongedAway,
+            StateUpdatedAtUtc: tAway,
+            CurrentActiveSecondsToday: 2,
+            AssignedEmployeeId: assignedEmpId,
+            IsOccupied: false,
+            UnoccupiedContinuousFrames: 100,
+            UnoccupiedContinuousSeconds: 20,
+            DetectedEmployeeId: null,
+            CapturedAtUtc: tStillAway,
+            ProlongedAbsenceThresholdSeconds: 10);
+        var outcome3 = SeatStateMachine.Evaluate(ctxStillAway);
+        Assert.Equal(SeatStateMachine.StateProlongedAway, outcome3.NewState);
+        Assert.False(outcome3.ProlongedAbsenceAlertTriggered);
+    }
 }

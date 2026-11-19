@@ -38,7 +38,7 @@ public sealed class SecurityIncidentDetectedIntegrationEventHandler(
         var severity = integrationEvent.AlertLevel == "LEVEL_3_BREACH"
             ? "CRITICAL"
             : integrationEvent.AlertLevel == "LEVEL_2_UNAUTH"
-                ? "HIGH"
+                ? (integrationEvent.IncidentType == "PROLONGED_ABSENCE" ? "MEDIUM" : "HIGH")
                 : "MEDIUM";
 
         // Gửi Telegram chỉ cho nhân viên liên quan tới bàn làm việc (người lạ tại bàn -> gửi cho chủ bàn; ngoài giờ -> gửi cho NV đó)
@@ -59,6 +59,15 @@ public sealed class SecurityIncidentDetectedIntegrationEventHandler(
                     $"⚠️ Cảnh báo ngoài giờ: Bạn đang hiện diện tại bàn {integrationEvent.SeatCode} ngoài ca làm việc mà chưa có đơn OT được phê duyệt.",
                     cancellationToken);
             }
+            else if (integrationEvent.IncidentType == "PROLONGED_ABSENCE")
+            {
+                // Đã được xử lý gửi qua ProlongedAbsenceRealtimeHandler
+                telegramSent = true;
+            }
+        }
+        else if (integrationEvent.IncidentType == "PROLONGED_ABSENCE")
+        {
+            telegramSent = true;
         }
 
         var incident = new SecurityIncident

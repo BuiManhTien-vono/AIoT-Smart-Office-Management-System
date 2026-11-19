@@ -32,6 +32,7 @@ public sealed class SecurityIncidentService(
     // Phân loại các kịch bản sự cố trọng tâm
     public const string TypeStrangerAtUncheckedDesk = "STRANGER_AT_UNCHECKED_DESK";
     public const string TypeUnregisteredAfterHours = "UNREGISTERED_AFTER_HOURS_PRESENCE";
+    public const string TypeProlongedAbsence = "PROLONGED_ABSENCE";
     public const string TypeSpoofingAttempt = "SPOOFING_ATTEMPT";
     public const string TypeStrangerGateCheckin = "STRANGER_GATE_CHECKIN";
     public const string TypeGhostAttendance = "GHOST_ATTENDANCE";
@@ -179,6 +180,20 @@ public sealed class SecurityIncidentService(
             severity = SeverityMedium;
             telegramSent = false;
             actionSummary = "Phát hiện khuôn mặt người lạ (chưa đăng ký trong CSDL nhân viên) cố gắng thực hiện chấm công tại Kiosk.";
+        }
+        // Nhánh 3b: Ra khỏi chỗ quá thời gian (>10s)
+        else if (incidentType == TypeProlongedAbsence)
+        {
+            alertLevel = AlertLevel2UnauthorizedPresence;
+            severity = SeverityMedium;
+            actionSummary = $"Nhân viên rời khỏi chỗ tại bàn {request.SeatCode ?? ""} quá thời gian quy định (>10s).";
+            if (telegramNotifier is not null && request.DetectedEmployeeId.HasValue)
+            {
+                telegramSent = await telegramNotifier.SendToEmployeeAsync(
+                    request.DetectedEmployeeId.Value,
+                    $"⚠️ Cảnh báo bàn làm việc: Bạn đã rời khỏi vị trí bàn {request.SeatCode ?? ""} quá thời gian quy định.",
+                    ct);
+            }
         }
         // Nhánh 4: Điểm danh ma (Check-in nhưng bỏ vị trí)
         else if (incidentType == TypeGhostAttendance)
@@ -424,6 +439,7 @@ public sealed class SecurityIncidentService(
         {
             TypeStrangerAtUncheckedDesk => "NGƯỜI LẠ TẠI BÀN LÀM VIỆC",
             TypeUnregisteredAfterHours => "HIỆN DIỆN NGOÀI GIỜ CHƯA DUYỆT OT",
+            TypeProlongedAbsence => "RA KHỎI CHỖ QUÁ THỜI GIAN",
             TypeSpoofingAttempt => "GIẢ MẠO SINH TRẮC HỌC (ẢNH/ĐT)",
             TypeStrangerGateCheckin => "NGƯỜI LẠ CHẤM CÔNG TẠI KIOSK",
             _ => incident.IncidentType ?? "SỰ CỐ AN NINH"
@@ -572,6 +588,18 @@ public sealed class SecurityIncidentService(
                 ct);
         }
 
+        var effectiveSummary = !string.IsNullOrWhiteSpace(actionSummary)
+            ? actionSummary
+            : incident.IncidentType switch
+            {
+                TypeProlongedAbsence => $"Cảnh báo ra khỏi chỗ quá thời gian: Nhân viên {employee?.FullName ?? employee?.EmployeeCode ?? "nội bộ"} rời vị trí bàn {incident.SeatCode ?? ""} quá thời gian quy định (>10s).",
+                TypeStrangerAtUncheckedDesk => $"Phát hiện người lạ/chưa check-in chiếm chỗ tại bàn {incident.SeatCode ?? ""} trong khi nhân viên chưa check-in vào công ty.",
+                TypeUnregisteredAfterHours => $"Cảnh báo hiện diện ngoài giờ chưa có đơn OT được duyệt tại bàn {incident.SeatCode ?? ""}.",
+                TypeSpoofingAttempt => "Phát hiện hành vi giả mạo sinh trắc học tại Kiosk (ảnh in/màn hình điện thoại).",
+                TypeStrangerGateCheckin => "Phát hiện khuôn mặt người lạ cố gắng thực hiện chấm công tại Kiosk.",
+                _ => $"Ghi nhận sự cố an ninh [{incident.IncidentType}] tại vị trí {incident.SeatCode ?? incident.CameraId.ToString()}."
+            };
+
         return new SecurityIncidentResponse(
             incident.Id,
             incident.CameraId,
@@ -592,6 +620,6 @@ public sealed class SecurityIncidentService(
             incident.ResolvedByUserId,
             incident.DetectedAt,
             incident.ResolvedAt,
-            actionSummary);
+            effectiveSummary);
     }
 }
