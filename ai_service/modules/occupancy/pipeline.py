@@ -18,7 +18,7 @@ class OccupancyPipeline:
         self,
         seats: Optional[List[SeatBox]] = None,
         custom_polygons: Optional[List[np.ndarray]] = None,
-        away_alert_sec: float = 10.0,
+        away_alert_sec: float = 15.0,
         anti_flicker_frames: int = 5,
         prolonged_away_sec: Optional[float] = None
     ):
@@ -87,6 +87,7 @@ class OccupancyPipeline:
                         break
 
             # 2. Cập nhật máy trạng thái FSM
+            prev_status = state.status
             if matched_head is not None:
                 state.consecutive_present_frames += 1
                 state.consecutive_absent_frames = 0
@@ -119,6 +120,7 @@ class OccupancyPipeline:
                 "seat_id": state.seat_id,
                 "seat_name": state.seat_name,
                 "status": state.status.value,
+                "status_changed": (state.status != prev_status),
                 "color_bgr": STATUS_COLORS_BGR[state.status],
                 "polygon_pixel": state.polygon_pixel,
                 "normalized_polygon": state.normalized_polygon,

@@ -363,7 +363,7 @@ def detect_preview(
                 except Exception as enc_err:
                     print(f"[!] Không thể nén ảnh snapshot bàn làm việc: {enc_err}")
 
-            has_alerts = any(res.get("is_alert") for res in pipeline_results)
+            has_alerts = any(res.get("is_alert") or res.get("status_changed") for res in pipeline_results)
             try:
                 backend_client.submit_occupancy_state_async(
                     camera_code=target_cam,

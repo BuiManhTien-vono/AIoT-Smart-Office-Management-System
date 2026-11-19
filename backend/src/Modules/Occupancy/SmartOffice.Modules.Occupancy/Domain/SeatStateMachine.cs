@@ -20,7 +20,7 @@ public static class SeatStateMachine
 
     public const int AntiFlickerMinFrames = 15;
     public const int AntiFlickerMinSeconds = 3;
-    public const int DefaultProlongedAbsenceSeconds = 10; // Rời chỗ >= 10 giây là cảnh báo
+    public const int DefaultProlongedAbsenceSeconds = 15; // Rời chỗ >= 15 giây là cảnh báo & gửi mail
 
     public static readonly TimeOnly DefaultLunchStart = new(12, 0);
     public static readonly TimeOnly DefaultLunchEnd = new(13, 30);

@@ -43,7 +43,22 @@ public sealed class ProlongedAbsenceRealtimeHandler(
         ProlongedAbsenceDetectedIntegrationEvent integrationEvent,
         CancellationToken cancellationToken = default)
     {
-        // Cảnh báo bàn làm việc -> gửi Telegram riêng cho nhân viên được gán bàn
+        if (hubContext is not null)
+        {
+            var groups = new[]
+            {
+                OccupancyHub.GetDepartmentGroupName(integrationEvent.DepartmentId),
+                OccupancyHub.GetRoleGroupName("ADMIN"),
+                OccupancyHub.GetRoleGroupName("HR"),
+                OccupancyHub.GetRoleGroupName("SECURITY")
+            };
+
+            await hubContext.Clients
+                .Groups(groups)
+                .SendAsync("ProlongedAbsenceAlert", integrationEvent, cancellationToken);
+        }
+
+        // Cảnh báo bàn làm việc -> gửi Gmail riêng cho nhân viên được gán bàn
         if (telegram is not null)
         {
             await telegram.SendToEmployeeAsync(
@@ -51,21 +66,6 @@ public sealed class ProlongedAbsenceRealtimeHandler(
                 $"⚠️ Cảnh báo rời chỗ quá lâu: bạn đã rời bàn {integrationEvent.SeatCode} {FormatDuration(integrationEvent.AwayDurationSeconds)} mà chưa quay lại.",
                 cancellationToken);
         }
-
-        if (hubContext is null)
-        {
-            return;
-        }
-
-        var groups = new[]
-        {
-            OccupancyHub.GetDepartmentGroupName(integrationEvent.DepartmentId),
-            OccupancyHub.GetRoleGroupName("ADMIN")
-        };
-
-        await hubContext.Clients
-            .Groups(groups)
-            .SendAsync("ProlongedAbsenceAlert", integrationEvent, cancellationToken);
     }
 
     internal static string FormatDuration(int seconds) =>

@@ -98,9 +98,9 @@ class OccupancySettings(BaseModel):
     async_mode: bool = True
     frame_skip: int = 5
     ring_buffer_capacity: int = 150
-    away_alert_seconds: float = 10.0
+    away_alert_seconds: float = 15.0
     anti_flicker_frames: int = 15
-    prolonged_away_sec: float = 10.0  # Rời chỗ >= 10 giây là cảnh báo (đồng bộ với Backend)
+    prolonged_away_sec: float = 15.0  # Rời chỗ >= 15 giây là cảnh báo & gửi mail (đồng bộ với Backend)
     default_camera_code: str = os.environ.get("DEFAULT_CAMERA_CODE", "CAM_DESK_IT")
     state_sync_interval_sec: float = 2.0
     fallback_video_path: Optional[str] = "D:\\code\\lmao\\018.avi"

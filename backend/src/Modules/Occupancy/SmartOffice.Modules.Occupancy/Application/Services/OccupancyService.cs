@@ -484,8 +484,17 @@ public sealed class OccupancyService(
                     new Error("SEAT_NOT_FOUND", $"Không tìm thấy vị trí bàn '{obs.SeatCode}' thuộc camera '{normalizedCamCode}'."));
             }
 
+            var effectiveThreshold = request.ProlongedAbsenceThresholdSeconds ?? SeatStateMachine.DefaultProlongedAbsenceSeconds;
+            var effectiveCurrentState = seat.CurrentState;
+            if (string.Equals(effectiveCurrentState, SeatStateMachine.StateEmpty, StringComparison.OrdinalIgnoreCase) &&
+                !obs.IsOccupied &&
+                obs.UnoccupiedContinuousSeconds > 0)
+            {
+                effectiveCurrentState = SeatStateMachine.StateTempAway;
+            }
+
             var evalContext = new SeatStateMachine.StateEvaluationContext(
-                CurrentState: seat.CurrentState,
+                CurrentState: effectiveCurrentState,
                 StateUpdatedAtUtc: seat.StateUpdatedAt,
                 CurrentActiveSecondsToday: seat.ActiveSecondsToday,
                 AssignedEmployeeId: seat.AssignedEmployeeId,
@@ -494,7 +503,7 @@ public sealed class OccupancyService(
                 UnoccupiedContinuousSeconds: obs.UnoccupiedContinuousSeconds,
                 DetectedEmployeeId: obs.DetectedEmployeeId,
                 CapturedAtUtc: capturedAtUtc,
-                ProlongedAbsenceThresholdSeconds: request.ProlongedAbsenceThresholdSeconds ?? SeatStateMachine.DefaultProlongedAbsenceSeconds);
+                ProlongedAbsenceThresholdSeconds: effectiveThreshold);
 
             var outcome = SeatStateMachine.Evaluate(evalContext);
 
@@ -540,68 +549,50 @@ public sealed class OccupancyService(
                     SeatProlongedAlertEmitted[seat.Id] = false;
                 }
 
-                if (outcome.ProlongedAbsenceAlertTriggered && seat.AssignedEmployeeId.HasValue)
+                if (outcome.ProlongedAbsenceAlertTriggered)
                 {
-                    var localTime = capturedAtUtc.ToOffset(TimeSpan.FromHours(7));
-                    var workDate = DateOnly.FromDateTime(localTime.DateTime);
-                    bool hasCheckedIn = await workScheduleLookup.HasEmployeeCheckedInTodayAsync(
-                        seat.AssignedEmployeeId.Value,
-                        workDate,
-                        ct);
-
-                    if (hasCheckedIn)
+                    // Debounce: Mỗi phiên rời bàn chỉ phát đúng 1 cảnh báo cho đến khi nhân viên quay lại bàn
+                    bool alreadyEmitted = SeatProlongedAlertEmitted.TryGetValue(seat.Id, out var emitted) && emitted;
+                    if (!alreadyEmitted)
                     {
-                        var scheduleCheck = await workScheduleLookup.ValidateEmployeePresenceTimeAsync(
-                            seat.AssignedEmployeeId.Value,
-                            capturedAtUtc,
-                            gracePeriodMinutes: 20,
-                            ct);
+                        SeatProlongedAlertEmitted[seat.Id] = true;
 
-                        // Chỉ phát cảnh báo rời bàn quá lâu khi nhân viên ĐÃ CHẤM CÔNG và ĐANG TRONG CA LÀM VIỆC HỢP LỆ (hành chính hoặc OT đã duyệt)
-                        if (scheduleCheck.IsAuthorizedToWork)
+                        var targetEmployeeId = seat.AssignedEmployeeId ?? obs.DetectedEmployeeId;
+                        if (!targetEmployeeId.HasValue)
                         {
-                            // Debounce: Mỗi phiên rời bàn chỉ phát đúng 1 cảnh báo cho đến khi nhân viên quay lại bàn
-                            bool alreadyEmitted = SeatProlongedAlertEmitted.TryGetValue(seat.Id, out var emitted) && emitted;
-                            if (!alreadyEmitted)
-                            {
-                                SeatProlongedAlertEmitted[seat.Id] = true;
-
-                                pendingProlongedEvents.Add(new ProlongedAbsenceDetectedIntegrationEvent(
-                                    Guid.NewGuid(),
-                                    capturedAtUtc,
-                                    seat.Id,
-                                    seat.SeatCode,
-                                    seat.DepartmentId,
-                                    seat.AssignedEmployeeId,
-                                    outcome.PreviousStateDurationSeconds));
-
-                                // Đưa sự cố ra khỏi chỗ quá thời gian (>10s) vào An ninh & Sự cố (SOC) kèm ảnh chụp hiện trường
-                                var incidentId = Guid.NewGuid();
-                                var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
-                                    ? request.SnapshotBase64
-                                    : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
-                                string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
-                                var actionSummary = $"Cảnh báo ra khỏi chỗ quá thời gian: Nhân viên rời vị trí tại bàn {seat.SeatCode} quá thời gian quy định ({outcome.PreviousStateDurationSeconds:F0}s >= 10s).";
-
-                                pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
-                                    Guid.NewGuid(),
-                                    capturedAtUtc,
-                                    incidentId,
-                                    camera.Id,
-                                    seat.DepartmentId,
-                                    seat.AssignedEmployeeId,
-                                    "LEVEL_2_UNAUTH",
-                                    snapshotObjectKey,
-                                    IncidentType: "PROLONGED_ABSENCE",
-                                    SeatCode: seat.SeatCode,
-                                    ActionSummary: actionSummary));
-                            }
+                            var activeEmployees = await employeeLookup.GetAllActiveAsync(ct);
+                            targetEmployeeId = activeEmployees.FirstOrDefault()?.EmployeeId;
                         }
-                    }
-                    else
-                    {
-                        // Nhân viên chưa điểm danh vào công ty mà người ngồi rời đi -> Trả bàn về trạng thái EMPTY, không báo rời chỗ
-                        seat.CurrentState = SeatStateMachine.StateEmpty;
+
+                        pendingProlongedEvents.Add(new ProlongedAbsenceDetectedIntegrationEvent(
+                            Guid.NewGuid(),
+                            capturedAtUtc,
+                            seat.Id,
+                            seat.SeatCode,
+                            seat.DepartmentId,
+                            targetEmployeeId,
+                            outcome.PreviousStateDurationSeconds));
+
+                        // Đưa sự cố ra khỏi chỗ quá thời gian (>= 15s) vào An ninh & Sự cố (SOC) kèm ảnh chụp hiện trường
+                        var incidentId = Guid.NewGuid();
+                        var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
+                            ? request.SnapshotBase64
+                            : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
+                        string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
+                        var actionSummary = $"Cảnh báo ra khỏi chỗ quá thời gian: Nhân viên rời vị trí tại bàn {seat.SeatCode} quá thời gian quy định ({outcome.PreviousStateDurationSeconds:F0}s >= {effectiveThreshold}s).";
+
+                        pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
+                            Guid.NewGuid(),
+                            capturedAtUtc,
+                            incidentId,
+                            camera.Id,
+                            seat.DepartmentId,
+                            targetEmployeeId,
+                            "LEVEL_2_UNAUTH",
+                            snapshotObjectKey,
+                            IncidentType: "PROLONGED_ABSENCE",
+                            SeatCode: seat.SeatCode,
+                            ActionSummary: actionSummary));
                     }
                 }
 
