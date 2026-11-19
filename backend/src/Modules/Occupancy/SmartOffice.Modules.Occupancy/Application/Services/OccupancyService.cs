@@ -540,43 +540,68 @@ public sealed class OccupancyService(
                     SeatProlongedAlertEmitted[seat.Id] = false;
                 }
 
-                if (outcome.ProlongedAbsenceAlertTriggered)
+                if (outcome.ProlongedAbsenceAlertTriggered && seat.AssignedEmployeeId.HasValue)
                 {
-                    // Debounce: Mỗi phiên rời bàn chỉ phát đúng 1 cảnh báo cho đến khi nhân viên quay lại bàn
-                    bool alreadyEmitted = SeatProlongedAlertEmitted.TryGetValue(seat.Id, out var emitted) && emitted;
-                    if (!alreadyEmitted)
+                    var localTime = capturedAtUtc.ToOffset(TimeSpan.FromHours(7));
+                    var workDate = DateOnly.FromDateTime(localTime.DateTime);
+                    bool hasCheckedIn = await workScheduleLookup.HasEmployeeCheckedInTodayAsync(
+                        seat.AssignedEmployeeId.Value,
+                        workDate,
+                        ct);
+
+                    if (hasCheckedIn)
                     {
-                        SeatProlongedAlertEmitted[seat.Id] = true;
-
-                        pendingProlongedEvents.Add(new ProlongedAbsenceDetectedIntegrationEvent(
-                            Guid.NewGuid(),
+                        var scheduleCheck = await workScheduleLookup.ValidateEmployeePresenceTimeAsync(
+                            seat.AssignedEmployeeId.Value,
                             capturedAtUtc,
-                            seat.Id,
-                            seat.SeatCode,
-                            seat.DepartmentId,
-                            seat.AssignedEmployeeId,
-                            outcome.PreviousStateDurationSeconds));
+                            gracePeriodMinutes: 20,
+                            ct);
 
-                        // Đưa sự cố ra khỏi chỗ quá thời gian (>10s) vào An ninh & Sự cố (SOC) kèm ảnh chụp hiện trường
-                        var incidentId = Guid.NewGuid();
-                        var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
-                            ? request.SnapshotBase64
-                            : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
-                        string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
-                        var actionSummary = $"Cảnh báo ra khỏi chỗ quá thời gian: Nhân viên rời vị trí tại bàn {seat.SeatCode} quá thời gian quy định ({outcome.PreviousStateDurationSeconds:F0}s >= 10s).";
+                        // Chỉ phát cảnh báo rời bàn quá lâu khi nhân viên ĐÃ CHẤM CÔNG và ĐANG TRONG CA LÀM VIỆC HỢP LỆ (hành chính hoặc OT đã duyệt)
+                        if (scheduleCheck.IsAuthorizedToWork)
+                        {
+                            // Debounce: Mỗi phiên rời bàn chỉ phát đúng 1 cảnh báo cho đến khi nhân viên quay lại bàn
+                            bool alreadyEmitted = SeatProlongedAlertEmitted.TryGetValue(seat.Id, out var emitted) && emitted;
+                            if (!alreadyEmitted)
+                            {
+                                SeatProlongedAlertEmitted[seat.Id] = true;
 
-                        pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
-                            Guid.NewGuid(),
-                            capturedAtUtc,
-                            incidentId,
-                            camera.Id,
-                            seat.DepartmentId,
-                            seat.AssignedEmployeeId,
-                            "LEVEL_2_UNAUTH",
-                            snapshotObjectKey,
-                            IncidentType: "PROLONGED_ABSENCE",
-                            SeatCode: seat.SeatCode,
-                            ActionSummary: actionSummary));
+                                pendingProlongedEvents.Add(new ProlongedAbsenceDetectedIntegrationEvent(
+                                    Guid.NewGuid(),
+                                    capturedAtUtc,
+                                    seat.Id,
+                                    seat.SeatCode,
+                                    seat.DepartmentId,
+                                    seat.AssignedEmployeeId,
+                                    outcome.PreviousStateDurationSeconds));
+
+                                // Đưa sự cố ra khỏi chỗ quá thời gian (>10s) vào An ninh & Sự cố (SOC) kèm ảnh chụp hiện trường
+                                var incidentId = Guid.NewGuid();
+                                var snapshotToSave = !string.IsNullOrWhiteSpace(request.SnapshotBase64)
+                                    ? request.SnapshotBase64
+                                    : LatestCameraSnapshots.GetValueOrDefault(camera.Id);
+                                string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, snapshotToSave, ct);
+                                var actionSummary = $"Cảnh báo ra khỏi chỗ quá thời gian: Nhân viên rời vị trí tại bàn {seat.SeatCode} quá thời gian quy định ({outcome.PreviousStateDurationSeconds:F0}s >= 10s).";
+
+                                pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
+                                    Guid.NewGuid(),
+                                    capturedAtUtc,
+                                    incidentId,
+                                    camera.Id,
+                                    seat.DepartmentId,
+                                    seat.AssignedEmployeeId,
+                                    "LEVEL_2_UNAUTH",
+                                    snapshotObjectKey,
+                                    IncidentType: "PROLONGED_ABSENCE",
+                                    SeatCode: seat.SeatCode,
+                                    ActionSummary: actionSummary));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Nhân viên chưa điểm danh vào công ty mà người ngồi rời đi -> Trả bàn về trạng thái EMPTY, không báo rời chỗ
+                        seat.CurrentState = SeatStateMachine.StateEmpty;
                     }
                 }
 

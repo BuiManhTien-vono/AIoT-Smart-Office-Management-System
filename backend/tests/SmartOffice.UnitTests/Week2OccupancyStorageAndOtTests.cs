@@ -104,6 +104,7 @@ public class Week2OccupancyStorageAndOtTests
         using var scope = provider.CreateScope();
 
         var biometricsService = scope.ServiceProvider.GetRequiredService<IBiometricsService>();
+        var attendanceService = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
         var occupancyService = scope.ServiceProvider.GetRequiredService<IOccupancyService>();
         var reportingDb = scope.ServiceProvider.GetRequiredService<ReportingDbContext>();
 
@@ -115,6 +116,10 @@ public class Week2OccupancyStorageAndOtTests
 
         var empOther = (await biometricsService.CreateEmployeeAsync(
             new CreateEmployeeRequest("NV002", "Trần Văn Ngồi Nhầm", null, null, dept.Id, null, null))).Value;
+
+        // Điểm danh vào ca lúc 08:00 sáng cho empOwner để phiên làm việc tại bàn là hợp lệ
+        await attendanceService.ProcessCheckInOutAsync(new CheckAttendanceRequest(
+            empOwner.Id, null, 0.98f, null, new DateTimeOffset(2026, 11, 3, 8, 0, 0, TimeSpan.Zero)));
 
         var camera = (await occupancyService.CreateCameraAsync(
             new CreateCameraRequest("CAM_DESK_IT", "Camera Phòng IT", "rtsp://localhost:8554/desk_it", "DESK", dept.Id))).Value;
@@ -464,5 +469,53 @@ public class Week2OccupancyStorageAndOtTests
         var outcome3 = SeatStateMachine.Evaluate(ctxStillAway);
         Assert.Equal(SeatStateMachine.StateProlongedAway, outcome3.NewState);
         Assert.False(outcome3.ProlongedAbsenceAlertTriggered);
+    }
+
+    [Fact]
+    public async Task Occupancy_UncheckedInEmployee_Leaving_Should_NOT_Trigger_ProlongedAlert()
+    {
+        using var provider = BuildFullModularServiceProvider(nameof(Occupancy_UncheckedInEmployee_Leaving_Should_NOT_Trigger_ProlongedAlert));
+        using var scope = provider.CreateScope();
+
+        var biometricsService = scope.ServiceProvider.GetRequiredService<IBiometricsService>();
+        var occupancyService = scope.ServiceProvider.GetRequiredService<IOccupancyService>();
+        var securityDb = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
+
+        var dept = (await biometricsService.CreateDepartmentAsync(
+            new CreateDepartmentRequest("DEPT_UNAUTH", "Phòng Thử Nghiệm", null))).Value;
+
+        var emp = (await biometricsService.CreateEmployeeAsync(
+            new CreateEmployeeRequest("NV_NO_CHECKIN", "Nhân Viên Chưa Điểm Danh", null, null, dept.Id, null, null))).Value;
+
+        var camera = (await occupancyService.CreateCameraAsync(
+            new CreateCameraRequest("CAM_NO_CHECKIN", "Camera Bàn", "rtsp://localhost:8554/desk", "DESK", dept.Id))).Value;
+
+        var polygon = new List<PolygonPointDto> { new(0.1, 0.1), new(0.9, 0.1), new(0.9, 0.9), new(0.1, 0.9) };
+        await occupancyService.CreateSeatAsync(new CreateSeatRequest("SEAT_NO_CHECKIN", "Bàn 1", camera.Id, dept.Id, emp.Id, polygon));
+
+        var t0 = new DateTimeOffset(2026, 11, 4, 9, 0, 0, TimeSpan.Zero);
+
+        // 1. Người lạ ngồi vào bàn khi nhân viên CHƯA check-in -> Báo STRANGER_AT_UNCHECKED_DESK
+        await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_NO_CHECKIN",
+            t0,
+            FrameSequence: 1,
+            [new SeatObservationInput("SEAT_NO_CHECKIN", IsOccupied: true, DetectedEmployeeId: null)]));
+
+        var strangerIncident = await securityDb.SecurityIncidents
+            .FirstOrDefaultAsync(x => x.IncidentType == "STRANGER_AT_UNCHECKED_DESK");
+        Assert.NotNull(strangerIncident);
+
+        // 2. Người đó đứng dậy rời bàn > 10 giây (vắng mặt) -> Vì nhân viên chưa check-in nên KHÔNG BÁO PROLONGED_ABSENCE
+        await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_NO_CHECKIN",
+            t0.AddSeconds(15),
+            FrameSequence: 2,
+            [new SeatObservationInput("SEAT_NO_CHECKIN", IsOccupied: false, UnoccupiedContinuousFrames: 50, UnoccupiedContinuousSeconds: 15)],
+            ProlongedAbsenceThresholdSeconds: 10));
+
+        var prolongedIncident = await securityDb.SecurityIncidents
+            .FirstOrDefaultAsync(x => x.IncidentType == "PROLONGED_ABSENCE");
+        Assert.Null(prolongedIncident); // Phải không có sự cố rời bàn quá lâu!
     }
 }
