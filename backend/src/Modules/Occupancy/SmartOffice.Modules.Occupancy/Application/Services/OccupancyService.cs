@@ -486,11 +486,23 @@ public sealed class OccupancyService(
 
             var effectiveThreshold = request.ProlongedAbsenceThresholdSeconds ?? SeatStateMachine.DefaultProlongedAbsenceSeconds;
             var effectiveCurrentState = seat.CurrentState;
-            if (string.Equals(effectiveCurrentState, SeatStateMachine.StateEmpty, StringComparison.OrdinalIgnoreCase) &&
-                !obs.IsOccupied &&
-                obs.UnoccupiedContinuousSeconds > 0)
+            if (!obs.IsOccupied && obs.UnoccupiedContinuousSeconds == 0 && obs.UnoccupiedContinuousFrames == 0)
+            {
+                // AI Service báo bàn đang ở trạng thái EMPTY gốc (chưa có phiên ngồi hoặc vừa reset)
+                effectiveCurrentState = SeatStateMachine.StateEmpty;
+                seat.CurrentState = SeatStateMachine.StateEmpty;
+                SeatProlongedAlertEmitted[seat.Id] = false;
+            }
+            else if (string.Equals(effectiveCurrentState, SeatStateMachine.StateEmpty, StringComparison.OrdinalIgnoreCase) &&
+                     !obs.IsOccupied &&
+                     obs.UnoccupiedContinuousSeconds > 0)
             {
                 effectiveCurrentState = SeatStateMachine.StateTempAway;
+            }
+
+            if (obs.IsOccupied || (obs.UnoccupiedContinuousSeconds > 0 && obs.UnoccupiedContinuousSeconds < effectiveThreshold))
+            {
+                SeatProlongedAlertEmitted[seat.Id] = false;
             }
 
             var evalContext = new SeatStateMachine.StateEvaluationContext(
@@ -543,8 +555,8 @@ public sealed class OccupancyService(
                     outcome.PreviousStateDurationSeconds,
                     seat.ActiveSecondsToday));
 
-                // Nếu nhân viên đang hoặc quay lại PRESENT -> Reset cờ đã báo vắng mặt cho bàn này
-                if (outcome.NewState == SeatStateMachine.StatePresent)
+                // Nếu nhân viên đang ở PRESENT hoặc TEMP_AWAY -> Reset cờ đã báo vắng mặt cho bàn này
+                if (outcome.NewState == SeatStateMachine.StatePresent || outcome.NewState == SeatStateMachine.StateTempAway)
                 {
                     SeatProlongedAlertEmitted[seat.Id] = false;
                 }

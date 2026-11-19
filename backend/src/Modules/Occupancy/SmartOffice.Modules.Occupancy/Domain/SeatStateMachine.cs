@@ -137,8 +137,8 @@ public static class SeatStateMachine
                     : "Bàn trống chưa phân bổ nhân viên (EMPTY).");
         }
 
-        // Tính tổng thời gian vắng mặt liên tục (lấy max giữa dữ liệu đo từ AI và khoảng thời gian từ lần cập nhật trước)
-        int awaySeconds = Math.Max(ctx.UnoccupiedContinuousSeconds, elapsedSeconds);
+        // Tính tổng thời gian vắng mặt liên tục (ưu tiên số giây thực tế do AI Service đo, fallback sang elapsedSeconds nếu AI không truyền)
+        int awaySeconds = ctx.UnoccupiedContinuousSeconds > 0 ? ctx.UnoccupiedContinuousSeconds : elapsedSeconds;
         int awayFrames = ctx.UnoccupiedContinuousFrames;
 
         // 3.2. Bộ lọc chống nhấp nháy Anti-Flicker (FR-OCC-03):
