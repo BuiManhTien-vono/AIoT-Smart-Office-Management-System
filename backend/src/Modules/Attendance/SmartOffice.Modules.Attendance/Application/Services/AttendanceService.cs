@@ -20,8 +20,9 @@ namespace SmartOffice.Modules.Attendance.Application.Services;
 public sealed class AttendanceService(
     AttendanceDbContext dbContext,
     IEmployeeLookupContract employeeLookup,
+    IOvertimeLookupContract overtimeLookup,
     IObjectStorageService objectStorage,
-    IInMemoryEventBus eventBus) : IAttendanceService
+    IInMemoryEventBus eventBus) : IAttendanceService, IWorkScheduleLookupContract
 {
     public const int DebounceWindowSeconds = 300; // 5 phút
     public const float MinMatchConfidence = 0.70f;
@@ -496,5 +497,118 @@ public sealed class AttendanceService(
             message,
             log.CheckinSnapshotKey,
             snapshotPresignedUrl);
+    }
+
+    public async Task<bool> HasEmployeeCheckedInTodayAsync(
+        Guid employeeId,
+        DateOnly workDate,
+        CancellationToken ct = default)
+    {
+        var previousDate = workDate.AddDays(-1);
+        return await dbContext.AttendanceLogs
+            .AnyAsync(x => x.EmployeeId == employeeId &&
+                           (x.WorkDate == workDate || x.WorkDate == previousDate) &&
+                           x.CheckInTime != null &&
+                           x.Status != "ABSENT", ct);
+    }
+
+    public async Task<WorkScheduleValidationResult> ValidateEmployeePresenceTimeAsync(
+        Guid employeeId,
+        DateTimeOffset presenceTimeUtc,
+        int gracePeriodMinutes = 20,
+        CancellationToken ct = default)
+    {
+        var employee = await employeeLookup.GetByIdAsync(employeeId, ct);
+        if (employee is null || !employee.IsActive)
+        {
+            return new WorkScheduleValidationResult(
+                IsAuthorizedToWork: false,
+                IsWithinDefaultShift: false,
+                IsWithinGracePeriod: false,
+                IsWithinApprovedOt: false,
+                ShiftName: string.Empty,
+                ShiftStart: null,
+                ShiftEnd: null,
+                ApprovedOtId: null,
+                OtStart: null,
+                OtEnd: null,
+                SummaryMessage: "Nhân viên không tồn tại hoặc đã ngừng làm việc.");
+        }
+
+        Shift? shift = null;
+        if (employee.DefaultShiftId.HasValue)
+        {
+            shift = await dbContext.Shifts.FirstOrDefaultAsync(s => s.Id == employee.DefaultShiftId.Value, ct);
+        }
+        shift ??= await dbContext.Shifts.OrderByDescending(s => s.IsDefault).FirstOrDefaultAsync(ct);
+
+        // Quy đổi về giờ làm việc địa phương (Vietnam / System local time)
+        var localTime = presenceTimeUtc.ToOffset(TimeSpan.FromHours(7));
+        var currentTime = TimeOnly.FromDateTime(localTime.DateTime);
+        var dayOfWeek = localTime.DayOfWeek;
+        var isWeekend = dayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+
+        // 1. Kiểm tra ca làm thêm ngoài giờ (OT) đã được phê duyệt (APPROVED)
+        var otCheck = await overtimeLookup.CheckApprovedOvertimeAsync(employeeId, presenceTimeUtc, ct);
+
+        // 2. Kiểm tra ca làm việc hành chính chuẩn (không tính cuối tuần nếu là ca hành chính mặc định)
+        bool isWithinShift = false;
+        bool isWithinGrace = false;
+        string shiftName = shift?.ShiftName ?? "Ca hành chính mặc định";
+        TimeOnly? shiftStart = shift?.StartTime;
+        TimeOnly? shiftEnd = shift?.EndTime;
+
+        if (shift is not null && !isWeekend)
+        {
+            var graceEnd = shift.EndTime.AddMinutes(gracePeriodMinutes);
+            if (shift.EndTime < shift.StartTime)
+            {
+                // Ca làm việc qua đêm
+                isWithinShift = currentTime >= shift.StartTime || currentTime <= shift.EndTime;
+                isWithinGrace = !isWithinShift && currentTime > shift.EndTime && currentTime <= graceEnd;
+            }
+            else
+            {
+                isWithinShift = currentTime >= shift.StartTime && currentTime <= shift.EndTime;
+                isWithinGrace = !isWithinShift && currentTime > shift.EndTime && currentTime <= graceEnd;
+            }
+        }
+
+        bool isAuthorized = isWithinShift || isWithinGrace || otCheck.HasApprovedOvertime;
+
+        string summary;
+        if (otCheck.HasApprovedOvertime)
+        {
+            summary = $"Nhân viên có lịch làm thêm ngoài giờ (OT: {otCheck.StartTime:HH:mm} - {otCheck.EndTime:HH:mm}) đã được phê duyệt.";
+        }
+        else if (isWithinShift)
+        {
+            summary = $"Nhân viên đang trong ca làm việc ({shiftName}: {shiftStart:HH:mm} - {shiftEnd:HH:mm}).";
+        }
+        else if (isWithinGrace)
+        {
+            summary = $"Nhân viên đang trong thời gian ân hạn {gracePeriodMinutes} phút sau ca làm việc ({shiftEnd:HH:mm}).";
+        }
+        else if (isWeekend)
+        {
+            summary = $"Ngày cuối tuần ({dayOfWeek}): Nhân viên hiện diện nhưng chưa được phê duyệt làm thêm giờ (OT).";
+        }
+        else
+        {
+            summary = $"Nhân viên hiện diện ngoài giờ làm việc ({currentTime:HH:mm}) mà chưa được phê duyệt làm thêm giờ (OT).";
+        }
+
+        return new WorkScheduleValidationResult(
+            IsAuthorizedToWork: isAuthorized,
+            IsWithinDefaultShift: isWithinShift,
+            IsWithinGracePeriod: isWithinGrace,
+            IsWithinApprovedOt: otCheck.HasApprovedOvertime,
+            ShiftName: shiftName,
+            ShiftStart: shiftStart,
+            ShiftEnd: shiftEnd,
+            ApprovedOtId: otCheck.OtRegistrationId,
+            OtStart: otCheck.StartTime,
+            OtEnd: otCheck.EndTime,
+            SummaryMessage: summary);
     }
 }

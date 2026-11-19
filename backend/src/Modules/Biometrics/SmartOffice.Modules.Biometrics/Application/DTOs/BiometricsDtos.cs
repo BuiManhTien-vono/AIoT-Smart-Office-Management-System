@@ -19,7 +19,8 @@ public sealed record CreateEmployeeRequest(
     string? PhoneNumber,
     Guid DepartmentId,
     Guid? DefaultShiftId,
-    string? AvatarObjectKey);
+    string? AvatarObjectKey,
+    string? TelegramChatId = null);
 
 public sealed record UpdateEmployeeRequest(
     string FullName,
@@ -27,7 +28,8 @@ public sealed record UpdateEmployeeRequest(
     string? PhoneNumber,
     Guid DepartmentId,
     Guid? DefaultShiftId = null,
-    bool? IsActive = null);
+    bool? IsActive = null,
+    string? TelegramChatId = null);
 
 public sealed record EmployeeResponse(
     Guid Id,
@@ -42,7 +44,8 @@ public sealed record EmployeeResponse(
     bool IsActive,
     int RegisteredVectorCount,
     DateTimeOffset CreatedAt,
-    string? AvatarPresignedUrl = null);
+    string? AvatarPresignedUrl = null,
+    string? TelegramChatId = null);
 
 public sealed record RegisterBiometricVectorRequest(
     float[] EmbeddingVector,

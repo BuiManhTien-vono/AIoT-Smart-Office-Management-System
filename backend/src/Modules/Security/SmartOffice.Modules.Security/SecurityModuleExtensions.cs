@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SmartOffice.Modules.Security.Application.Handlers;
 using SmartOffice.Modules.Security.Application.Services;
 using SmartOffice.Modules.Security.Infrastructure;
 using SmartOffice.SharedKernel.Contracts;
+using SmartOffice.SharedKernel.Events;
 
 namespace SmartOffice.Modules.Security;
 
@@ -32,6 +34,7 @@ public static class SecurityModuleExtensions
         services.AddScoped<IOtService, OtService>();
         services.AddScoped<IOvertimeLookupContract, OtService>();
         services.AddScoped<ISecurityIncidentService, SecurityIncidentService>();
+        services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentDetectedIntegrationEventHandler>();
 
         return services;
     }

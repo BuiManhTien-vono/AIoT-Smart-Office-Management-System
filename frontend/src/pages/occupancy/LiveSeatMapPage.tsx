@@ -134,10 +134,12 @@ export function LiveSeatMapPage({ session }: Props) {
 
     const unsubAlert = signalrService.onProlongedAbsence(
       (event: ProlongedAbsenceAlertEvent) => {
-        const awayMinutes = Math.round(event.awayDurationSeconds / 60)
+        const durationText = event.awayDurationSeconds < 60
+          ? `${event.awayDurationSeconds} giây`
+          : `${Math.round(event.awayDurationSeconds / 60)} phút`
         const newAlert: AlertToast = {
           id: `${event.seatCode}-${Date.now()}`,
-          message: `Bàn [${event.seatCode}] đã vắng mặt hơn ${awayMinutes} phút mà chưa trở lại.`,
+          message: `Bàn [${event.seatCode}] đã rời vị trí ${durationText} mà chưa trở lại.`,
           timestamp: new Date(),
         }
         setAlerts(prev => [newAlert, ...prev.slice(0, 4)])

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { aiHealthUrl, backendHealthUrl } from '../../services/apiClient'
+import { signalrService } from '../../services/signalrService'
+import type { SecurityAlertEvent } from '../../services/signalrService'
+import type { ProlongedAbsenceAlertEvent, WrongSeatAlertEvent } from '../../types/occupancy.types'
 import { roleLabels } from '../../types/auth.types'
 import type { Session } from '../../types/auth.types'
 import { Icon } from './Icon'
@@ -55,10 +58,72 @@ function HealthPill({ label, health }: { label: string; health: Health }) {
   </div>
 }
 
+interface DeskNotificationItem {
+  id: string
+  title: string
+  message: string
+  time: string
+  isRead: boolean
+}
+
 function Notifications() {
   const [open, setOpen] = useState(false)
+  const [items, setItems] = useState<DeskNotificationItem[]>([])
   const container = useRef<HTMLDivElement>(null)
   const bell = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const unsubAbsence = signalrService.onProlongedAbsence((event: ProlongedAbsenceAlertEvent) => {
+      const durationText = event.awayDurationSeconds < 60
+        ? `${event.awayDurationSeconds} giây`
+        : `${Math.round(event.awayDurationSeconds / 60)} phút`
+      setItems(prev => [
+        {
+          id: `absent-${Date.now()}-${Math.random()}`,
+          title: `Bàn [${event.seatCode}] - Rời vị trí quá 10s`,
+          message: `Nhân viên đã rời vị trí ${durationText} mà chưa trở lại.`,
+          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          isRead: false,
+        },
+        ...prev.slice(0, 19),
+      ])
+    })
+
+    const unsubWrongSeat = signalrService.onWrongSeat((event: WrongSeatAlertEvent) => {
+      setItems(prev => [
+        {
+          id: `wrong-${Date.now()}-${Math.random()}`,
+          title: `Bàn [${event.seatCode}] - Ngồi sai vị trí`,
+          message: `Phát hiện nhân viên ngồi nhầm vị trí bàn đã phân bổ.`,
+          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          isRead: false,
+        },
+        ...prev.slice(0, 19),
+      ])
+    })
+
+    const unsubSecurity = signalrService.onSecurityAlert((event: SecurityAlertEvent) => {
+      // Chỉ nhận thông báo liên quan đến bàn làm việc
+      if (event.seatCode) {
+        setItems(prev => [
+          {
+            id: `sec-${Date.now()}-${Math.random()}`,
+            title: `Bàn [${event.seatCode}] - ${event.incidentType === 'UNREGISTERED_AFTER_HOURS_PRESENCE' ? 'Hiện diện ngoài giờ' : 'Sự cố bàn làm việc'}`,
+            message: event.actionSummary || 'Phát hiện sự cố an ninh tại bàn làm việc.',
+            time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            isRead: false,
+          },
+          ...prev.slice(0, 19),
+        ])
+      }
+    })
+
+    return () => {
+      unsubAbsence()
+      unsubWrongSeat()
+      unsubSecurity()
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -79,14 +144,64 @@ function Notifications() {
     }
   }, [open])
 
-  return <div className="shell-notifications" ref={container}>
-    <button ref={bell} className="notification-button" onClick={() => setOpen(value => !value)} aria-label="Thông báo, chưa có nguồn cảnh báo được kết nối" aria-expanded={open} aria-controls="notifications-panel"><Icon name="bell" size={22} /><span className="notification-count" aria-hidden="true">0</span></button>
-    {open && <section id="notifications-panel" className="notifications-panel" aria-label="Thông báo">
-      <div className="notifications-heading"><h2>Thông báo</h2><span>0 chưa đọc</span></div>
-      <div className="notifications-empty"><Icon name="bell" size={28} /><strong>Chưa kết nối nguồn cảnh báo</strong><p>Thông báo nghiệp vụ sẽ xuất hiện khi dịch vụ cảnh báo được tích hợp.</p></div>
-      <p className="notifications-footnote">Trạng thái Backend và AI được hiển thị riêng trên thanh công cụ.</p>
-    </section>}
-  </div>
+  const markAllAsRead = () => {
+    setItems(prev => prev.map(item => ({ ...item, isRead: true })))
+  }
+
+  const unreadCount = items.filter(x => !x.isRead).length
+
+  return (
+    <div className="shell-notifications" ref={container}>
+      <button
+        ref={bell}
+        className="notification-button"
+        onClick={() => {
+          setOpen(value => !value)
+          if (!open && unreadCount > 0) markAllAsRead()
+        }}
+        aria-label={`Thông báo, ${unreadCount} cảnh báo bàn làm việc chưa đọc`}
+        aria-expanded={open}
+        aria-controls="notifications-panel"
+      >
+        <Icon name="bell" size={22} />
+        <span className="notification-count" aria-hidden="true">{unreadCount > 9 ? '9+' : unreadCount}</span>
+      </button>
+      {open && (
+        <section id="notifications-panel" className="notifications-panel" aria-label="Thông báo bàn làm việc">
+          <div className="notifications-heading">
+            <h2>Cảnh báo bàn làm việc</h2>
+            {items.length > 0 ? (
+              <button type="button" className="notifications-clear-btn" onClick={() => setItems([])}>
+                Xóa tất cả
+              </button>
+            ) : (
+              <span>0 chưa đọc</span>
+            )}
+          </div>
+          {items.length === 0 ? (
+            <div className="notifications-empty">
+              <Icon name="bell" size={28} />
+              <strong>Chưa có cảnh báo bàn làm việc</strong>
+              <p>Hệ thống tự động hiển thị thông báo khi có người rời chỗ quá 10s, ngồi nhầm bàn hoặc ngoài giờ chưa đăng ký OT.</p>
+            </div>
+          ) : (
+            <div className="notifications-list">
+              {items.map(item => (
+                <div key={item.id} className={`notification-item ${item.isRead ? '' : 'unread'}`}>
+                  <div className="notification-item-header">
+                    <span>{item.title}</span>
+                    <span className="notification-item-time">{item.time}</span>
+                  </div>
+                  <div className="notification-item-body">{item.message}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="notifications-footnote">Cảnh báo bàn làm việc cũng được tự động gửi qua Telegram cá nhân của nhân viên.</p>
+        </section>
+      )}
+    </div>
+  )
 }
 
 export function MainLayout({ session, links, path, onLogout, children }: {

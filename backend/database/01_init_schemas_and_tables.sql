@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS biometrics.employees (
     full_name VARCHAR(100) NOT NULL,
     email VARCHAR(120) UNIQUE,
     phone_number VARCHAR(20),
+    telegram_chat_id VARCHAR(32),
     department_id UUID NOT NULL REFERENCES biometrics.departments(id) ON DELETE RESTRICT,
     default_shift_id UUID, -- Tham chiếu logic sang attendance.shifts(id)
     avatar_object_key VARCHAR(255),

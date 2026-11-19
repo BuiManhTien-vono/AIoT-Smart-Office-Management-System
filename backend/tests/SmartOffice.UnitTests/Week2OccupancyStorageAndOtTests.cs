@@ -44,6 +44,7 @@ public class Week2OccupancyStorageAndOtTests
         services.AddScoped<IBiometricsService, BiometricsService>();
         services.AddScoped<IEmployeeLookupContract, BiometricsEmployeeLookupService>();
         services.AddScoped<IAttendanceService, AttendanceService>();
+        services.AddScoped<IWorkScheduleLookupContract, AttendanceService>();
         services.AddScoped<IOccupancyService, OccupancyService>();
         services.AddScoped<IOtService, OtService>();
         services.AddScoped<IOvertimeLookupContract, OtService>();
@@ -172,12 +173,12 @@ public class Week2OccupancyStorageAndOtTests
         Assert.Equal(0, syncFlicker.TransitionsCount);
         Assert.Equal(SeatStateMachine.StatePresent, syncFlicker.Results[0].NewState);
 
-        // [09:06:00] Rời bàn 60 giây / 45 frames (>= 3s & < 15p) -> Chuyển PRESENT -> TEMP_AWAY
+        // [09:05:07] Rời bàn 5 giây / 20 frames (>= 3s & < ngưỡng 10s) -> Chuyển PRESENT -> TEMP_AWAY
         var syncTempAway = (await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
             "CAM_DESK_IT",
-            baseDate.AddMinutes(6),
+            baseDate.AddMinutes(5).AddSeconds(7),
             FrameSequence: 4,
-            [new SeatObservationInput("SEAT_IT_01", IsOccupied: false, UnoccupiedContinuousFrames: 45, UnoccupiedContinuousSeconds: 60)]))).Value;
+            [new SeatObservationInput("SEAT_IT_01", IsOccupied: false, UnoccupiedContinuousFrames: 20, UnoccupiedContinuousSeconds: 5)]))).Value;
 
         Assert.Equal(1, syncTempAway.TransitionsCount);
         Assert.Equal(SeatStateMachine.StateTempAway, syncTempAway.Results[0].NewState);

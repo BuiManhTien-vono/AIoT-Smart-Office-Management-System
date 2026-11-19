@@ -20,10 +20,11 @@ public sealed class SecurityIncidentsController(ISecurityIncidentService inciden
     public async Task<IActionResult> GetIncidents(
         [FromQuery] string? ticketStatus,
         [FromQuery] string? alertLevel,
+        [FromQuery] string? incidentType,
         [FromQuery] int limit = 50,
         CancellationToken ct = default)
     {
-        var list = await incidentService.GetIncidentsAsync(ticketStatus, alertLevel, limit, ct);
+        var list = await incidentService.GetIncidentsAsync(ticketStatus, alertLevel, incidentType, limit, ct);
         return Ok(list);
     }
 
@@ -71,6 +72,18 @@ public sealed class SecurityIncidentsController(ISecurityIncidentService inciden
         }
 
         return Ok(result.Value);
+    }
+
+    [HttpGet("incidents/{id:guid}/snapshot")]
+    public async Task<IActionResult> GetIncidentSnapshot(Guid id, CancellationToken ct = default)
+    {
+        var result = await incidentService.GetIncidentSnapshotBytesAsync(id, ct);
+        if (result.IsFailure)
+        {
+            return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return File(result.Value.Bytes, result.Value.ContentType);
     }
 
     [HttpPut("incidents/{id:guid}/resolve")]

@@ -47,7 +47,10 @@ export interface SecurityAlertEvent {
   departmentId?: string
   detectedEmployeeId?: string
   alertLevel: string
+  snapshotObjectKey?: string
   incidentType?: string
+  seatCode?: string
+  actionSummary?: string
   description?: string
 }
 export type SecurityAlertListener = (event: SecurityAlertEvent) => void

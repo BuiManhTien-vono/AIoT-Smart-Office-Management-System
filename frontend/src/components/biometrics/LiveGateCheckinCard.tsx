@@ -103,7 +103,7 @@ export function LiveGateCheckinCard() {
   }, []);
 
   // Perform continuous gate checkin scan
-  const scanFrame = useCallback(async (blob?: Blob) => {
+  const scanFrame = useCallback(async (blob?: Blob, isManualTrigger = false) => {
     if (isApiPendingRef.current || cooldownRef.current) return;
 
     let payload = blob;
@@ -116,7 +116,8 @@ export function LiveGateCheckinCard() {
     isApiPendingRef.current = true;
     setIsApiPending(true);
     try {
-      const data = await testGateCheckin(payload, cameraId);
+      const isAttempt = isManualTrigger || scanMode === 'manual' || Boolean(blob);
+      const data = await testGateCheckin(payload, cameraId, isAttempt);
       setResult(data);
 
       const isSuccess =
@@ -260,7 +261,7 @@ export function LiveGateCheckinCard() {
     const file = e.target.files?.[0];
     if (!file) return;
     setResult(null);
-    void scanFrame(file);
+    void scanFrame(file, true);
   };
 
   const livenessScore = result?.liveness?.real_score ?? result?.liveness_score ?? 0;

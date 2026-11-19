@@ -527,6 +527,211 @@
 .ot-badge-pending  { background: #fef3c7; color: #92400e; font-weight: 600; }
 .ot-badge-rejected { background: #fee2e2; color: #991b1b; font-weight: 600; }
 
+/* Real-time Toast Banner (Không phát âm thanh) */
+.soc-realtime-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: var(--radius-control, 8px);
+  background: #fef2f2;
+  border: 1px solid #f87171;
+  color: #991b1b;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15);
+  animation: slide-down 0.25s ease-out;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.soc-realtime-toast-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.soc-realtime-toast-content strong {
+  color: #b91c1c;
+}
+
+/* Badges phân loại sự cố */
+.badge-crit { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; font-weight: 700; }
+.badge-warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; font-weight: 600; }
+.badge-low  { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; font-weight: 500; }
+
+.badge-type-stranger-desk  { background: #fee2e2; color: #b91c1c; font-weight: 600; }
+.badge-type-unregistered   { background: #fef3c7; color: #b45309; font-weight: 600; }
+.badge-type-spoofing       { background: #fae8ff; color: #86198f; font-weight: 700; }
+.badge-type-stranger-kiosk { background: #ffedd5; color: #c2410c; font-weight: 600; }
+.badge-type-ghost          { background: #f1f5f9; color: #475569; font-weight: 600; }
+
+/* 8. Nâng cấp Modal Xử lý sự cố (SOC Ticket Resolution) */
+.soc-resolve-context-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.soc-resolve-context-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px dashed #cbd5e1;
+  padding-bottom: 8px;
+}
+
+.soc-resolve-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.soc-resolve-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.soc-resolve-context-content {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.soc-resolve-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.soc-resolve-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.soc-resolve-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+
+.meta-label {
+  color: #64748b;
+  margin-right: 6px;
+}
+
+.meta-val {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.soc-resolve-snapshot-thumb {
+  width: 90px;
+  height: 90px;
+  border-radius: 8px;
+  background: #0f172a;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.soc-resolve-snapshot-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.soc-resolve-snapshot-thumb:hover img {
+  transform: scale(1.05);
+}
+
+.snapshot-zoom-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.soc-resolve-snapshot-thumb:hover .snapshot-zoom-overlay {
+  opacity: 1;
+}
+
+.no-snap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.soc-quick-tags-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.quick-tags-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.quick-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quick-tag-chip {
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.quick-tag-chip:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
 @media (max-width: 768px) {
   .incident-card-content {
     flex-direction: column;

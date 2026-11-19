@@ -15,6 +15,8 @@ public sealed class Employee : BaseEntity
     public string FullName { get; set; } = string.Empty;
     public string? Email { get; set; }
     public string? PhoneNumber { get; set; }
+    /// <summary>Chat ID Telegram cá nhân để nhận cảnh báo bàn làm việc của chính nhân viên.</summary>
+    public string? TelegramChatId { get; set; }
     public Guid DepartmentId { get; set; }
     public Guid? DefaultShiftId { get; set; }
     public string? AvatarObjectKey { get; set; }

@@ -8,7 +8,10 @@ public sealed record EvaluateNightGuardDetectionRequest(
     string? SnapshotObjectKey = null,
     string? VideoClipObjectKey = null,
     DateTimeOffset? DetectedAtUtc = null,
-    bool IsSpoofingAttempt = false);
+    bool IsSpoofingAttempt = false,
+    string? IncidentType = null,
+    string? SeatCode = null,
+    string? Severity = null);
 
 public sealed record ResolveSecurityIncidentRequest(
     string TicketStatus,
@@ -21,6 +24,9 @@ public sealed record SecurityIncidentResponse(
     Guid? DetectedEmployeeId,
     string? DetectedEmployeeCode,
     string? DetectedEmployeeName,
+    string IncidentType,
+    string? SeatCode,
+    string Severity,
     string AlertLevel,
     string SnapshotObjectKey,
     string? SnapshotPresignedUrl,

@@ -21,4 +21,8 @@ public interface IEmployeeLookupContract
     Task<EmployeeContractDto?> GetByIdAsync(Guid employeeId, CancellationToken cancellationToken = default);
     Task<EmployeeContractDto?> GetByCodeAsync(string employeeCode, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EmployeeContractDto>> GetAllActiveAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Chat ID Telegram cá nhân của nhân viên (null nếu chưa liên kết).</summary>
+    Task<string?> GetTelegramChatIdAsync(Guid employeeId, CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
 }

@@ -98,4 +98,7 @@ public sealed record SecurityIncidentDetectedIntegrationEvent(
     Guid? DepartmentId,
     Guid? DetectedEmployeeId,
     string AlertLevel,
-    string SnapshotObjectKey) : IIntegrationEvent;
+    string SnapshotObjectKey,
+    string IncidentType = "SECURITY_BREACH",
+    string? SeatCode = null,
+    string? ActionSummary = null) : IIntegrationEvent;

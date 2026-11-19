@@ -214,11 +214,13 @@ export async function verifyDuplicateFace(
 export async function testGateCheckin(
   file: File | Blob,
   gateCameraId = 'GATE_MAIN_CAM_01',
+  isCheckinAttempt = false,
   signal?: AbortSignal
 ): Promise<AiGateCheckinResponse> {
   const formData = new FormData();
   formData.append('file', file, 'checkin.jpg');
   formData.append('camera_id', gateCameraId);
+  formData.append('is_checkin_attempt', String(isCheckinAttempt));
 
   const response = await fetch(`${AI_BASE_URL}/api/v1/face/gate-checkin`, {
     method: 'POST',

@@ -6,6 +6,7 @@ import json
 import time
 import re
 import urllib.request
+import base64
 import cv2
 import numpy as np
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -348,12 +349,24 @@ async def detect_preview(
         if sync_backend and backend_client and len(pipeline_results) > 0:
             target_cam = (camera_code or settings.occupancy.default_camera_code).strip().upper()
             prolonged_thresh = int(occupancy_pipeline.away_alert_sec) if occupancy_pipeline.away_alert_sec else None
+
+            # Nén ảnh hiện trường bàn làm việc nếu có ghế đang có người ngồi để đính kèm bằng chứng an ninh
+            snapshot_b64 = None
+            if len(occupied_seat_ids) > 0 and frame is not None:
+                try:
+                    # Nén JPEG chất lượng 80 (~80KB) để gửi kèm trạng thái mà không gây nghẽn mạng
+                    _, enc = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                    snapshot_b64 = base64.b64encode(enc.tobytes()).decode("utf-8")
+                except Exception as enc_err:
+                    print(f"[!] Không thể nén ảnh snapshot bàn làm việc: {enc_err}")
+
             try:
                 backend_client.submit_occupancy_state_async(
                     camera_code=target_cam,
                     frame_sequence=int(time.time() * 1000) % 1_000_000,
                     seat_statuses=pipeline_results,
-                    prolonged_absence_threshold_seconds=prolonged_thresh
+                    prolonged_absence_threshold_seconds=prolonged_thresh,
+                    snapshot_base64=snapshot_b64
                 )
             except Exception as exc:
                 print(f"[!] Lỗi đồng bộ state-sync sang backend: {exc}")

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartOffice.Modules.Attendance.Application.Services;
 using SmartOffice.Modules.Attendance.Infrastructure;
+using SmartOffice.SharedKernel.Contracts;
 
 namespace SmartOffice.Modules.Attendance;
 
@@ -29,6 +30,7 @@ public static class AttendanceModuleExtensions
         });
 
         services.AddScoped<IAttendanceService, AttendanceService>();
+        services.AddScoped<IWorkScheduleLookupContract, AttendanceService>();
 
         return services;
     }

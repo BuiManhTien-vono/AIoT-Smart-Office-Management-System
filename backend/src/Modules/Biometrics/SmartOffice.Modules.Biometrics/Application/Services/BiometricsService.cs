@@ -91,6 +91,7 @@ public sealed class BiometricsService(
             FullName = request.FullName.Trim(),
             Email = request.Email?.Trim(),
             PhoneNumber = request.PhoneNumber?.Trim(),
+            TelegramChatId = string.IsNullOrWhiteSpace(request.TelegramChatId) ? null : request.TelegramChatId.Trim(),
             DepartmentId = request.DepartmentId,
             DefaultShiftId = request.DefaultShiftId,
             AvatarObjectKey = request.AvatarObjectKey,
@@ -192,6 +193,13 @@ public sealed class BiometricsService(
         employee.PhoneNumber = request.PhoneNumber?.Trim();
         employee.DepartmentId = request.DepartmentId;
         employee.DefaultShiftId = request.DefaultShiftId;
+
+        // null = giữ nguyên; chuỗi rỗng = xóa liên kết Telegram
+        if (request.TelegramChatId is not null)
+        {
+            var chatId = request.TelegramChatId.Trim();
+            employee.TelegramChatId = chatId.Length == 0 ? null : chatId;
+        }
 
         if (request.IsActive.HasValue)
         {
@@ -517,6 +525,7 @@ public sealed class BiometricsService(
             employee.IsActive,
             vectorCount,
             employee.CreatedAt,
-            avatarUrl);
+            avatarUrl,
+            employee.TelegramChatId);
     }
 }

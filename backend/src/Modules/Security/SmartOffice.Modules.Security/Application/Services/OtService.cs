@@ -24,6 +24,35 @@ public sealed class OtService(
         "REJECTED"
     };
 
+    /// <summary>Múi giờ văn phòng (Việt Nam, UTC+7) dùng để diễn giải ngày/giờ đăng ký OT.</summary>
+    public static readonly TimeSpan OfficeUtcOffset = TimeSpan.FromHours(7);
+
+    /// <summary>Ân hạn sau giờ kết thúc OT để nhân viên thu dọn ra về.</summary>
+    public const int OtEndGraceMinutes = 20;
+
+    /// <summary>
+    /// Kiểm tra thời điểm (giờ địa phương) có nằm trong [StartTime, EndTime + ân hạn] của ca OT,
+    /// hỗ trợ cả ca vắt qua nửa đêm. Quy về số phút tính từ 00:00 ngày OtDate.
+    /// </summary>
+    internal static bool IsWithinOtWindow(OtRegistration reg, DateOnly checkDate, TimeOnly checkTime)
+    {
+        int dayOffset = checkDate.DayNumber - reg.OtDate.DayNumber;
+        if (dayOffset is < 0 or > 1)
+        {
+            return false;
+        }
+
+        int checkMinute = dayOffset * 1440 + (int)checkTime.ToTimeSpan().TotalMinutes;
+        int startMinute = (int)reg.StartTime.ToTimeSpan().TotalMinutes;
+        int endMinute = (int)reg.EndTime.ToTimeSpan().TotalMinutes;
+        if (reg.EndTime < reg.StartTime)
+        {
+            endMinute += 1440; // Ca qua đêm
+        }
+
+        return checkMinute >= startMinute && checkMinute <= endMinute + OtEndGraceMinutes;
+    }
+
     public async Task<Result<OtRegistrationResponse>> CreateOtRegistrationAsync(
         CreateOtRegistrationRequest request,
         CancellationToken ct = default)
@@ -35,7 +64,7 @@ public sealed class OtService(
         }
 
         var status = string.IsNullOrWhiteSpace(request.ApprovalStatus)
-            ? "APPROVED"
+            ? "PENDING"
             : request.ApprovalStatus.Trim().ToUpperInvariant();
 
         if (!AllowedStatuses.Contains(status))
@@ -59,9 +88,11 @@ public sealed class OtService(
             StartTime = request.StartTime,
             EndTime = request.EndTime,
             Reason = request.Reason?.Trim(),
+            ProjectName = request.ProjectName?.Trim(),
             ApprovalStatus = status,
             ApprovedByUserId = request.ApprovedByUserId
         };
+
 
         dbContext.OtRegistrations.Add(ot);
         await dbContext.SaveChangesAsync(ct);
@@ -97,6 +128,30 @@ public sealed class OtService(
         if (!string.IsNullOrWhiteSpace(request.Reason))
         {
             ot.Reason = request.Reason.Trim();
+        }
+
+        // Tự động đóng các sự cố hiện diện ngoài giờ (OPEN) của nhân viên trong ngày OT nếu ca OT được duyệt
+        if (ot.ApprovalStatus == "APPROVED")
+        {
+            var openIncidents = await dbContext.SecurityIncidents
+                .Where(x => x.DetectedEmployeeId == ot.EmployeeId &&
+                            x.IncidentType == SecurityIncidentService.TypeUnregisteredAfterHours &&
+                            x.TicketStatus == SecurityIncidentService.TicketOpen)
+                .ToListAsync(ct);
+
+            foreach (var inc in openIncidents)
+            {
+                var incDate = DateOnly.FromDateTime(inc.DetectedAt.ToOffset(OfficeUtcOffset).DateTime);
+                if (incDate == ot.OtDate)
+                {
+                    inc.TicketStatus = SecurityIncidentService.TicketAcknowledged;
+                    inc.AlertLevel = SecurityIncidentService.AlertLevel1ApprovedOt;
+                    inc.Severity = SecurityIncidentService.SeverityLow;
+                    inc.ResolutionNote = $"Tự động đóng sự cố: ca làm thêm ngày {ot.OtDate:dd/MM/yyyy} ({ot.StartTime:HH\\:mm} - {ot.EndTime:HH\\:mm}) đã được phê duyệt.";
+                    inc.ResolvedAt = DateTimeOffset.UtcNow;
+                    inc.ResolvedByUserId = request.ApprovedByUserId;
+                }
+            }
         }
 
         await dbContext.SaveChangesAsync(ct);
@@ -141,9 +196,12 @@ public sealed class OtService(
         DateTimeOffset checkTimeUtc,
         CancellationToken ct = default)
     {
-        var checkDate = DateOnly.FromDateTime(checkTimeUtc.DateTime);
+        // Ca OT được đăng ký theo giờ văn phòng Việt Nam (UTC+7) -> phải quy đổi trước khi so sánh.
+        // Lỗi cũ: dùng checkTimeUtc.DateTime (giờ UTC) nên 20:00 VN bị so thành 13:00 và lệch cả ngày lúc sáng sớm.
+        var localTime = checkTimeUtc.ToOffset(OfficeUtcOffset);
+        var checkDate = DateOnly.FromDateTime(localTime.DateTime);
         var previousDate = checkDate.AddDays(-1);
-        var checkTime = TimeOnly.FromDateTime(checkTimeUtc.DateTime);
+        var checkTime = TimeOnly.FromDateTime(localTime.DateTime);
 
         var candidates = await dbContext.OtRegistrations
             .Where(x => x.EmployeeId == employeeId &&
@@ -153,38 +211,16 @@ public sealed class OtService(
 
         foreach (var reg in candidates)
         {
-            bool isOvernight = reg.EndTime < reg.StartTime;
-            if (!isOvernight)
+            if (IsWithinOtWindow(reg, checkDate, checkTime))
             {
-                if (reg.OtDate == checkDate && checkTime >= reg.StartTime && checkTime <= reg.EndTime)
-                {
-                    return new OvertimeLookupResultDto(
-                        true,
-                        reg.Id,
-                        reg.EmployeeId,
-                        reg.EmployeeCode,
-                        reg.OtDate,
-                        reg.StartTime,
-                        reg.EndTime);
-                }
-            }
-            else
-            {
-                // Ca OT vắt qua nửa đêm (VD: 22:00 ngày D đến 02:00 sáng ngày D+1)
-                bool matchedSameNight = reg.OtDate == checkDate && checkTime >= reg.StartTime;
-                bool matchedEarlyMorningAfter = reg.OtDate == previousDate && checkTime <= reg.EndTime;
-
-                if (matchedSameNight || matchedEarlyMorningAfter)
-                {
-                    return new OvertimeLookupResultDto(
-                        true,
-                        reg.Id,
-                        reg.EmployeeId,
-                        reg.EmployeeCode,
-                        reg.OtDate,
-                        reg.StartTime,
-                        reg.EndTime);
-                }
+                return new OvertimeLookupResultDto(
+                    true,
+                    reg.Id,
+                    reg.EmployeeId,
+                    reg.EmployeeCode,
+                    reg.OtDate,
+                    reg.StartTime,
+                    reg.EndTime);
             }
         }
 
@@ -198,8 +234,18 @@ public sealed class OtService(
             null);
     }
 
+    private static double CalculateHours(TimeOnly start, TimeOnly end)
+    {
+        if (end > start)
+        {
+            return (end - start).TotalHours;
+        }
+        return 24 - (start - end).TotalHours;
+    }
+
     private static OtRegistrationResponse MapResponse(OtRegistration ot, string fullName)
     {
+        var hours = CalculateHours(ot.StartTime, ot.EndTime);
         return new OtRegistrationResponse(
             ot.Id,
             ot.EmployeeId,
@@ -209,6 +255,8 @@ public sealed class OtService(
             ot.StartTime,
             ot.EndTime,
             IsOvernight: ot.EndTime < ot.StartTime,
+            EstimatedHours: Math.Round(hours, 1),
+            ot.ProjectName,
             ot.Reason,
             ot.ApprovalStatus,
             ot.ApprovedByUserId,

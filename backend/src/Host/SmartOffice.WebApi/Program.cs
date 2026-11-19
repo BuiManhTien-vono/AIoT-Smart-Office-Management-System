@@ -98,6 +98,13 @@ static async Task SeedInitialDemoDataAsync(IServiceProvider rootProvider)
 
     try
     {
+        // Vá schema cộng thêm (idempotent) cho DB đã tạo trước khi có cột telegram_chat_id
+        if (bioDb.Database.IsRelational())
+        {
+            await bioDb.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE biometrics.employees ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(32);");
+        }
+
         var deptItId = Guid.Parse("11111111-1111-1111-1111-111111111101");
         var deptHrId = Guid.Parse("11111111-1111-1111-1111-111111111102");
         var shiftHcId = Guid.Parse("22222222-2222-2222-2222-222222222201");

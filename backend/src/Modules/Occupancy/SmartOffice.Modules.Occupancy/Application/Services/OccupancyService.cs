@@ -20,6 +20,7 @@ namespace SmartOffice.Modules.Occupancy.Application.Services;
 public sealed class OccupancyService(
     OccupancyDbContext dbContext,
     IEmployeeLookupContract employeeLookup,
+    IWorkScheduleLookupContract workScheduleLookup,
     IObjectStorageService objectStorage,
     IInMemoryEventBus eventBus) : IOccupancyService
 {
@@ -459,6 +460,7 @@ public sealed class OccupancyService(
         var pendingStateEvents = new List<SeatStateChangedIntegrationEvent>();
         var pendingProlongedEvents = new List<ProlongedAbsenceDetectedIntegrationEvent>();
         var pendingWrongSeatEvents = new List<WrongSeatDetectedIntegrationEvent>();
+        var pendingSecurityEvents = new List<SecurityIncidentDetectedIntegrationEvent>();
         int transitionsCount = 0;
 
         foreach (var obs in request.Observations)
@@ -545,6 +547,69 @@ public sealed class OccupancyService(
                         seat.AssignedEmployeeId.Value,
                         obs.DetectedEmployeeId.Value));
                 }
+
+                // Kiểm tra Cảnh báo An ninh Chỗ ngồi khi nhân viên vừa bắt đầu hiện diện (FSM chuyển sang PRESENT)
+                if (outcome.NewState == SeatStateMachine.StatePresent && seat.AssignedEmployeeId.HasValue)
+                {
+                    var localTime = capturedAtUtc.ToOffset(TimeSpan.FromHours(7));
+                    var workDate = DateOnly.FromDateTime(localTime.DateTime);
+                    bool hasCheckedIn = await workScheduleLookup.HasEmployeeCheckedInTodayAsync(
+                        seat.AssignedEmployeeId.Value,
+                        workDate,
+                        ct);
+
+                    if (!hasCheckedIn)
+                    {
+                        // Kịch bản 1: Người lạ / Chưa check-in vào chỗ làm việc trong khi nhân viên đó chưa chấm công vào công ty
+                        var actionSummary = $"Phát hiện người lạ/chưa check-in chiếm chỗ tại bàn {seat.SeatCode} trong khi nhân viên chưa check-in vào công ty.";
+                        var incidentId = Guid.NewGuid();
+                        string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, request.SnapshotBase64, ct);
+
+                        pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
+                            Guid.NewGuid(),
+                            capturedAtUtc,
+                            incidentId,
+                            camera.Id,
+                            seat.DepartmentId,
+                            seat.AssignedEmployeeId,
+                            "LEVEL_3_BREACH",
+                            snapshotObjectKey,
+                            IncidentType: "STRANGER_AT_UNCHECKED_DESK",
+                            SeatCode: seat.SeatCode,
+                            ActionSummary: actionSummary));
+                    }
+                    else
+                    {
+                        // Kịch bản 2: Nhân viên ĐÃ CHẤM CÔNG và vào bàn làm việc -> Kiểm tra ca làm việc & đơn OT
+                        var scheduleCheck = await workScheduleLookup.ValidateEmployeePresenceTimeAsync(
+                            seat.AssignedEmployeeId.Value,
+                            capturedAtUtc,
+                            gracePeriodMinutes: 20,
+                            ct);
+
+                        // Nếu ĐÃ ĐƯỢC DUYỆT OT (IsWithinApprovedOt) hoặc ĐANG TRONG CA HÀNH CHÍNH (+20p ân hạn) -> HỢP LỆ (Không báo lỗi)
+                        // Nếu ngoài ca hành chính VÀ CHƯA CÓ ĐƠN OT ĐƯỢC DUYỆT -> Báo Ngoài giờ chưa đăng ký OT
+                        if (!scheduleCheck.IsAuthorizedToWork)
+                        {
+                            var actionSummary = $"Cảnh báo hiện diện ngoài giờ chưa có đơn OT được duyệt: Nhân viên ngồi tại bàn {seat.SeatCode} ngoài ca hành chính (+20p ân hạn) và chưa có đơn OT phê duyệt.";
+                            var incidentId = Guid.NewGuid();
+                            string snapshotObjectKey = await TrySaveDeskSnapshotAsync(incidentId, capturedAtUtc, request.SnapshotBase64, ct);
+
+                            pendingSecurityEvents.Add(new SecurityIncidentDetectedIntegrationEvent(
+                                Guid.NewGuid(),
+                                capturedAtUtc,
+                                incidentId,
+                                camera.Id,
+                                seat.DepartmentId,
+                                seat.AssignedEmployeeId,
+                                "LEVEL_2_UNAUTH",
+                                snapshotObjectKey,
+                                IncidentType: "UNREGISTERED_AFTER_HOURS_PRESENCE",
+                                SeatCode: seat.SeatCode,
+                                ActionSummary: actionSummary));
+                        }
+                    }
+                }
             }
 
             transitionResults.Add(new SeatStateTransitionResultDto(
@@ -577,6 +642,11 @@ public sealed class OccupancyService(
         foreach (var wrongSeatEvt in pendingWrongSeatEvents)
         {
             await eventBus.PublishAsync(wrongSeatEvt, ct);
+        }
+
+        foreach (var secEvt in pendingSecurityEvents)
+        {
+            await eventBus.PublishAsync(secEvt, ct);
         }
 
         return Result.Success(new OccupancyStateSyncResponse(
@@ -860,6 +930,41 @@ public sealed class OccupancyService(
         catch
         {
             return [];
+        }
+    }
+
+    private async Task<string> TrySaveDeskSnapshotAsync(
+        Guid incidentId,
+        DateTimeOffset capturedAtUtc,
+        string? snapshotBase64,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotBase64))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var dateFolder = capturedAtUtc.ToString("yyyy-MM-dd");
+            var objectKey = $"security_evidence/{dateFolder}/incident_{incidentId:N}_snapshot.jpg";
+            var fileBytes = Convert.FromBase64String(snapshotBase64);
+
+            var localFilePath = Path.Combine(AppContext.BaseDirectory, "storage", objectKey.Replace('/', Path.DirectorySeparatorChar));
+            var dir = Path.GetDirectoryName(localFilePath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            await File.WriteAllBytesAsync(localFilePath, fileBytes, ct);
+
+            using var uploadStream = new MemoryStream(fileBytes);
+            await objectStorage.UploadFileAsync(objectKey, uploadStream, "image/jpeg", ct);
+            return objectKey;
+        }
+        catch
+        {
+            return string.Empty;
         }
     }
 }

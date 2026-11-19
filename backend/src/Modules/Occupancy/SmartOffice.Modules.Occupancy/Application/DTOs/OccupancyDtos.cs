@@ -110,7 +110,8 @@ public sealed record OccupancyStateSyncRequest(
     DateTimeOffset? CapturedAtUtc,
     long FrameSequence,
     IReadOnlyList<SeatObservationInput> Observations,
-    int? ProlongedAbsenceThresholdSeconds = null);
+    int? ProlongedAbsenceThresholdSeconds = null,
+    string? SnapshotBase64 = null);
 
 public sealed record SeatStateTransitionResultDto(
     Guid SeatId,

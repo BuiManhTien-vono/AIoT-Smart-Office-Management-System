@@ -6,7 +6,8 @@ public sealed record CreateOtRegistrationRequest(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string? Reason = null,
-    string ApprovalStatus = "APPROVED",
+    string ApprovalStatus = "PENDING",
+    string? ProjectName = null,
     Guid? ApprovedByUserId = null);
 
 public sealed record UpdateOtApprovalRequest(
@@ -23,6 +24,8 @@ public sealed record OtRegistrationResponse(
     TimeOnly StartTime,
     TimeOnly EndTime,
     bool IsOvernight,
+    double EstimatedHours,
+    string? ProjectName,
     string? Reason,
     string ApprovalStatus,
     Guid? ApprovedByUserId,

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using SmartOffice.Modules.Occupancy.Endpoints;
+using SmartOffice.SharedKernel.Contracts;
 using SmartOffice.SharedKernel.Events;
 
 namespace SmartOffice.Modules.Occupancy.Application.Handlers;
@@ -33,13 +34,24 @@ public sealed class SeatStateChangedRealtimeHandler(IHubContext<OccupancyHub>? h
     }
 }
 
-public sealed class ProlongedAbsenceRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+public sealed class ProlongedAbsenceRealtimeHandler(
+    IHubContext<OccupancyHub>? hubContext = null,
+    IEmployeeTelegramNotifier? telegram = null)
     : IIntegrationEventHandler<ProlongedAbsenceDetectedIntegrationEvent>
 {
     public async Task HandleAsync(
         ProlongedAbsenceDetectedIntegrationEvent integrationEvent,
         CancellationToken cancellationToken = default)
     {
+        // Cảnh báo bàn làm việc -> gửi Telegram riêng cho nhân viên được gán bàn
+        if (telegram is not null)
+        {
+            await telegram.SendToEmployeeAsync(
+                integrationEvent.AssignedEmployeeId,
+                $"⚠️ Cảnh báo rời chỗ quá lâu: bạn đã rời bàn {integrationEvent.SeatCode} {FormatDuration(integrationEvent.AwayDurationSeconds)} mà chưa quay lại.",
+                cancellationToken);
+        }
+
         if (hubContext is null)
         {
             return;
@@ -55,15 +67,29 @@ public sealed class ProlongedAbsenceRealtimeHandler(IHubContext<OccupancyHub>? h
             .Groups(groups)
             .SendAsync("ProlongedAbsenceAlert", integrationEvent, cancellationToken);
     }
+
+    internal static string FormatDuration(int seconds) =>
+        seconds < 60 ? $"{seconds} giây" : $"{seconds / 60} phút {seconds % 60} giây";
 }
 
-public sealed class WrongSeatRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+public sealed class WrongSeatRealtimeHandler(
+    IHubContext<OccupancyHub>? hubContext = null,
+    IEmployeeTelegramNotifier? telegram = null)
     : IIntegrationEventHandler<WrongSeatDetectedIntegrationEvent>
 {
     public async Task HandleAsync(
         WrongSeatDetectedIntegrationEvent integrationEvent,
         CancellationToken cancellationToken = default)
     {
+        // Gửi riêng cho nhân viên đang ngồi sai bàn
+        if (telegram is not null)
+        {
+            await telegram.SendToEmployeeAsync(
+                integrationEvent.DetectedEmployeeId,
+                $"⚠️ Cảnh báo ngồi sai vị trí: bạn đang ngồi tại bàn {integrationEvent.SeatCode}, không phải bàn được phân bổ cho bạn.",
+                cancellationToken);
+        }
+
         if (hubContext is null)
         {
             return;

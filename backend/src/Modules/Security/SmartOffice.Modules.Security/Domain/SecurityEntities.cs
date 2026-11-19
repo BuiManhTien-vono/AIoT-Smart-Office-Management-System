@@ -10,7 +10,8 @@ public sealed class OtRegistration : BaseEntity
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public string? Reason { get; set; }
-    public string ApprovalStatus { get; set; } = "APPROVED";
+    public string? ProjectName { get; set; }
+    public string ApprovalStatus { get; set; } = "PENDING";
     public Guid? ApprovedByUserId { get; set; }
 }
 
@@ -18,6 +19,9 @@ public sealed class SecurityIncident : BaseEntity
 {
     public Guid CameraId { get; set; }
     public Guid? DetectedEmployeeId { get; set; }
+    public string IncidentType { get; set; } = "SECURITY_BREACH";
+    public string? SeatCode { get; set; }
+    public string Severity { get; set; } = "MEDIUM";
     public string AlertLevel { get; set; } = "LEVEL_3_BREACH";
     public string SnapshotObjectKey { get; set; } = string.Empty;
     public string? VideoClipObjectKey { get; set; }

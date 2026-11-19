@@ -41,6 +41,7 @@ public sealed class BiometricsDbContext(DbContextOptions<BiometricsDbContext> op
             entity.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(100).IsRequired();
             entity.Property(x => x.Email).HasColumnName("email").HasMaxLength(120);
             entity.Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(20);
+            entity.Property(x => x.TelegramChatId).HasColumnName("telegram_chat_id").HasMaxLength(32);
             entity.Property(x => x.DepartmentId).HasColumnName("department_id");
             entity.Property(x => x.DefaultShiftId).HasColumnName("default_shift_id");
             entity.Property(x => x.AvatarObjectKey).HasColumnName("avatar_object_key").HasMaxLength(255);

@@ -134,7 +134,8 @@ class BackendSyncClient:
         frame_sequence: int,
         seat_statuses: List[Dict[str, Any]],
         captured_at_utc: Optional[str] = None,
-        prolonged_absence_threshold_seconds: Optional[int] = None
+        prolonged_absence_threshold_seconds: Optional[int] = None,
+        snapshot_base64: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Chuyển đổi kết quả từ OccupancyPipeline.process_frame() sang đúng hợp đồng JSON
@@ -170,6 +171,8 @@ class BackendSyncClient:
         }
         if prolonged_absence_threshold_seconds is not None:
             payload["prolongedAbsenceThresholdSeconds"] = int(prolonged_absence_threshold_seconds)
+        if snapshot_base64:
+            payload["snapshotBase64"] = snapshot_base64
         return payload
 
     def sync_occupancy_state(
@@ -178,7 +181,8 @@ class BackendSyncClient:
         frame_sequence: int,
         seat_statuses: List[Dict[str, Any]],
         captured_at_utc: Optional[str] = None,
-        prolonged_absence_threshold_seconds: Optional[int] = None
+        prolonged_absence_threshold_seconds: Optional[int] = None,
+        snapshot_base64: Optional[str] = None
     ) -> Dict[str, Any]:
         """Gửi đồng bộ trạng thái chỗ ngồi sang POST /api/v1/occupancy/state-sync."""
         payload = self.build_state_sync_payload(
@@ -186,7 +190,8 @@ class BackendSyncClient:
             frame_sequence=frame_sequence,
             seat_statuses=seat_statuses,
             captured_at_utc=captured_at_utc,
-            prolonged_absence_threshold_seconds=prolonged_absence_threshold_seconds
+            prolonged_absence_threshold_seconds=prolonged_absence_threshold_seconds,
+            snapshot_base64=snapshot_base64
         )
         result = self._request_json("POST", "occupancy/state-sync", payload)
         with self._lock:
@@ -199,7 +204,8 @@ class BackendSyncClient:
         camera_code: str,
         frame_sequence: int,
         seat_statuses: List[Dict[str, Any]],
-        prolonged_absence_threshold_seconds: Optional[int] = None
+        prolonged_absence_threshold_seconds: Optional[int] = None,
+        snapshot_base64: Optional[str] = None
     ) -> bool:
         """
         Đẩy dữ liệu state-sync sang Backend trong một luồng ngầm (non-blocking)
@@ -220,7 +226,8 @@ class BackendSyncClient:
                     camera_code=camera_code,
                     frame_sequence=frame_sequence,
                     seat_statuses=snapshot_statuses,
-                    prolonged_absence_threshold_seconds=prolonged_absence_threshold_seconds
+                    prolonged_absence_threshold_seconds=prolonged_absence_threshold_seconds,
+                    snapshot_base64=snapshot_base64
                 )
             except Exception as exc:
                 with self._lock:
@@ -293,6 +300,9 @@ class BackendSyncClient:
         department_id: Optional[str] = None,
         detected_employee_id: Optional[str] = None,
         is_spoofing_attempt: bool = False,
+        incident_type: Optional[str] = None,
+        seat_code: Optional[str] = None,
+        severity: Optional[str] = None,
         snapshot_object_key: Optional[str] = None,
         video_clip_object_key: Optional[str] = None,
         detected_at_utc: Optional[str] = None
@@ -324,9 +334,51 @@ class BackendSyncClient:
             "departmentId": valid_dept_guid,
             "detectedEmployeeId": valid_emp_guid,
             "isSpoofingAttempt": bool(is_spoofing_attempt),
+            "incidentType": incident_type,
+            "seatCode": seat_code,
+            "severity": severity,
             "snapshotObjectKey": snapshot_object_key,
             "videoClipObjectKey": video_clip_object_key,
             "detectedAtUtc": detected_at_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         }
         return self._request_json("POST", "security/incidents", payload)
+
+    def upload_incident_evidence(
+        self,
+        incident_id: str,
+        image_bytes: bytes,
+        evidence_type: str = "SNAPSHOT",
+        content_type: str = "image/jpeg"
+    ) -> Dict[str, Any]:
+        """Tải tệp ảnh hiện trường lên POST /api/v1/security/incidents/{id}/evidence"""
+        import uuid
+        try:
+            valid_id = str(uuid.UUID(str(incident_id)))
+        except (ValueError, AttributeError):
+            valid_id = str(incident_id)
+
+        boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
+        filename = "snapshot.jpg" if evidence_type == "SNAPSHOT" else "evidence.bin"
+
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode("utf-8") + image_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "User-Agent": "SmartOffice-AIService/1.0"
+        }
+
+        url = f"{self.base_api_url}/security/incidents/{valid_id}/evidence?evidenceType={evidence_type}"
+        req = urllib.request.Request(url=url, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
+                raw_body = resp.read().decode("utf-8")
+                return json.loads(raw_body) if raw_body else {"success": True}
+        except Exception as exc:
+            return {"error": str(exc)}
+
 

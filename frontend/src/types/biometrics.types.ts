@@ -18,6 +18,7 @@ export interface Employee {
   fullName: string
   email?: string | null
   phoneNumber?: string | null
+  telegramChatId?: string | null
   departmentId: string
   departmentCode: string
   defaultShiftId?: string | null
@@ -32,6 +33,7 @@ export interface CreateEmployeeInput {
   fullName: string
   email?: string
   phoneNumber?: string
+  telegramChatId?: string
   departmentId: string
   defaultShiftId?: string | null
   avatarObjectKey?: string
@@ -41,6 +43,7 @@ export interface UpdateEmployeeInput {
   fullName: string
   email?: string
   phoneNumber?: string
+  telegramChatId?: string
   departmentId: string
   defaultShiftId?: string | null
   isActive?: boolean

@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import cv2
 import numpy as np
+import time
 
 from modules.face_recognition.pipeline import FaceRecognitionPipeline
 from modules.face_recognition.recognizer import compute_cosine_similarity
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/api/v1/face", tags=["Face Biometrics"])
 
 pipeline = FaceRecognitionPipeline()
 backend_client = BackendSyncClient()
+
+# Bộ đệm chống spam cảnh báo an ninh liên tiếp (ngăn quét liên tục tạo hàng chục ticket giống nhau)
+_recent_gate_alerts: Dict[str, float] = {}
 
 
 class DuplicateCheckRequest(BaseModel):
@@ -105,17 +109,27 @@ async def gate_camera_checkin(
     file: UploadFile = File(...),
     gate_camera_id: Optional[str] = Form(default=None),
     camera_id: Optional[str] = Form(default=None),
-    snapshot_object_key: Optional[str] = Form(default=None)
+    snapshot_object_key: Optional[str] = Form(default=None),
+    is_checkin_attempt: Optional[str] = Form(default="false")
 ):
     """
     Luồng liên thông End-to-End tại Camera Cửa (AI Service -> Backend .NET 10):
     1. Phát hiện khuôn mặt (SCRFD) & Kiểm tra thực thể sống (MiniFASNet-V2).
-    2. Nếu phát hiện giả mạo (Spoofing) -> Gọi POST /api/v1/security/incidents trên Backend .NET.
+    2. Nếu phát hiện giả mạo (Spoofing) -> Gọi POST /api/v1/security/incidents trên Backend .NET (kèm debounce 30s).
     3. Nếu là người thật -> Căn chỉnh Affine 112x112 & Trích xuất vector 512D (ArcFace).
     4. Gọi POST /api/v1/biometrics/identify trên Backend .NET để định danh 1:N.
     5. Nếu khớp nhân viên -> Tự động gọi POST /api/v1/attendance/check để chấm công!
+    6. Nếu là người lạ: CHỈ tạo sự cố khi có thao tác cố tình chấm công (is_checkin_attempt=true),
+       tránh trường hợp camera tự quét liên tục hoặc quét góc mờ gây hiểu nhầm thành người lạ chấm công.
     """
-    effective_camera_id = gate_camera_id or camera_id
+    effective_camera_id = gate_camera_id or camera_id or settings.face.default_gate_camera_id
+
+    # Phân biệt giữa camera tự động quét liên tục (Auto Scan) và hành động cố tình chấm công
+    is_explicit_attempt = False
+    if is_checkin_attempt is not None:
+        val_str = str(is_checkin_attempt).strip().lower()
+        is_explicit_attempt = val_str in ("true", "1", "yes")
+
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -133,15 +147,35 @@ async def gate_camera_checkin(
     # 1. Kiểm tra chống giả mạo sinh trắc học (FR-ATT-01)
     is_real, real_score, liveness_details = pipeline.anti_spoofing.check_liveness(image, bbox=bbox)
     if not is_real:
-        try:
-            incident = backend_client.report_security_incident(
-                camera_id=effective_camera_id or settings.face.default_gate_camera_id,
-                department_id=settings.face.default_department_id,
-                is_spoofing_attempt=True,
-                snapshot_object_key=snapshot_object_key
-            )
-        except Exception as exc:
-            incident = {"error": str(exc)}
+        incident = None
+        now = time.time()
+        alert_key = f"{effective_camera_id}:SPOOFING_ATTEMPT"
+        # Áp dụng debounce 30 giây để tránh việc camera quét liên tục 650ms đẩy hàng loạt ticket trùng lặp
+        if now - _recent_gate_alerts.get(alert_key, 0.0) >= 30.0:
+            _recent_gate_alerts[alert_key] = now
+            # Chuẩn bị ảnh bằng chứng hiện trường có đánh dấu vi phạm
+            evidence_image = image.copy()
+            x1, y1, x2, y2 = bbox
+            cv2.rectangle(evidence_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.putText(evidence_image, "SPOOF DETECTED", (x1, max(y1 - 10, 20)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            _, encoded_img = cv2.imencode(".jpg", evidence_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            snap_bytes = encoded_img.tobytes()
+
+            try:
+                incident = backend_client.report_security_incident(
+                    camera_id=effective_camera_id,
+                    department_id=settings.face.default_department_id,
+                    is_spoofing_attempt=True,
+                    incident_type="SPOOFING_ATTEMPT",
+                    severity="CRITICAL",
+                    snapshot_object_key=snapshot_object_key
+                )
+                incident_id = incident.get("id") if isinstance(incident, dict) else None
+                if incident_id:
+                    backend_client.upload_incident_evidence(str(incident_id), snap_bytes)
+            except Exception as exc:
+                incident = {"error": str(exc)}
 
         return {
             "success": False,
@@ -168,11 +202,41 @@ async def gate_camera_checkin(
         identify_res["similarity"] = similarity
 
         if not is_matched or not employee_id:
+            incident = None
+            now = time.time()
+            alert_key = f"{effective_camera_id}:STRANGER_GATE_CHECKIN"
+            # Áp dụng debounce 30 giây để tránh việc camera quét liên tục 650ms tạo ra hàng loạt cảnh báo trùng lặp
+            if now - _recent_gate_alerts.get(alert_key, 0.0) >= 30.0:
+                _recent_gate_alerts[alert_key] = now
+                evidence_image = image.copy()
+                x1, y1, x2, y2 = bbox
+                cv2.rectangle(evidence_image, (x1, y1), (x2, y2), (0, 165, 255), 2)
+                cv2.putText(evidence_image, "STRANGER", (x1, max(y1 - 10, 20)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+                _, encoded_img = cv2.imencode(".jpg", evidence_image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                snap_bytes = encoded_img.tobytes()
+
+                try:
+                    incident = backend_client.report_security_incident(
+                        camera_id=effective_camera_id,
+                        department_id=settings.face.default_department_id,
+                        is_spoofing_attempt=False,
+                        incident_type="STRANGER_GATE_CHECKIN",
+                        severity="MEDIUM",
+                        snapshot_object_key=snapshot_object_key
+                    )
+                    incident_id = incident.get("id") if isinstance(incident, dict) else None
+                    if incident_id:
+                        backend_client.upload_incident_evidence(str(incident_id), snap_bytes)
+                except Exception as exc:
+                    incident = {"error": str(exc)}
+
             return {
                 "success": True,
                 "status": "UNKNOWN_PERSON",
                 "liveness_score": round(real_score, 4),
-                "identification": identify_res
+                "identification": identify_res,
+                "security_incident": incident
             }
 
         attendance_res = backend_client.check_in_out_on_backend(

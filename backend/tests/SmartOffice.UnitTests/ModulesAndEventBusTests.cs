@@ -30,6 +30,7 @@ public class ModulesAndEventBusTests
         // Đăng ký Services & Contract Interface (Phương thức 2)
         services.AddScoped<IBiometricsService, BiometricsService>();
         services.AddScoped<IEmployeeLookupContract, BiometricsEmployeeLookupService>();
+        services.AddScoped<IOvertimeLookupContract, DummyOvertimeLookup>();
         services.AddScoped<IAttendanceService, AttendanceService>();
 
         // Đăng ký Event Handlers (Phương thức 1 - InMemoryEventBus)
@@ -126,5 +127,17 @@ public class ModulesAndEventBusTests
         Assert.NotNull(summaryAfterCheckIn);
         Assert.Equal(1, summaryAfterCheckIn.PresentCount);
         Assert.Equal(1, summaryAfterCheckIn.LateCount);
+    }
+
+    private sealed class DummyOvertimeLookup : IOvertimeLookupContract
+    {
+        public Task<OvertimeLookupResultDto> CheckApprovedOvertimeAsync(
+            Guid employeeId,
+            DateTimeOffset checkTimeUtc,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new OvertimeLookupResultDto(
+                false, null, employeeId, string.Empty, null, null, null));
+        }
     }
 }

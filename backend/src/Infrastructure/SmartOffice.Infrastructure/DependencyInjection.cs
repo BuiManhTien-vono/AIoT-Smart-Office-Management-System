@@ -48,6 +48,7 @@ public static class DependencyInjection
 
         services.AddSingleton(storageOptions);
         services.AddSingleton<IObjectStorageService, S3ObjectStorageService>();
+        services.AddScoped<SmartOffice.SharedKernel.Contracts.IEmployeeTelegramNotifier, Notifications.TelegramEmployeeNotifier>();
 
         return services;
     }

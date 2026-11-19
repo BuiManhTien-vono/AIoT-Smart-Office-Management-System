@@ -26,6 +26,11 @@ public interface ISecurityIncidentService
     Task<IReadOnlyList<SecurityIncidentResponse>> GetIncidentsAsync(
         string? ticketStatus = null,
         string? alertLevel = null,
+        string? incidentType = null,
         int limit = 50,
+        CancellationToken ct = default);
+
+    Task<Result<(byte[] Bytes, string ContentType)>> GetIncidentSnapshotBytesAsync(
+        Guid incidentId,
         CancellationToken ct = default);
 }

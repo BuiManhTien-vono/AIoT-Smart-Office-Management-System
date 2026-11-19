@@ -6,12 +6,25 @@ export type AlertLevel =
   | 'LEVEL_3_SECURITY_BREACH'
   | 'SPOOFING_ATTEMPT'
 
+export type IncidentType =
+  | 'STRANGER_AT_UNCHECKED_DESK'
+  | 'UNREGISTERED_AFTER_HOURS_PRESENCE'
+  | 'SPOOFING_ATTEMPT'
+  | 'STRANGER_GATE_CHECKIN'
+  | 'SECURITY_BREACH'
+  | string
+
+export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
 export interface SecurityIncident {
   id: string
   cameraId: string
   detectedEmployeeId?: string | null
   detectedEmployeeCode?: string | null
   detectedEmployeeName?: string | null
+  incidentType?: IncidentType
+  seatCode?: string | null
+  severity?: IncidentSeverity | string
   alertLevel: AlertLevel | string
   snapshotObjectKey: string
   snapshotPresignedUrl?: string | null
@@ -49,6 +62,8 @@ export interface OtRegistration {
   startTime: string
   endTime: string
   isOvernight: boolean
+  estimatedHours?: number
+  projectName?: string | null
   reason?: string | null
   approvalStatus: OtApprovalStatus | string
   approvedByUserId?: string | null
@@ -61,6 +76,7 @@ export interface CreateOtRequest {
   startTime: string
   endTime: string
   reason?: string
+  projectName?: string
   approvalStatus?: string
   approvedByUserId?: string
 }

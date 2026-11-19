@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient'
+import { apiBase, apiRequest } from './apiClient'
 import type {
   SecurityIncident,
   NightGuardStatus,
@@ -30,6 +30,7 @@ export async function listSecurityIncidents(
   filters?: {
     ticketStatus?: string
     alertLevel?: string
+    incidentType?: string
     limit?: number
   },
   signal?: AbortSignal
@@ -40,6 +41,9 @@ export async function listSecurityIncidents(
   }
   if (filters?.alertLevel && filters.alertLevel !== 'ALL') {
     params.set('alertLevel', filters.alertLevel)
+  }
+  if (filters?.incidentType && filters.incidentType !== 'ALL') {
+    params.set('incidentType', filters.incidentType)
   }
   if (filters?.limit) {
     params.set('limit', filters.limit.toString())
@@ -131,10 +135,20 @@ export async function updateOtApprovalStatus(
 }
 
 /**
- * Chuẩn hóa URL ảnh snapshot để trình duyệt hiển thị đúng (tránh hostname nội bộ container)
+ * Trả về endpoint tải trực tiếp ảnh bằng chứng từ Backend .NET
  */
-export function formatMediaUrl(url?: string | null): string | undefined {
-  if (!url) return undefined
+export function getIncidentSnapshotFallbackUrl(incidentId: string): string {
+  return `${apiBase}/security/incidents/${incidentId}/snapshot`
+}
+
+/**
+ * Chuẩn hóa URL ảnh snapshot để trình duyệt hiển thị đúng (tránh hostname nội bộ container)
+ * kèm cơ chế fallback về Backend .NET nếu presigned url trống.
+ */
+export function formatMediaUrl(url?: string | null, incidentId?: string): string | undefined {
+  if (!url) {
+    return incidentId ? getIncidentSnapshotFallbackUrl(incidentId) : undefined
+  }
   if (url.includes('http://minio:9000')) {
     return url.replace('http://minio:9000', 'http://localhost:9000')
   }
