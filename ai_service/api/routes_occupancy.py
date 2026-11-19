@@ -300,10 +300,16 @@ def detect_preview(
                 )
             else:
                 st = occupancy_pipeline.seats_state[s_id]
+                if st.assigned_employee_id != emp_id or st.normalized_polygon != poly_tuples:
+                    st.status = SeatStatus.EMPTY
+                    st.away_start_time = None
+                    st.away_duration_sec = 0.0
+                    st.consecutive_absent_frames = 0
+                    st.consecutive_present_frames = 0
+                    st.is_alert = False
                 st.normalized_polygon = poly_tuples
                 st.seat_name = s_name
-                if emp_id:
-                    st.assigned_employee_id = emp_id
+                st.assigned_employee_id = emp_id
 
         # Loại bỏ các ghế đã bị xóa nếu seats_data được cung cấp
         if seats_data:

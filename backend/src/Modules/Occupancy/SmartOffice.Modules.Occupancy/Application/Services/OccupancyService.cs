@@ -348,6 +348,9 @@ public sealed class OccupancyService(
 
         seat.ZoneType = targetZoneType;
         seat.PolygonPointsJson = JsonSerializer.Serialize(request.PolygonPoints, JsonOptions);
+        seat.CurrentState = SeatStateMachine.StateEmpty;
+        seat.StateUpdatedAt = DateTimeOffset.UtcNow;
+        SeatProlongedAlertEmitted[seat.Id] = false;
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -842,6 +845,7 @@ public sealed class OccupancyService(
 
         foreach (var seat in seats)
         {
+            SeatProlongedAlertEmitted[seat.Id] = false;
             var prevState = seat.CurrentState;
             if (prevState != SeatStateMachine.StateEmpty)
             {
