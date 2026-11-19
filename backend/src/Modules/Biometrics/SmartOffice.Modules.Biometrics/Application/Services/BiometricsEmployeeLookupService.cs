@@ -62,4 +62,12 @@ public sealed class BiometricsEmployeeLookupService(BiometricsDbContext dbContex
             .Select(e => e.TelegramChatId)
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    public async Task<string?> GetEmailAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Employees
+            .Where(e => e.Id == employeeId && e.IsActive)
+            .Select(e => e.Email)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

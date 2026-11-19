@@ -3456,7 +3456,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
               <div className="summary-card">
                 <span>Tỷ lệ xử lý SOC (SLA)</span>
                 <strong>{securityOtSummary.resolutionRatePercent}%</strong>
-                <small className="muted">Chờ xử lý: {securityOtSummary.openCount} · Telegram đã gửi: {securityOtSummary.telegramAlertCount}</small>
+                <small className="muted">Chờ xử lý: {securityOtSummary.openCount} · Email đã gửi: {securityOtSummary.telegramAlertCount}</small>
               </div>
               <div className="summary-card">
                 <span>Ca đăng ký làm thêm (OT)</span>
@@ -3658,7 +3658,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
                               <th scope="col">Thời điểm</th>
                               <th scope="col">Mức cảnh báo</th>
                               <th scope="col">Đối tượng nhận diện</th>
-                              <th scope="col">Telegram</th>
+                              <th scope="col">Email</th>
                               <th scope="col">Trạng thái</th>
                               <th scope="col">Tóm tắt / Biên bản xử lý</th>
                             </tr>

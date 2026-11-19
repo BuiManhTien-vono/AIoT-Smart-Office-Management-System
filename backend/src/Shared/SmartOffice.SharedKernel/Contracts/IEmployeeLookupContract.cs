@@ -25,4 +25,8 @@ public interface IEmployeeLookupContract
     /// <summary>Chat ID Telegram cá nhân của nhân viên (null nếu chưa liên kết).</summary>
     Task<string?> GetTelegramChatIdAsync(Guid employeeId, CancellationToken cancellationToken = default)
         => Task.FromResult<string?>(null);
+
+    /// <summary>Địa chỉ Email (Gmail) cá nhân của nhân viên để nhận cảnh báo tự động (null nếu chưa cập nhật).</summary>
+    Task<string?> GetEmailAsync(Guid employeeId, CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
 }

@@ -606,8 +606,8 @@ export function SecuritySocPage({ session }: { session: Session }) {
                             {isOpen ? '🔴 ĐANG MỞ' : inc.ticketStatus === 'ACKNOWLEDGED' ? '🟢 ĐÃ XỬ LÝ' : '⚪ BÁO ĐỘNG NHẦM'}
                           </span>
                           {inc.telegramSent && (
-                            <span className="badge badge-info" title="Hệ thống đã phát tín hiệu gửi cảnh báo Telegram (mô phỏng)">
-                              <PaperPlaneTilt size={13} weight="bold" /> Đã báo Telegram
+                            <span className="badge badge-info" title="Hệ thống đã gửi cảnh báo tự động qua Email (Gmail)">
+                              <PaperPlaneTilt size={13} weight="bold" /> Đã báo Email
                             </span>
                           )}
                         </div>

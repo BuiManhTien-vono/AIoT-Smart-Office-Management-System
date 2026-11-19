@@ -197,7 +197,7 @@ function Notifications() {
               ))}
             </div>
           )}
-          <p className="notifications-footnote">Cảnh báo bàn làm việc cũng được tự động gửi qua Telegram cá nhân của nhân viên.</p>
+          <p className="notifications-footnote">Cảnh báo bàn làm việc cũng được tự động gửi qua Gmail cá nhân của nhân viên.</p>
         </section>
       )}
     </div>

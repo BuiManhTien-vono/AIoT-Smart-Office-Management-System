@@ -1903,7 +1903,7 @@ export function exportMultiSheetExcelWorkbook(payload: MultiSheetExcelReportPayl
       { value: 'Thời điểm phát hiện', style: 'TableHeaderStyle' },
       { value: 'Đối tượng nhận diện', style: 'TableHeaderStyle' },
       { value: 'Mức cảnh báo', style: 'TableHeaderStyle' },
-      { value: 'Telegram', style: 'TableHeaderStyle' },
+      { value: 'Email', style: 'TableHeaderStyle' },
       { value: 'Trạng thái ticket', style: 'TableHeaderStyle' },
       { value: 'Biên bản xử lý / Tóm tắt sự cố', style: 'TableHeaderStyle' },
     ], 24),

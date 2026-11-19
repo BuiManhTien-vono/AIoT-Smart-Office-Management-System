@@ -41,7 +41,6 @@ export function CreateEmployeeWithBiometricsModal({
   const [fullName, setFullName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
-  const [telegramChatId, setTelegramChatId] = useState<string>('');
   const [deptId, setDeptId] = useState<string>('');
   const [createdEmployee, setCreatedEmployee] = useState<Employee | null>(null);
 
@@ -342,7 +341,6 @@ export function CreateEmployeeWithBiometricsModal({
         fullName: fullName.trim(),
         email: email.trim().toLowerCase() || undefined,
         phoneNumber: phone.trim() || undefined,
-        telegramChatId: telegramChatId.trim() || undefined,
         departmentId: deptId,
       };
 
@@ -378,7 +376,6 @@ export function CreateEmployeeWithBiometricsModal({
           fullName: fullName.trim(),
           email: email.trim().toLowerCase() || undefined,
           phoneNumber: phone.trim() || undefined,
-          telegramChatId: telegramChatId.trim() || undefined,
           departmentId: deptId,
         };
 
@@ -536,13 +533,16 @@ export function CreateEmployeeWithBiometricsModal({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
               <label className="field">
-                <span>Email công ty</span>
+                <span>Email (Gmail nhận cảnh báo bàn làm việc)</span>
                 <input
                   type="email"
-                  placeholder="a.nguyen@smartoffice.vn"
+                  placeholder="ten.nhanvien@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
+                <small style={{ color: 'var(--color-text-muted, #6b7280)', fontSize: '0.75rem', marginTop: '4px' }}>
+                  Hệ thống tự động gửi cảnh báo về địa chỉ Gmail này khi rời chỗ quá lâu hoặc có sự cố bàn làm việc.
+                </small>
               </label>
 
               <label className="field">
@@ -555,19 +555,6 @@ export function CreateEmployeeWithBiometricsModal({
                 />
               </label>
             </div>
-
-            <label className="field">
-              <span>Telegram Chat ID (Nhận cảnh báo bàn làm việc)</span>
-              <input
-                type="text"
-                placeholder="Ví dụ: 123456789 (lấy từ @userinfobot)"
-                value={telegramChatId}
-                onChange={(e) => setTelegramChatId(e.target.value)}
-              />
-              <small style={{ color: 'var(--color-text-muted, #6b7280)', fontSize: '0.75rem', marginTop: '4px' }}>
-                Tùy chọn: Nhập Chat ID Telegram để nhân viên nhận cảnh báo cá nhân khi rời chỗ quá 10s hoặc có sự cố bàn làm việc.
-              </small>
-            </label>
 
             <label className="field">
               <span>Phòng ban trực thuộc *</span>

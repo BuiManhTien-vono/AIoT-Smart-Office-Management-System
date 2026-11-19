@@ -25,7 +25,6 @@ export function EditEmployeeModal({
   const [fullName, setFullName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
-  const [telegramChatId, setTelegramChatId] = useState<string>('');
   const [deptId, setDeptId] = useState<string>('');
   const [isActive, setIsActive] = useState<boolean>(true);
 
@@ -38,7 +37,6 @@ export function EditEmployeeModal({
       setFullName(employee.fullName || '');
       setEmail(employee.email || '');
       setPhone(employee.phoneNumber || '');
-      setTelegramChatId(employee.telegramChatId || '');
       setDeptId(employee.departmentId || '');
       setIsActive(employee.isActive);
       setError(null);
@@ -77,7 +75,6 @@ export function EditEmployeeModal({
         fullName: fullName.trim(),
         email: email.trim().toLowerCase() || undefined,
         phoneNumber: phone.trim() || undefined,
-        telegramChatId: telegramChatId.trim() || undefined,
         departmentId: deptId,
         isActive,
       };
@@ -169,13 +166,16 @@ export function EditEmployeeModal({
         {/* Email & Số điện thoại */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <label className="field">
-            <span>Email</span>
+            <span>Email (Gmail nhận cảnh báo bàn làm việc)</span>
             <input
               type="email"
-              placeholder="ten@smartoffice.vn"
+              placeholder="ten.nhanvien@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+            <small style={{ color: 'var(--color-text-muted, #6b7280)', fontSize: '0.75rem', marginTop: '4px' }}>
+              Hệ thống tự động gửi cảnh báo về địa chỉ Gmail này khi rời chỗ quá lâu hoặc có sự cố bàn làm việc.
+            </small>
           </label>
 
           <label className="field">
@@ -188,20 +188,6 @@ export function EditEmployeeModal({
             />
           </label>
         </div>
-
-        {/* Telegram Chat ID để nhận cảnh báo bàn làm việc */}
-        <label className="field">
-          <span>Telegram Chat ID (Nhận cảnh báo bàn làm việc)</span>
-          <input
-            type="text"
-            placeholder="Ví dụ: 123456789 (lấy từ @userinfobot)"
-            value={telegramChatId}
-            onChange={(e) => setTelegramChatId(e.target.value)}
-          />
-          <small style={{ color: 'var(--color-text-muted, #6b7280)', fontSize: '0.75rem', marginTop: '4px' }}>
-            Nhân viên cần mở Bot Telegram của công ty và bấm Start, sau đó nhập Chat ID vào đây để nhận cảnh báo khi rời chỗ quá lâu hoặc có sự cố bàn làm việc.
-          </small>
-        </label>
 
         {/* Trạng thái hoạt động */}
         <div className="field">
