@@ -111,6 +111,16 @@ static async Task SeedInitialDemoDataAsync(IServiceProvider rootProvider)
                 """);
         }
 
+        if (attDb.Database.IsRelational())
+        {
+            await attDb.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE IF EXISTS attendance.leave_requests
+                    ADD COLUMN IF NOT EXISTS start_time TIME NOT NULL DEFAULT '08:00:00',
+                    ADD COLUMN IF NOT EXISTS end_time TIME NOT NULL DEFAULT '17:30:00',
+                    ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT TRUE;
+                """);
+        }
+
         var deptItId = Guid.Parse("11111111-1111-1111-1111-111111111101");
         var deptHrId = Guid.Parse("11111111-1111-1111-1111-111111111102");
         var shiftHcId = Guid.Parse("22222222-2222-2222-2222-222222222201");

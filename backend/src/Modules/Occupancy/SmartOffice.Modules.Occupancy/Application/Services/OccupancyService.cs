@@ -22,7 +22,8 @@ public sealed class OccupancyService(
     IEmployeeLookupContract employeeLookup,
     IWorkScheduleLookupContract workScheduleLookup,
     IObjectStorageService objectStorage,
-    IInMemoryEventBus eventBus) : IOccupancyService
+    IInMemoryEventBus eventBus,
+    ILeaveLookupContract? leaveLookup = null) : IOccupancyService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -466,7 +467,7 @@ public sealed class OccupancyService(
             LatestCameraSnapshots[camera.Id] = request.SnapshotBase64;
         }
 
-        var capturedAtUtc = request.CapturedAtUtc ?? DateTimeOffset.UtcNow;
+        var capturedAtUtc = request.CapturedAtUtc ?? VietnamDateTime.Now;
         var seatsOnCamera = await dbContext.Seats
             .Where(s => s.CameraId == camera.Id)
             .ToDictionaryAsync(s => s.SeatCode, StringComparer.OrdinalIgnoreCase, ct);
@@ -476,6 +477,7 @@ public sealed class OccupancyService(
         var pendingProlongedEvents = new List<ProlongedAbsenceDetectedIntegrationEvent>();
         var pendingWrongSeatEvents = new List<WrongSeatDetectedIntegrationEvent>();
         var pendingSecurityEvents = new List<SecurityIncidentDetectedIntegrationEvent>();
+        var pendingUnauthorizedOnLeaveEvents = new List<UnauthorizedSeatAccessDetectedIntegrationEvent>();
         int transitionsCount = 0;
 
         foreach (var obs in request.Observations)
@@ -485,6 +487,21 @@ public sealed class OccupancyService(
             {
                 return Result.Failure<OccupancyStateSyncResponse>(
                     new Error("SEAT_NOT_FOUND", $"Không tìm thấy vị trí bàn '{obs.SeatCode}' thuộc camera '{normalizedCamCode}'."));
+            }
+
+            bool hasApprovedExemption = false;
+            bool isPaidExemption = false;
+            string? exemptionLeaveType = null;
+
+            if (seat.AssignedEmployeeId.HasValue && leaveLookup is not null)
+            {
+                var leaveCheck = await leaveLookup.CheckApprovedLeaveAsync(seat.AssignedEmployeeId.Value, capturedAtUtc, ct);
+                if (leaveCheck.HasApprovedLeave)
+                {
+                    hasApprovedExemption = true;
+                    isPaidExemption = leaveCheck.IsPaid;
+                    exemptionLeaveType = leaveCheck.LeaveType;
+                }
             }
 
             var effectiveThreshold = request.ProlongedAbsenceThresholdSeconds ?? SeatStateMachine.DefaultProlongedAbsenceSeconds;
@@ -518,7 +535,10 @@ public sealed class OccupancyService(
                 UnoccupiedContinuousSeconds: obs.UnoccupiedContinuousSeconds,
                 DetectedEmployeeId: obs.DetectedEmployeeId,
                 CapturedAtUtc: capturedAtUtc,
-                ProlongedAbsenceThresholdSeconds: effectiveThreshold);
+                ProlongedAbsenceThresholdSeconds: request.ProlongedAbsenceThresholdSeconds ?? SeatStateMachine.DefaultProlongedAbsenceSeconds,
+                HasApprovedExemption: hasApprovedExemption,
+                IsPaidExemption: isPaidExemption,
+                ExemptionLeaveType: exemptionLeaveType);
 
             var outcome = SeatStateMachine.Evaluate(evalContext);
 
@@ -626,7 +646,9 @@ public sealed class OccupancyService(
                 }
 
                 // Kiểm tra Cảnh báo An ninh Chỗ ngồi khi nhân viên vừa bắt đầu hiện diện (FSM chuyển sang PRESENT)
-                if (outcome.NewState == SeatStateMachine.StatePresent && seat.AssignedEmployeeId.HasValue)
+                if (outcome.NewState == SeatStateMachine.StatePresent &&
+                    seat.AssignedEmployeeId.HasValue &&
+                    !hasApprovedExemption)
                 {
                     var localTime = capturedAtUtc.ToOffset(TimeSpan.FromHours(7));
                     var workDate = DateOnly.FromDateTime(localTime.DateTime);
@@ -693,6 +715,21 @@ public sealed class OccupancyService(
                         }
                     }
                 }
+
+                if (outcome.UnauthorizedAccessOnLeaveTriggered &&
+                    seat.AssignedEmployeeId.HasValue)
+                {
+                    pendingUnauthorizedOnLeaveEvents.Add(new UnauthorizedSeatAccessDetectedIntegrationEvent(
+                        Guid.NewGuid(),
+                        capturedAtUtc,
+                        seat.Id,
+                        seat.SeatCode,
+                        seat.CameraId,
+                        seat.DepartmentId,
+                        seat.AssignedEmployeeId.Value,
+                        obs.DetectedEmployeeId,
+                        exemptionLeaveType));
+                }
             }
 
             transitionResults.Add(new SeatStateTransitionResultDto(
@@ -725,6 +762,11 @@ public sealed class OccupancyService(
         foreach (var wrongSeatEvt in pendingWrongSeatEvents)
         {
             await eventBus.PublishAsync(wrongSeatEvt, CancellationToken.None);
+        }
+
+        foreach (var unauthSeatEvt in pendingUnauthorizedOnLeaveEvents)
+        {
+            await eventBus.PublishAsync(unauthSeatEvt, ct);
         }
 
         foreach (var secEvt in pendingSecurityEvents)

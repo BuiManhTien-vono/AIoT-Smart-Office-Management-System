@@ -95,6 +95,42 @@ public sealed class AttendanceCheckedEventHandler(ReportingDbContext dbContext)
 
 /// <summary>
 /// Bộ lắng nghe sự kiện tích hợp tại Module Reporting:
+/// Trừ lại PresentCount / LateCount khi bản ghi lỡ chấm công trong thời gian nghỉ phép bị xóa.
+/// </summary>
+public sealed class AttendanceLogRemovedEventHandler(ReportingDbContext dbContext)
+    : IIntegrationEventHandler<AttendanceLogRemovedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceLogRemovedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        var summary = await dbContext.DailyDepartmentSummaries
+            .FirstOrDefaultAsync(
+                x => x.SummaryDate == integrationEvent.WorkDate && x.DepartmentId == integrationEvent.DepartmentId,
+                cancellationToken);
+
+        if (summary is null)
+        {
+            return;
+        }
+
+        if (integrationEvent.PreviousStatus != "ABSENT" && summary.PresentCount > 0)
+        {
+            summary.PresentCount -= 1;
+        }
+
+        if (integrationEvent.PreviousStatus == "LATE" && summary.LateCount > 0)
+        {
+            summary.LateCount -= 1;
+        }
+
+        summary.UpdatedAt = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Bộ lắng nghe sự kiện tích hợp tại Module Reporting:
 /// Tự động tăng AbsentCount khi tiến trình cuối ngày của Module Attendance chốt vắng mặt không phép.
 /// </summary>
 public sealed class AttendanceAbsentMarkedEventHandler(ReportingDbContext dbContext)

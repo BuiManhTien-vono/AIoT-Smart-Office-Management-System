@@ -58,17 +58,25 @@ public sealed record CreateLeaveRequestDto(
     DateOnly StartDate,
     DateOnly EndDate,
     string LeaveType = "ANNUAL_LEAVE",
-    string? Reason = null);
+    string? Reason = null,
+    TimeOnly? StartTime = null,
+    TimeOnly? EndTime = null,
+    bool? IsPaid = null);
 
 public sealed record LeaveRequestResponse(
     Guid Id,
     Guid EmployeeId,
     DateOnly StartDate,
     DateOnly EndDate,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
     string LeaveType,
+    bool IsPaid,
     string? Reason,
     string ApprovalStatus,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? EmployeeCode = null,
+    string? EmployeeName = null);
 
 public sealed record DailyAbsentProcessResponse(
     DateOnly WorkDate,

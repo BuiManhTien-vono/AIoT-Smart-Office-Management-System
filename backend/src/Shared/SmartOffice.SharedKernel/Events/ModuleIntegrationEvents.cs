@@ -31,6 +31,20 @@ public sealed record AttendanceCheckedIntegrationEvent(
     bool IsFirstCheckInOfDay) : IIntegrationEvent;
 
 /// <summary>
+/// Sự kiện phát ra từ Module 2 (Attendance) khi một bản ghi chấm công lỡ tạo trong thời gian nghỉ phép bị xóa.
+/// Module Reporting lắng nghe để trừ lại số lượng đi làm / đi muộn trong bảng tổng hợp.
+/// </summary>
+public sealed record AttendanceLogRemovedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredOnUtc,
+    Guid AttendanceLogId,
+    Guid EmployeeId,
+    string EmployeeCode,
+    Guid DepartmentId,
+    DateOnly WorkDate,
+    string PreviousStatus) : IIntegrationEvent;
+
+/// <summary>
 /// Sự kiện phát ra từ Module 2 (Attendance) khi tiến trình cuối ngày đánh dấu nhân viên vắng mặt không phép (ABSENT - FR-ATT-06).
 /// Module Reporting lắng nghe để tăng AbsentCount trong bảng tổng hợp.
 /// </summary>
@@ -42,6 +56,25 @@ public sealed record AttendanceAbsentMarkedIntegrationEvent(
     string EmployeeCode,
     Guid DepartmentId,
     DateOnly WorkDate) : IIntegrationEvent;
+
+/// <summary>
+/// Sự kiện phát ra từ Module 2 (Attendance) khi tạo đơn nghỉ phép / công vụ hoặc nghỉ đột xuất trong ngày.
+/// Module Occupancy lắng nghe để đẩy cập nhật thời gian thực lên giao diện theo dõi.
+/// </summary>
+public sealed record LeaveRequestCreatedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredOnUtc,
+    Guid LeaveRequestId,
+    Guid EmployeeId,
+    string EmployeeCode,
+    Guid DepartmentId,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string LeaveType,
+    bool IsPaid,
+    string ApprovalStatus) : IIntegrationEvent;
 
 /// <summary>
 /// Sự kiện phát ra từ Module 3 (Occupancy) mỗi khi một vị trí bàn làm việc chuyển trạng thái FSM.
@@ -85,6 +118,21 @@ public sealed record WrongSeatDetectedIntegrationEvent(
     Guid DepartmentId,
     Guid AssignedEmployeeId,
     Guid DetectedEmployeeId) : IIntegrationEvent;
+
+/// <summary>
+/// Sự kiện phát ra từ Module 3 (Occupancy) khi phát hiện người lạ hoặc người khác ngồi vào vị trí bàn
+/// của nhân viên đang trong khung giờ nghỉ phép đã duyệt. Module Security lắng nghe để kiểm tra và lập sự cố an ninh.
+/// </summary>
+public sealed record UnauthorizedSeatAccessDetectedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredOnUtc,
+    Guid SeatId,
+    string SeatCode,
+    Guid CameraId,
+    Guid DepartmentId,
+    Guid AssignedEmployeeId,
+    Guid? DetectedEmployeeId,
+    string? LeaveType) : IIntegrationEvent;
 
 /// <summary>
 /// Sự kiện phát ra từ Module 4 (Security) khi phát hiện sự cố an ninh ngoài giờ hoặc giả mạo khuôn mặt (FR-SEC-02, US-SEC-02).

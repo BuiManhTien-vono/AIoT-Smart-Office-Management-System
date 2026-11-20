@@ -21,6 +21,22 @@ from typing import List, Dict, Any, Optional
 from .config import settings, SeatBox
 
 
+class BackendHttpError(RuntimeError):
+    """Lỗi HTTP từ Backend .NET có kèm status_code, error_code và error_message."""
+
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None
+    ):
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.error_message = error_message
+
+
 class BackendSyncClient:
     """
     Client giao tiếp bất đồng bộ & đồng bộ với SmartOffice.WebApi (.NET 10).
@@ -76,11 +92,23 @@ class BackendSyncClient:
                 return {"data": parsed}
         except urllib.error.HTTPError as http_err:
             err_body = ""
+            error_code = None
+            error_message = None
             try:
                 err_body = http_err.read().decode("utf-8")
+                if err_body:
+                    parsed_err = json.loads(err_body)
+                    if isinstance(parsed_err, dict):
+                        error_code = parsed_err.get("code")
+                        error_message = parsed_err.get("message")
             except Exception:
                 pass
-            raise RuntimeError(f"HTTP {http_err.code} từ Backend ({url}): {err_body or http_err.reason}")
+            raise BackendHttpError(
+                status_code=http_err.code,
+                message=f"HTTP {http_err.code} từ Backend ({url}): {err_body or http_err.reason}",
+                error_code=error_code,
+                error_message=error_message
+            )
         except urllib.error.URLError as url_err:
             raise RuntimeError(f"Không thể kết nối tới Backend ({url}): {url_err.reason}")
 

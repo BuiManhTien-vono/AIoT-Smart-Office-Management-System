@@ -36,7 +36,10 @@ public sealed class LeaveRequest : BaseEntity
     public Guid EmployeeId { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
+    public TimeOnly StartTime { get; set; } = new(8, 0);
+    public TimeOnly EndTime { get; set; } = new(17, 30);
     public string LeaveType { get; set; } = "ANNUAL_LEAVE";
+    public bool IsPaid { get; set; } = true;
     public string? Reason { get; set; }
     public string ApprovalStatus { get; set; } = "APPROVED";
     public Guid? ApprovedByUserId { get; set; }

@@ -31,6 +31,7 @@ public static class AttendanceModuleExtensions
 
         services.AddScoped<IAttendanceService, AttendanceService>();
         services.AddScoped<IWorkScheduleLookupContract, AttendanceService>();
+        services.AddScoped<ILeaveLookupContract, AttendanceService>();
 
         return services;
     }

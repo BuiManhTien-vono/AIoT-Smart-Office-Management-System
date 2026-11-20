@@ -19,6 +19,7 @@ using SmartOffice.Modules.Reporting.Application.Handlers;
 using SmartOffice.Modules.Reporting.Application.Services;
 using SmartOffice.Modules.Reporting.Infrastructure;
 using SmartOffice.Modules.Security.Application.DTOs;
+using SmartOffice.Modules.Security.Application.Handlers;
 using SmartOffice.Modules.Security.Application.Services;
 using SmartOffice.Modules.Security.Infrastructure;
 using SmartOffice.SharedKernel.Contracts;
@@ -44,6 +45,7 @@ public class Week2OccupancyStorageAndOtTests
         services.AddScoped<IBiometricsService, BiometricsService>();
         services.AddScoped<IEmployeeLookupContract, BiometricsEmployeeLookupService>();
         services.AddScoped<IAttendanceService, AttendanceService>();
+        services.AddScoped<ILeaveLookupContract, AttendanceService>();
         services.AddScoped<IWorkScheduleLookupContract, AttendanceService>();
         services.AddScoped<IOccupancyService, OccupancyService>();
         services.AddScoped<IOtService, OtService>();
@@ -55,7 +57,9 @@ public class Week2OccupancyStorageAndOtTests
         services.AddScoped<IIntegrationEventHandler<EmployeeRegisteredIntegrationEvent>, EmployeeRegisteredEventHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceCheckedIntegrationEvent>, AttendanceCheckedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceAbsentMarkedIntegrationEvent>, AttendanceAbsentMarkedEventHandler>();
+        services.AddScoped<IIntegrationEventHandler<LeaveRequestCreatedIntegrationEvent>, LeaveRequestCreatedRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<ProlongedAbsenceDetectedIntegrationEvent>, ProlongedAbsenceDetectedEventHandler>();
+        services.AddScoped<IIntegrationEventHandler<UnauthorizedSeatAccessDetectedIntegrationEvent>, UnauthorizedSeatAccessEventHandler>();
         services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentDetectedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<SeatStateChangedIntegrationEvent>, SeatStateChangedRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<WrongSeatDetectedIntegrationEvent>, WrongSeatRealtimeHandler>();
@@ -387,6 +391,202 @@ public class Week2OccupancyStorageAndOtTests
         Assert.Equal("VIDEO_CLIP", evidenceUpload.Value.EvidenceType);
         Assert.Contains("clip10s.mp4", evidenceUpload.Value.ObjectKey);
         Assert.Contains("X-Amz-Algorithm=AWS4-HMAC-SHA256", evidenceUpload.Value.PresignedViewUrl);
+    }
+
+    [Fact]
+    public async Task Occupancy_Should_Mute_ProlongedAbsence_And_Distinguish_Paid_Vs_Unpaid_Via_LeaveLookupContract()
+    {
+        using var provider = BuildFullModularServiceProvider(nameof(Occupancy_Should_Mute_ProlongedAbsence_And_Distinguish_Paid_Vs_Unpaid_Via_LeaveLookupContract));
+        using var scope = provider.CreateScope();
+
+        var biometricsService = scope.ServiceProvider.GetRequiredService<IBiometricsService>();
+        var attendanceService = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
+        var occupancyService = scope.ServiceProvider.GetRequiredService<IOccupancyService>();
+        var reportingDb = scope.ServiceProvider.GetRequiredService<ReportingDbContext>();
+
+        var dept = (await biometricsService.CreateDepartmentAsync(
+            new CreateDepartmentRequest("DEPT_RES", "Phòng Nghiên cứu", null))).Value;
+
+        var shift = (await attendanceService.CreateShiftAsync(
+            new CreateShiftRequest("SHIFT_RES", "Ca Nghiên cứu", new TimeOnly(8, 0), new TimeOnly(17, 30), 15, IsDefault: true))).Value;
+
+        var empPaid = (await biometricsService.CreateEmployeeAsync(
+            new CreateEmployeeRequest("NV601", "Nguyễn Văn Công Vụ", null, null, dept.Id, shift.Id, null))).Value;
+
+        var empUnpaid = (await biometricsService.CreateEmployeeAsync(
+            new CreateEmployeeRequest("NV602", "Trần Thị Đột Xuất", null, null, dept.Id, shift.Id, null))).Value;
+
+        var camera = (await occupancyService.CreateCameraAsync(
+            new CreateCameraRequest("CAM_RES_01", "Camera Phòng Nghiên cứu", "rtsp://localhost:8554/res01", "DESK", dept.Id))).Value;
+
+        var polygon1 = new List<PolygonPointDto>
+        {
+            new(0.10, 0.10), new(0.30, 0.10), new(0.30, 0.40), new(0.10, 0.40)
+        };
+        var polygon2 = new List<PolygonPointDto>
+        {
+            new(0.40, 0.10), new(0.60, 0.10), new(0.60, 0.40), new(0.40, 0.40)
+        };
+
+        await occupancyService.CreateSeatAsync(
+            new CreateSeatRequest("SEAT_RES_01", "Bàn 01", camera.Id, dept.Id, empPaid.Id, polygon1));
+        await occupancyService.CreateSeatAsync(
+            new CreateSeatRequest("SEAT_RES_02", "Bàn 02", camera.Id, dept.Id, empUnpaid.Id, polygon2));
+
+        var workDate = new DateOnly(2026, 11, 17);
+
+        // NV601 đăng ký OFFICIAL_DUTY (có lương) từ 09:35 -> 11:00 (giờ VN GMT+7)
+        await attendanceService.CreateLeaveRequestAsync(new CreateLeaveRequestDto(
+            empPaid.Id, workDate, workDate, "OFFICIAL_DUTY", "Họp chiến lược phòng ban",
+            new TimeOnly(9, 35), new TimeOnly(11, 0)));
+
+        // NV602 đăng ký SUDDENLY_ALLOWED_LEAVE (không lương) từ 09:35 -> 11:00 (giờ VN GMT+7)
+        await attendanceService.CreateLeaveRequestAsync(new CreateLeaveRequestDto(
+            empUnpaid.Id, workDate, workDate, "SUDDENLY_ALLOWED_LEAVE", "Nghỉ việc gia đình đột xuất",
+            new TimeOnly(9, 35), new TimeOnly(11, 0)));
+
+        var t0 = new DateTimeOffset(2026, 11, 17, 9, 0, 0, TimeSpan.FromHours(7));
+
+        // [09:00] Cả 2 vào bàn -> PRESENT
+        await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_RES_01", t0, 1,
+            [
+                new SeatObservationInput("SEAT_RES_01", IsOccupied: true, DetectedEmployeeId: empPaid.Id),
+                new SeatObservationInput("SEAT_RES_02", IsOccupied: true, DetectedEmployeeId: empUnpaid.Id)
+            ]));
+
+        // [09:30] Cả 2 vẫn ngồi -> PRESENT, mỗi người tích lũy 1800s (30 phút)
+        var syncPresent = (await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_RES_01", t0.AddMinutes(30), 2,
+            [
+                new SeatObservationInput("SEAT_RES_01", IsOccupied: true, DetectedEmployeeId: empPaid.Id),
+                new SeatObservationInput("SEAT_RES_02", IsOccupied: true, DetectedEmployeeId: empUnpaid.Id)
+            ]))).Value;
+
+        Assert.Equal(1800, syncPresent.Results[0].ActiveSecondsToday);
+        Assert.Equal(1800, syncPresent.Results[1].ActiveSecondsToday);
+
+        // [09:50] Cả 2 rời bàn 20 phút (>= 900s) trong khung giờ đơn đã duyệt (09:30 - 11:00)
+        // - Đều phải giữ TEMP_AWAY và không kích hoạt PROLONGED_AWAY
+        // - NV601 (OFFICIAL_DUTY, IsPaid = true): ActiveSecondsToday tăng lên 1800 + 1200 = 3000s
+        // - NV602 (SUDDENLY_ALLOWED_LEAVE, IsPaid = false): ActiveSecondsToday giữ nguyên 1800s
+        var syncDuringExemption = (await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_RES_01", t0.AddMinutes(50), 3,
+            [
+                new SeatObservationInput("SEAT_RES_01", IsOccupied: false, UnoccupiedContinuousFrames: 600, UnoccupiedContinuousSeconds: 1200),
+                new SeatObservationInput("SEAT_RES_02", IsOccupied: false, UnoccupiedContinuousFrames: 600, UnoccupiedContinuousSeconds: 1200)
+            ]))).Value;
+
+        Assert.Equal(SeatStateMachine.StateTempAway, syncDuringExemption.Results[0].NewState);
+        Assert.False(syncDuringExemption.Results[0].ProlongedAbsenceAlertTriggered);
+        Assert.Equal(3000, syncDuringExemption.Results[0].ActiveSecondsToday);
+
+        Assert.Equal(SeatStateMachine.StateTempAway, syncDuringExemption.Results[1].NewState);
+        Assert.False(syncDuringExemption.Results[1].ProlongedAbsenceAlertTriggered);
+        Assert.Equal(1800, syncDuringExemption.Results[1].ActiveSecondsToday);
+
+        // Module Reporting không bị cộng bất kỳ vi phạm ProlongedAwayEvents nào
+        var summaryBeforeExpire = await reportingDb.DailyDepartmentSummaries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.SummaryDate == workDate);
+        Assert.Equal(0, summaryBeforeExpire?.ProlongedAwayEvents ?? 0);
+
+        // [11:20] Hết thời gian đơn phép (sau 11:00), NV602 vẫn rời bàn 20 phút (>= 900s) -> Chuyển PROLONGED_AWAY & bắn Event
+        var syncAfterExpire = (await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_RES_01", new DateTimeOffset(2026, 11, 17, 11, 20, 0, TimeSpan.FromHours(7)), 4,
+            [
+                new SeatObservationInput("SEAT_RES_02", IsOccupied: false, UnoccupiedContinuousFrames: 600, UnoccupiedContinuousSeconds: 1200)
+            ]))).Value;
+
+        Assert.Equal(SeatStateMachine.StateProlongedAway, syncAfterExpire.Results[0].NewState);
+        Assert.True(syncAfterExpire.Results[0].ProlongedAbsenceAlertTriggered);
+
+        var summaryAfterExpire = await reportingDb.DailyDepartmentSummaries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.SummaryDate == workDate);
+        Assert.NotNull(summaryAfterExpire);
+        Assert.Equal(1, summaryAfterExpire.ProlongedAwayEvents);
+    }
+
+    [Fact]
+    public async Task Occupancy_OnLeave_Should_Block_Present_For_Owner_And_Trigger_SecurityIncident_For_Stranger()
+    {
+        using var provider = BuildFullModularServiceProvider(nameof(Occupancy_OnLeave_Should_Block_Present_For_Owner_And_Trigger_SecurityIncident_For_Stranger));
+        using var scope = provider.CreateScope();
+
+        var biometricsService = scope.ServiceProvider.GetRequiredService<IBiometricsService>();
+        var attendanceService = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
+        var occupancyService = scope.ServiceProvider.GetRequiredService<IOccupancyService>();
+        var incidentService = scope.ServiceProvider.GetRequiredService<ISecurityIncidentService>();
+        var reportingDb = scope.ServiceProvider.GetRequiredService<ReportingDbContext>();
+
+        var dept = (await biometricsService.CreateDepartmentAsync(
+            new CreateDepartmentRequest("DEPT_SEC2", "Phòng An ninh Bàn", null))).Value;
+
+        var shift = (await attendanceService.CreateShiftAsync(
+            new CreateShiftRequest("SHIFT_SEC2", "Ca Hành Chính", new TimeOnly(8, 0), new TimeOnly(17, 30), 15, IsDefault: true))).Value;
+
+        var empOwner = (await biometricsService.CreateEmployeeAsync(
+            new CreateEmployeeRequest("NV701", "Lê Văn Nghỉ Đột Xuất", null, null, dept.Id, shift.Id, null))).Value;
+
+        var camera = (await occupancyService.CreateCameraAsync(
+            new CreateCameraRequest("CAM_SEC_DESK", "Camera Giám Sát Bàn", "rtsp://localhost:8554/secdesk", "DESK", dept.Id))).Value;
+
+        var polygon = new List<PolygonPointDto>
+        {
+            new(0.10, 0.10), new(0.35, 0.10), new(0.35, 0.45), new(0.10, 0.45)
+        };
+        await occupancyService.CreateSeatAsync(
+            new CreateSeatRequest("SEAT_SEC_01", "Bàn 01", camera.Id, dept.Id, empOwner.Id, polygon));
+
+        var workDate = new DateOnly(2026, 11, 18);
+
+        // NV701 đăng ký nghỉ đột xuất từ 14:00 đến 23:00 (giờ VN GMT+7)
+        var leaveRes = await attendanceService.CreateLeaveRequestAsync(new CreateLeaveRequestDto(
+            empOwner.Id,
+            workDate,
+            workDate,
+            "SUDDENLY_ALLOWED_LEAVE",
+            "Nghỉ đột xuất chiều tối",
+            new TimeOnly(14, 0),
+            new TimeOnly(23, 0)));
+        Assert.True(leaveRes.IsSuccess);
+
+        // 1. Giả lập AI Service gửi timestamp UTC (07:30Z = 14:30 GMT+7) khi chính NV701 ngồi ở bàn:
+        // Không được chuyển sang PRESENT và không cộng ActiveSecondsToday!
+        var ownerAtDeskUtc = new DateTimeOffset(2026, 11, 18, 7, 30, 0, TimeSpan.Zero);
+        var syncOwner = (await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_SEC_DESK",
+            ownerAtDeskUtc,
+            1,
+            [new SeatObservationInput("SEAT_SEC_01", IsOccupied: true, DetectedEmployeeId: empOwner.Id)]))).Value;
+
+        Assert.NotEqual(SeatStateMachine.StatePresent, syncOwner.Results[0].NewState);
+        Assert.Equal(SeatStateMachine.StateTempAway, syncOwner.Results[0].NewState);
+        Assert.Equal(0, syncOwner.Results[0].ActiveSecondsToday);
+
+        // 2. Sau đó lúc 14:35 GMT+7 (07:35Z), có người lạ (DetectedEmployeeId = null) ngồi vào bàn của NV701:
+        // Bàn chuyển WRONG_SEAT + Module Security tạo sự cố LEVEL_3_BREACH + Reporting tăng SecurityAlertsCount!
+        var strangerAtDeskUtc = new DateTimeOffset(2026, 11, 18, 7, 35, 0, TimeSpan.Zero);
+        var syncStranger = (await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_SEC_DESK",
+            strangerAtDeskUtc,
+            2,
+            [new SeatObservationInput("SEAT_SEC_01", IsOccupied: true, DetectedEmployeeId: null)]))).Value;
+
+        Assert.Equal(SeatStateMachine.StateWrongSeat, syncStranger.Results[0].NewState);
+        Assert.True(syncStranger.Results[0].WrongSeatAlertTriggered);
+
+        var incidents = await incidentService.GetIncidentsAsync();
+        Assert.Single(incidents);
+        Assert.Equal(SecurityIncidentService.AlertLevel3SecurityBreach, incidents[0].AlertLevel);
+        Assert.True(incidents[0].TelegramSent);
+
+        var summary = await reportingDb.DailyDepartmentSummaries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.SummaryDate == workDate);
+        Assert.NotNull(summary);
+        Assert.Equal(1, summary.SecurityAlertsCount);
     }
 
     [Fact]

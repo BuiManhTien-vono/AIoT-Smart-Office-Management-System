@@ -22,6 +22,8 @@ public interface IAttendanceService
         CancellationToken ct = default);
 
     Task<Result<LeaveRequestResponse>> CreateLeaveRequestAsync(CreateLeaveRequestDto request, CancellationToken ct = default);
+    Task<Result<LeaveRequestResponse>> CancelLeaveRequestAsync(Guid leaveRequestId, CancellationToken ct = default);
+    Task<Result<LeaveRequestResponse>> ReplaceLeaveRequestAsync(Guid leaveRequestId, CreateLeaveRequestDto request, CancellationToken ct = default);
     Task<IReadOnlyList<LeaveRequestResponse>> GetLeaveRequestsAsync(DateOnly? date = null, CancellationToken ct = default);
 
     Task<Result<DailyAbsentProcessResponse>> MarkDailyAbsentEmployeesAsync(DateOnly? workDate = null, CancellationToken ct = default);

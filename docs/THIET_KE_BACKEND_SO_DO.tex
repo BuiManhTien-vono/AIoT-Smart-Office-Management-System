@@ -1,0 +1,73 @@
+% Phần sơ đồ thiết kế backend.
+% Cách dùng: \input{docs/THIET_KE_BACKEND_SO_DO.tex} từ thư mục gốc repo,
+% hoặc \input{THIET_KE_BACKEND_SO_DO.tex} khi biên dịch trong docs/.
+% Gói cần có trong preamble tài liệu chính: graphicx, float, pdflscape.
+
+\graphicspath{{docs/images/backend-design/}{images/backend-design/}}
+
+\section{Sơ đồ thiết kế hệ thống Backend}
+\label{sec:backend-design-diagrams}
+
+Phần này trình bày các sơ đồ thiết kế backend theo ba góc nhìn: mô hình miền và
+các hợp đồng giữa module; luồng xử lý nghiệp vụ; và các chức năng của hệ thống.
+
+\subsection{Mô hình lớp và hợp đồng giữa các module}
+
+\begin{landscape}
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.96\linewidth,height=0.82\textheight,keepaspectratio]{class-contracts-eventbus.webp}
+    \caption{Mô hình lớp các dịch vụ, hợp đồng liên module và Event Bus}
+    \label{fig:backend-class-contracts-eventbus}
+\end{figure}
+\end{landscape}
+
+\begin{landscape}
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.96\linewidth,height=0.82\textheight,keepaspectratio]{class-domain-entities.webp}
+    \caption{Mô hình lớp các thực thể nghiệp vụ theo từng module}
+    \label{fig:backend-domain-entities}
+\end{figure}
+\end{landscape}
+
+\subsection{Sơ đồ tuần tự các luồng nghiệp vụ}
+
+\begin{landscape}
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.98\linewidth,height=0.84\textheight,keepaspectratio]{sequence-attendance-checkin.webp}
+    \caption{Luồng tuần tự chấm công bằng nhận diện khuôn mặt}
+    \label{fig:backend-sequence-attendance}
+\end{figure}
+\end{landscape}
+
+\begin{landscape}
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.98\linewidth,height=0.84\textheight,keepaspectratio]{sequence-occupancy-state-sync.webp}
+    \caption{Luồng đồng bộ trạng thái chỗ ngồi, máy trạng thái FSM và thông báo thời gian thực}
+    \label{fig:backend-sequence-occupancy}
+\end{figure}
+\end{landscape}
+
+\begin{landscape}
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.98\linewidth,height=0.84\textheight,keepaspectratio]{sequence-after-hours-security.webp}
+    \caption{Luồng tuần tự phát hiện và xử lý sự cố an ninh ngoài giờ}
+    \label{fig:backend-sequence-security}
+\end{figure}
+\end{landscape}
+
+\subsection{Sơ đồ chức năng hệ thống}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.90\linewidth,height=0.72\textheight,keepaspectratio]{use-case-system.webp}
+    \caption{Sơ đồ Use Case của hệ thống Smart Office}
+    \label{fig:backend-use-case}
+\end{figure}
+
+% Có thể tham chiếu trong nội dung bằng \ref{fig:backend-sequence-attendance},
+% \ref{fig:backend-domain-entities}, ...

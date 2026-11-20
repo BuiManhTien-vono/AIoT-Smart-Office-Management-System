@@ -68,7 +68,10 @@ public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> op
             entity.Property(x => x.EmployeeId).HasColumnName("employee_id");
             entity.Property(x => x.StartDate).HasColumnName("start_date");
             entity.Property(x => x.EndDate).HasColumnName("end_date");
+            entity.Property(x => x.StartTime).HasColumnName("start_time");
+            entity.Property(x => x.EndTime).HasColumnName("end_time");
             entity.Property(x => x.LeaveType).HasColumnName("leave_type").HasMaxLength(30).IsRequired();
+            entity.Property(x => x.IsPaid).HasColumnName("is_paid");
             entity.Property(x => x.Reason).HasColumnName("reason").HasMaxLength(255);
             entity.Property(x => x.ApprovalStatus).HasColumnName("approval_status").HasMaxLength(20).IsRequired();
             entity.Property(x => x.ApprovedByUserId).HasColumnName("approved_by_user_id");
