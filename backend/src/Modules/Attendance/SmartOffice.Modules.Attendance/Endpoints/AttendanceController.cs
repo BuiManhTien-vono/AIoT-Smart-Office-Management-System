@@ -96,6 +96,33 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
         return Created($"/api/v1/attendance/leaves/{result.Value.Id}", result.Value);
     }
 
+    [HttpPatch("leaves/{id:guid}/cancel")]
+    public async Task<IActionResult> CancelLeave(Guid id, CancellationToken ct)
+    {
+        var result = await attendanceService.CancelLeaveRequestAsync(id, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
+    [HttpPost("leaves/{id:guid}/replace")]
+    public async Task<IActionResult> ReplaceLeave(
+        Guid id,
+        [FromBody] CreateLeaveRequestDto request,
+        CancellationToken ct)
+    {
+        var result = await attendanceService.ReplaceLeaveRequestAsync(id, request, ct);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
     [HttpPost("mark-absent")]
     public async Task<IActionResult> MarkDailyAbsent([FromQuery] DateOnly? date, CancellationToken ct)
     {

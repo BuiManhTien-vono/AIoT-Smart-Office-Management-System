@@ -103,7 +103,10 @@ CREATE TABLE IF NOT EXISTS attendance.leave_requests (
     employee_id UUID NOT NULL, -- Tham chiếu logic sang biometrics.employees(id)
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
+    start_time TIME NOT NULL DEFAULT '08:00:00',
+    end_time TIME NOT NULL DEFAULT '17:30:00',
     leave_type VARCHAR(30) NOT NULL DEFAULT 'ANNUAL_LEAVE',
+    is_paid BOOLEAN NOT NULL DEFAULT TRUE,
     reason VARCHAR(255),
     approval_status VARCHAR(20) NOT NULL DEFAULT 'APPROVED', -- PENDING, APPROVED, REJECTED
     approved_by_user_id UUID,

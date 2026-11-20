@@ -22,11 +22,21 @@ public sealed class AttendanceService(
     IEmployeeLookupContract employeeLookup,
     IOvertimeLookupContract overtimeLookup,
     IObjectStorageService objectStorage,
-    IInMemoryEventBus eventBus) : IAttendanceService, IWorkScheduleLookupContract
+    IInMemoryEventBus eventBus) : IAttendanceService, IWorkScheduleLookupContract, ILeaveLookupContract
 {
     public const int DebounceWindowSeconds = 300; // 5 phút
     public const float MinMatchConfidence = 0.70f;
     public const int DefaultPresignedExpiryMinutes = 15;
+
+    public static readonly HashSet<string> AllowedLeaveTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ANNUAL_LEAVE",
+        "SICK_LEAVE",
+        "PERSONAL_LEAVE",
+        "UNPAID_LEAVE",
+        "OFFICIAL_DUTY",
+        "SUDDENLY_ALLOWED_LEAVE"
+    };
 
     public async Task<Result<ShiftResponse>> CreateShiftAsync(
         CreateShiftRequest request,
@@ -137,16 +147,60 @@ public sealed class AttendanceService(
             workDate = DateOnly.FromDateTime(nowVn.DateTime);
         }
 
+        var activeLeave = await FindActiveLeaveAtAsync(
+            employee.EmployeeId,
+            workDate,
+            currentTimeOfDay,
+            includeOfficialDuty: false,
+            ct);
+
+        if (activeLeave is not null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("EMPLOYEE_ON_LEAVE", "Nhân viên đang trong thời gian nghỉ phép"));
+        }
+
         var existingLog = await dbContext.AttendanceLogs
             .FirstOrDefaultAsync(x => x.EmployeeId == employee.EmployeeId && x.WorkDate == workDate, ct);
+
+        // Kiểm tra các đơn vắng mặt / công vụ trong ngày đã được duyệt để điều chỉnh mốc đầu/cuối ca hợp lệ
+        var approvedLeavesToday = await dbContext.LeaveRequests
+            .Where(l => l.EmployeeId == employee.EmployeeId &&
+                        l.ApprovalStatus == "APPROVED" &&
+                        l.StartDate <= workDate &&
+                        l.EndDate >= workDate)
+            .ToListAsync(ct);
+
+        var effectiveStartTime = shift.StartTime;
+        var effectiveEndTime = shift.EndTime;
+
+        foreach (var lv in approvedLeavesToday.OrderBy(x => x.StartDate).ThenBy(x => x.StartTime))
+        {
+            var dayStart = lv.StartDate < workDate ? TimeOnly.MinValue : lv.StartTime;
+            var dayEnd = lv.EndDate > workDate ? TimeOnly.MaxValue : lv.EndTime;
+            if (dayStart <= effectiveStartTime && dayEnd > effectiveStartTime)
+            {
+                effectiveStartTime = dayEnd < shift.EndTime ? dayEnd : shift.EndTime;
+            }
+        }
+
+        foreach (var lv in approvedLeavesToday.OrderByDescending(x => x.EndDate).ThenByDescending(x => x.EndTime))
+        {
+            var dayStart = lv.StartDate < workDate ? TimeOnly.MinValue : lv.StartTime;
+            var dayEnd = lv.EndDate > workDate ? TimeOnly.MaxValue : lv.EndTime;
+            if (dayEnd >= effectiveEndTime && dayStart < effectiveEndTime)
+            {
+                effectiveEndTime = dayStart > shift.StartTime ? dayStart : shift.StartTime;
+            }
+        }
 
         // 4. Trường hợp Lượt chấm công đầu tiên trong ngày (Check-in vào ca - FR-ATT-04)
         if (existingLog is null)
         {
-            var latestAllowedTime = shift.StartTime.AddMinutes(shift.GraceMinutes);
+            var latestAllowedTime = effectiveStartTime.AddMinutes(shift.GraceMinutes);
             var isLate = currentTimeOfDay > latestAllowedTime;
             var lateMinutes = isLate
-                ? (int)Math.Ceiling((currentTimeOfDay - shift.StartTime).TotalMinutes)
+                ? (int)Math.Ceiling((currentTimeOfDay - effectiveStartTime).TotalMinutes)
                 : 0;
             var status = isLate ? "LATE" : "ON_TIME";
 
@@ -212,9 +266,9 @@ public sealed class AttendanceService(
         existingLog.CheckOutTime = nowUtc;
         existingLog.LastSeenTime = nowUtc;
 
-        if (currentTimeOfDay < shift.EndTime)
+        if (currentTimeOfDay < effectiveEndTime)
         {
-            existingLog.EarlyLeaveMinutes = (int)Math.Ceiling((shift.EndTime - currentTimeOfDay).TotalMinutes);
+            existingLog.EarlyLeaveMinutes = (int)Math.Ceiling((effectiveEndTime - currentTimeOfDay).TotalMinutes);
             if (existingLog.Status == "ON_TIME")
             {
                 existingLog.Status = "EARLY_LEAVE";
@@ -338,42 +392,317 @@ public sealed class AttendanceService(
         CreateLeaveRequestDto request,
         CancellationToken ct = default)
     {
-        if (request.EndDate < request.StartDate)
+        var prepared = await PrepareLeaveEntityAsync(request, excludeLeaveId: null, ct);
+        if (prepared.IsFailure)
+        {
+            return Result.Failure<LeaveRequestResponse>(prepared.Error);
+        }
+
+        var (leave, employee) = prepared.Value;
+        dbContext.LeaveRequests.Add(leave);
+        var removedEvents = await CleanupOverlappingAttendanceLogsAsync(leave, employee, ct);
+        await dbContext.SaveChangesAsync(ct);
+
+        await PublishLeaveCreatedEventAsync(leave, employee, ct);
+        foreach (var removedEvt in removedEvents)
+        {
+            await eventBus.PublishAsync(removedEvt, ct);
+        }
+
+        return Result.Success(MapLeaveResponse(leave, employee.EmployeeCode, employee.FullName));
+    }
+
+    public async Task<Result<LeaveRequestResponse>> CancelLeaveRequestAsync(
+        Guid leaveRequestId,
+        CancellationToken ct = default)
+    {
+        var leave = await dbContext.LeaveRequests.FirstOrDefaultAsync(l => l.Id == leaveRequestId, ct);
+        if (leave is null)
         {
             return Result.Failure<LeaveRequestResponse>(
+                new Error("LEAVE_NOT_FOUND", "Không tìm thấy đơn xin nghỉ phép cần hủy."));
+        }
+
+        if (leave.ApprovalStatus is "CANCELLED" or "REJECTED")
+        {
+            return Result.Failure<LeaveRequestResponse>(
+                new Error("LEAVE_ALREADY_CLOSED", $"Đơn nghỉ phép đang ở trạng thái '{leave.ApprovalStatus}', không thể hủy."));
+        }
+
+        leave.ApprovalStatus = "CANCELLED";
+        await dbContext.SaveChangesAsync(ct);
+
+        var emp = await employeeLookup.GetByIdAsync(leave.EmployeeId, ct);
+        return Result.Success(MapLeaveResponse(leave, emp?.EmployeeCode, emp?.FullName));
+    }
+
+    public async Task<Result<LeaveRequestResponse>> ReplaceLeaveRequestAsync(
+        Guid leaveRequestId,
+        CreateLeaveRequestDto request,
+        CancellationToken ct = default)
+    {
+        var existingLeave = await dbContext.LeaveRequests.FirstOrDefaultAsync(l => l.Id == leaveRequestId, ct);
+        if (existingLeave is null)
+        {
+            return Result.Failure<LeaveRequestResponse>(
+                new Error("LEAVE_NOT_FOUND", "Không tìm thấy đơn xin nghỉ phép cần thay thế."));
+        }
+
+        if (existingLeave.ApprovalStatus is "CANCELLED" or "REJECTED")
+        {
+            return Result.Failure<LeaveRequestResponse>(
+                new Error("LEAVE_CANNOT_BE_REPLACED", $"Đơn nghỉ phép đang ở trạng thái '{existingLeave.ApprovalStatus}', không thể thay thế."));
+        }
+
+        var normalizedRequest = request.EmployeeId == Guid.Empty
+            ? request with { EmployeeId = existingLeave.EmployeeId }
+            : request;
+
+        if (normalizedRequest.EmployeeId != existingLeave.EmployeeId)
+        {
+            return Result.Failure<LeaveRequestResponse>(
+                new Error("EMPLOYEE_MISMATCH", "Không thể thay thế đơn nghỉ phép cho một nhân viên khác."));
+        }
+
+        var prepared = await PrepareLeaveEntityAsync(normalizedRequest, excludeLeaveId: leaveRequestId, ct);
+        if (prepared.IsFailure)
+        {
+            return Result.Failure<LeaveRequestResponse>(prepared.Error);
+        }
+
+        var (newLeave, employee) = prepared.Value;
+        existingLeave.ApprovalStatus = "CANCELLED";
+        dbContext.LeaveRequests.Add(newLeave);
+        var removedEvents = await CleanupOverlappingAttendanceLogsAsync(newLeave, employee, ct);
+        await dbContext.SaveChangesAsync(ct);
+
+        await PublishLeaveCreatedEventAsync(newLeave, employee, ct);
+        foreach (var removedEvt in removedEvents)
+        {
+            await eventBus.PublishAsync(removedEvt, ct);
+        }
+
+        return Result.Success(MapLeaveResponse(newLeave, employee.EmployeeCode, employee.FullName));
+    }
+
+    private async Task<List<AttendanceLogRemovedIntegrationEvent>> CleanupOverlappingAttendanceLogsAsync(
+        LeaveRequest leave,
+        EmployeeContractDto employee,
+        CancellationToken ct)
+    {
+        var removedEvents = new List<AttendanceLogRemovedIntegrationEvent>();
+        if (string.Equals(leave.LeaveType, "OFFICIAL_DUTY", StringComparison.OrdinalIgnoreCase))
+        {
+            return removedEvents;
+        }
+
+        var leaveStart = leave.StartDate.ToDateTime(leave.StartTime);
+        var leaveEnd = leave.EndDate.ToDateTime(leave.EndTime);
+
+        var logs = await dbContext.AttendanceLogs
+            .Where(x => x.EmployeeId == leave.EmployeeId &&
+                        x.WorkDate >= leave.StartDate &&
+                        x.WorkDate <= leave.EndDate)
+            .ToListAsync(ct);
+
+        foreach (var log in logs)
+        {
+            if (log.Status == "ABSENT" && !log.CheckInTime.HasValue)
+            {
+                dbContext.AttendanceLogs.Remove(log);
+                removedEvents.Add(new AttendanceLogRemovedIntegrationEvent(
+                    Guid.NewGuid(),
+                    DateTimeOffset.UtcNow,
+                    log.Id,
+                    log.EmployeeId,
+                    log.EmployeeCode,
+                    employee.DepartmentId,
+                    log.WorkDate,
+                    log.Status));
+                continue;
+            }
+
+            if (log.CheckInTime.HasValue)
+            {
+                var checkInLocal = VietnamDateTime.ToVietnamDateOnly(log.CheckInTime.Value)
+                    .ToDateTime(VietnamDateTime.ToVietnamTimeOnly(log.CheckInTime.Value));
+
+                if (leaveStart <= checkInLocal && checkInLocal <= leaveEnd)
+                {
+                    dbContext.AttendanceLogs.Remove(log);
+                    removedEvents.Add(new AttendanceLogRemovedIntegrationEvent(
+                        Guid.NewGuid(),
+                        DateTimeOffset.UtcNow,
+                        log.Id,
+                        log.EmployeeId,
+                        log.EmployeeCode,
+                        employee.DepartmentId,
+                        log.WorkDate,
+                        log.Status));
+                    continue;
+                }
+            }
+
+            if (log.CheckOutTime.HasValue)
+            {
+                var checkOutLocal = VietnamDateTime.ToVietnamDateOnly(log.CheckOutTime.Value)
+                    .ToDateTime(VietnamDateTime.ToVietnamTimeOnly(log.CheckOutTime.Value));
+
+                if (leaveStart <= checkOutLocal && checkOutLocal <= leaveEnd)
+                {
+                    log.CheckOutTime = null;
+                    log.EarlyLeaveMinutes = 0;
+                    if (log.Status == "EARLY_LEAVE")
+                    {
+                        log.Status = log.LateMinutes > 0 ? "LATE" : "ON_TIME";
+                    }
+                    log.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+        }
+
+        return removedEvents;
+    }
+
+    private async Task<Result<(LeaveRequest Leave, EmployeeContractDto Employee)>> PrepareLeaveEntityAsync(
+        CreateLeaveRequestDto request,
+        Guid? excludeLeaveId,
+        CancellationToken ct)
+    {
+        if (request.EndDate < request.StartDate)
+        {
+            return Result.Failure<(LeaveRequest, EmployeeContractDto)>(
                 new Error("INVALID_DATE_RANGE", "Ngày kết thúc nghỉ phép không được nhỏ hơn ngày bắt đầu."));
         }
 
-        var employee = await employeeLookup.GetByIdAsync(request.EmployeeId, ct);
-        if (employee is null)
+        var normalizedLeaveType = string.IsNullOrWhiteSpace(request.LeaveType)
+            ? "ANNUAL_LEAVE"
+            : request.LeaveType.Trim().ToUpperInvariant();
+
+        if (!AllowedLeaveTypes.Contains(normalizedLeaveType))
         {
-            return Result.Failure<LeaveRequestResponse>(
-                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên."));
+            return Result.Failure<(LeaveRequest, EmployeeContractDto)>(
+                new Error("INVALID_LEAVE_TYPE", $"Loại nghỉ phép '{request.LeaveType}' không hợp lệ."));
         }
+
+        var employee = await employeeLookup.GetByIdAsync(request.EmployeeId, ct);
+        if (employee is null || !employee.IsActive)
+        {
+            return Result.Failure<(LeaveRequest, EmployeeContractDto)>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên hoặc nhân viên đã ngừng làm việc."));
+        }
+
+        // Lấy ca làm việc của nhân viên (hoặc ca mặc định) để gán giá trị default cho StartTime và EndTime
+        Shift? shift = null;
+        if (employee.DefaultShiftId.HasValue)
+        {
+            shift = await dbContext.Shifts.FirstOrDefaultAsync(s => s.Id == employee.DefaultShiftId.Value, ct);
+        }
+
+        shift ??= await dbContext.Shifts.OrderByDescending(s => s.IsDefault).FirstOrDefaultAsync(ct);
+
+        var resolvedStartTime = request.StartTime ?? shift?.StartTime ?? new TimeOnly(8, 0);
+        var resolvedEndTime = request.EndTime ?? shift?.EndTime ?? new TimeOnly(17, 30);
+
+        if (request.StartDate == request.EndDate && resolvedEndTime <= resolvedStartTime)
+        {
+            return Result.Failure<(LeaveRequest, EmployeeContractDto)>(
+                new Error("INVALID_TIME_RANGE", "Giờ kết thúc phải lớn hơn giờ bắt đầu khi đăng ký trong cùng một ngày."));
+        }
+
+        // Kiểm tra trùng lặp khoảng thời gian liên tục (StartDate+StartTime .. EndDate+EndTime) với các đơn còn hiệu lực
+        var overlapQuery = dbContext.LeaveRequests
+            .Where(l => l.EmployeeId == request.EmployeeId &&
+                        l.ApprovalStatus != "REJECTED" &&
+                        l.ApprovalStatus != "CANCELLED" &&
+                        l.StartDate <= request.EndDate &&
+                        l.EndDate >= request.StartDate);
+
+        if (excludeLeaveId.HasValue)
+        {
+            overlapQuery = overlapQuery.Where(l => l.Id != excludeLeaveId.Value);
+        }
+
+        var reqStartDt = request.StartDate.ToDateTime(resolvedStartTime);
+        var reqEndDt = request.EndDate.ToDateTime(resolvedEndTime);
+        var candidateLeaves = await overlapQuery.ToListAsync(ct);
+        var overlappingLeave = candidateLeaves.FirstOrDefault(l =>
+        {
+            var existStartDt = l.StartDate.ToDateTime(l.StartTime);
+            var existEndDt = l.EndDate.ToDateTime(l.EndTime);
+            return existStartDt < reqEndDt && existEndDt > reqStartDt;
+        });
+
+        if (overlappingLeave is not null)
+        {
+            return Result.Failure<(LeaveRequest, EmployeeContractDto)>(
+                new Error(
+                    "LEAVE_OVERLAP",
+                    $"Nhân viên đã có đơn nghỉ phép trùng khung giờ ({overlappingLeave.StartDate:dd/MM/yyyy} - {overlappingLeave.EndDate:dd/MM/yyyy}, {overlappingLeave.StartTime:HH\\:mm} - {overlappingLeave.EndTime:HH\\:mm}). Vui lòng hủy hoặc điều chỉnh đơn cũ."));
+        }
+
+        bool isPaid = normalizedLeaveType switch
+        {
+            "OFFICIAL_DUTY" => true,
+            "SUDDENLY_ALLOWED_LEAVE" => false,
+            "UNPAID_LEAVE" => false,
+            _ => request.IsPaid ?? true
+        };
 
         var leave = new LeaveRequest
         {
             EmployeeId = request.EmployeeId,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
-            LeaveType = request.LeaveType,
+            StartTime = resolvedStartTime,
+            EndTime = resolvedEndTime,
+            LeaveType = normalizedLeaveType,
+            IsPaid = isPaid,
             Reason = request.Reason,
             ApprovalStatus = "APPROVED"
         };
 
-        dbContext.LeaveRequests.Add(leave);
-        await dbContext.SaveChangesAsync(ct);
+        return Result.Success((leave, employee));
+    }
 
-        return Result.Success(new LeaveRequestResponse(
+    private Task PublishLeaveCreatedEventAsync(
+        LeaveRequest leave,
+        EmployeeContractDto employee,
+        CancellationToken ct)
+    {
+        return eventBus.PublishAsync(new LeaveRequestCreatedIntegrationEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            leave.Id,
+            leave.EmployeeId,
+            employee.EmployeeCode,
+            employee.DepartmentId,
+            leave.StartDate,
+            leave.EndDate,
+            leave.StartTime,
+            leave.EndTime,
+            leave.LeaveType,
+            leave.IsPaid,
+            leave.ApprovalStatus), ct);
+    }
+
+    private static LeaveRequestResponse MapLeaveResponse(
+        LeaveRequest leave,
+        string? employeeCode,
+        string? employeeName) => new(
             leave.Id,
             leave.EmployeeId,
             leave.StartDate,
             leave.EndDate,
+            leave.StartTime,
+            leave.EndTime,
             leave.LeaveType,
+            leave.IsPaid,
             leave.Reason,
             leave.ApprovalStatus,
-            leave.CreatedAt));
-    }
+            leave.CreatedAt,
+            employeeCode,
+            employeeName);
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetLeaveRequestsAsync(
         DateOnly? date = null,
@@ -385,18 +714,103 @@ public sealed class AttendanceService(
             query = query.Where(l => l.StartDate <= date.Value && l.EndDate >= date.Value);
         }
 
-        return await query
+        var leaves = await query
             .OrderByDescending(l => l.StartDate)
-            .Select(l => new LeaveRequestResponse(
+            .ThenByDescending(l => l.StartTime)
+            .ToListAsync(ct);
+
+        var responses = new List<LeaveRequestResponse>(leaves.Count);
+        foreach (var l in leaves)
+        {
+            var emp = await employeeLookup.GetByIdAsync(l.EmployeeId, ct);
+            responses.Add(new LeaveRequestResponse(
                 l.Id,
                 l.EmployeeId,
                 l.StartDate,
                 l.EndDate,
+                l.StartTime,
+                l.EndTime,
                 l.LeaveType,
+                l.IsPaid,
                 l.Reason,
                 l.ApprovalStatus,
-                l.CreatedAt))
+                l.CreatedAt,
+                emp?.EmployeeCode,
+                emp?.FullName));
+        }
+
+        return responses;
+    }
+
+    public async Task<LeaveLookupResultDto> CheckApprovedLeaveAsync(
+        Guid employeeId,
+        DateTimeOffset checkTimeUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var checkDate = VietnamDateTime.ToVietnamDateOnly(checkTimeUtc);
+        var checkTime = VietnamDateTime.ToVietnamTimeOnly(checkTimeUtc);
+
+        var matched = await FindActiveLeaveAtAsync(
+            employeeId,
+            checkDate,
+            checkTime,
+            includeOfficialDuty: true,
+            cancellationToken);
+
+        if (matched is not null)
+        {
+            return new LeaveLookupResultDto(
+                HasApprovedLeave: true,
+                LeaveRequestId: matched.Id,
+                EmployeeId: matched.EmployeeId,
+                LeaveType: matched.LeaveType,
+                IsPaid: matched.IsPaid,
+                StartDate: matched.StartDate,
+                EndDate: matched.EndDate,
+                StartTime: matched.StartTime,
+                EndTime: matched.EndTime);
+        }
+
+        return new LeaveLookupResultDto(
+            HasApprovedLeave: false,
+            LeaveRequestId: null,
+            EmployeeId: employeeId,
+            LeaveType: null,
+            IsPaid: false,
+            StartDate: null,
+            EndDate: null,
+            StartTime: null,
+            EndTime: null);
+    }
+
+    private async Task<LeaveRequest?> FindActiveLeaveAtAsync(
+        Guid employeeId,
+        DateOnly targetDate,
+        TimeOnly targetTime,
+        bool includeOfficialDuty,
+        CancellationToken ct)
+    {
+        var targetDateTime = targetDate.ToDateTime(targetTime);
+        var candidates = await dbContext.LeaveRequests
+            .Where(l => l.EmployeeId == employeeId &&
+                        l.ApprovalStatus == "APPROVED" &&
+                        l.StartDate <= targetDate &&
+                        l.EndDate >= targetDate)
+            .OrderByDescending(l => l.IsPaid)
+            .ThenByDescending(l => l.CreatedAt)
             .ToListAsync(ct);
+
+        return candidates.FirstOrDefault(l =>
+        {
+            if (!includeOfficialDuty && string.Equals(l.LeaveType, "OFFICIAL_DUTY", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var leaveStart = l.StartDate.ToDateTime(l.StartTime);
+            var leaveEnd = l.EndDate.ToDateTime(l.EndTime);
+            return leaveStart <= targetDateTime && targetDateTime <= leaveEnd;
+        });
     }
 
     /// <summary>

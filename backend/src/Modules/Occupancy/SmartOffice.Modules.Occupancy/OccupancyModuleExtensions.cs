@@ -37,6 +37,7 @@ public static class OccupancyModuleExtensions
         services.AddScoped<IIntegrationEventHandler<WrongSeatDetectedIntegrationEvent>, WrongSeatRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceCheckedIntegrationEvent>, AttendanceCheckedRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceAbsentMarkedIntegrationEvent>, AttendanceAbsentMarkedRealtimeHandler>();
+        services.AddScoped<IIntegrationEventHandler<LeaveRequestCreatedIntegrationEvent>, LeaveRequestCreatedRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentRealtimeHandler>();
 
         return services;

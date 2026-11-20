@@ -42,7 +42,13 @@ export interface AttendanceRecord {
   checkinSnapshotPresignedUrl?: string | null
 }
 
-export type LeaveType = 'ANNUAL_LEAVE' | 'SICK_LEAVE' | 'PERSONAL_LEAVE' | 'UNPAID_LEAVE'
+export type LeaveType =
+  | 'ANNUAL_LEAVE'
+  | 'SICK_LEAVE'
+  | 'PERSONAL_LEAVE'
+  | 'UNPAID_LEAVE'
+  | 'OFFICIAL_DUTY'
+  | 'SUDDENLY_ALLOWED_LEAVE'
 
 export interface LeaveRequest {
   id: string
@@ -51,9 +57,12 @@ export interface LeaveRequest {
   employeeName?: string
   startDate: string
   endDate: string
+  startTime?: string
+  endTime?: string
   leaveType: string
+  isPaid: boolean
   reason?: string | null
-  approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | string
+  approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | string
   createdAt: string
 }
 
@@ -61,7 +70,10 @@ export interface CreateLeaveInput {
   employeeId: string
   startDate: string
   endDate: string
+  startTime?: string
+  endTime?: string
   leaveType?: string
+  isPaid?: boolean
   reason?: string
 }
 
@@ -79,6 +91,8 @@ export const leaveTypeLabels: Record<string, string> = {
   SICK_LEAVE: 'Nghỉ ốm / Khám bệnh',
   PERSONAL_LEAVE: 'Việc riêng có lương',
   UNPAID_LEAVE: 'Nghỉ không lương',
+  OFFICIAL_DUTY: 'Công vụ / Họp hợp lệ trong ca',
+  SUDDENLY_ALLOWED_LEAVE: 'Nghỉ đột xuất trong ngày (Không lương)',
 }
 
 export const attendanceStatusLabels: Record<string, { label: string; class: string }> = {

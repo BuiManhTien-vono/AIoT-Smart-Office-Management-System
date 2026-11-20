@@ -37,7 +37,10 @@ public static class SeatStateMachine
         DateTimeOffset CapturedAtUtc,
         int ProlongedAbsenceThresholdSeconds = DefaultProlongedAbsenceSeconds,
         TimeOnly? LunchStart = null,
-        TimeOnly? LunchEnd = null);
+        TimeOnly? LunchEnd = null,
+        bool HasApprovedExemption = false,
+        bool IsPaidExemption = false,
+        string? ExemptionLeaveType = null);
 
     public sealed record StateEvaluationOutcome(
         string PreviousState,
@@ -50,7 +53,8 @@ public static class SeatStateMachine
         bool IsLunchMuted,
         bool ProlongedAbsenceAlertTriggered,
         bool WrongSeatAlertTriggered,
-        string Message);
+        string Message,
+        bool UnauthorizedAccessOnLeaveTriggered = false);
 
     public static StateEvaluationOutcome Evaluate(StateEvaluationContext ctx)
     {
@@ -85,6 +89,51 @@ public static class SeatStateMachine
         // 2. Trường hợp CÓ NGƯỜI NGỒI TẠI BÀN (IsOccupied == true)
         if (ctx.IsOccupied)
         {
+            if (ctx.HasApprovedExemption)
+            {
+                bool isUnauthorizedOrWrongPerson = !ctx.DetectedEmployeeId.HasValue ||
+                                                   (ctx.AssignedEmployeeId.HasValue &&
+                                                    ctx.DetectedEmployeeId.Value != ctx.AssignedEmployeeId.Value);
+
+                if (isUnauthorizedOrWrongPerson)
+                {
+                    bool changedToWrongSeat = prevState != StateWrongSeat;
+                    return new StateEvaluationOutcome(
+                        PreviousState: prevState,
+                        NewState: StateWrongSeat,
+                        StateChanged: changedToWrongSeat,
+                        IsIgnoredOutOfOrder: false,
+                        PreviousStateDurationSeconds: elapsedSeconds,
+                        UpdatedActiveSecondsToday: ctx.CurrentActiveSecondsToday,
+                        UpdatedStateTimestampUtc: ctx.CapturedAtUtc,
+                        IsLunchMuted: isLunchWindow,
+                        ProlongedAbsenceAlertTriggered: false,
+                        WrongSeatAlertTriggered: changedToWrongSeat,
+                        Message: $"Cảnh báo xâm nhập vị trí bàn của nhân viên đang nghỉ phép ({ctx.ExemptionLeaveType ?? "APPROVED_LEAVE"}).",
+                        UnauthorizedAccessOnLeaveTriggered: changedToWrongSeat);
+                }
+
+                // Nếu là công vụ (OFFICIAL_DUTY) và chính chủ quay lại bàn -> ghi nhận PRESENT bình thường
+                if (!string.Equals(ctx.ExemptionLeaveType, "OFFICIAL_DUTY", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Chính chủ bàn ngồi lại bàn trong thời gian đã duyệt nghỉ phép: không ghi nhận PRESENT, không cộng ActiveSecondsToday
+                    bool changedToLeaveHold = prevState != StateTempAway;
+                    return new StateEvaluationOutcome(
+                        PreviousState: prevState,
+                        NewState: StateTempAway,
+                        StateChanged: changedToLeaveHold,
+                        IsIgnoredOutOfOrder: false,
+                        PreviousStateDurationSeconds: elapsedSeconds,
+                        UpdatedActiveSecondsToday: ctx.CurrentActiveSecondsToday,
+                        UpdatedStateTimestampUtc: ctx.CapturedAtUtc,
+                        IsLunchMuted: isLunchWindow,
+                        ProlongedAbsenceAlertTriggered: false,
+                        WrongSeatAlertTriggered: false,
+                        Message: $"Không ghi nhận có mặt (PRESENT): Chủ bàn đang trong khung giờ nghỉ phép ({ctx.ExemptionLeaveType ?? "APPROVED_LEAVE"}).",
+                        UnauthorizedAccessOnLeaveTriggered: false);
+                }
+            }
+
             bool isWrongSeat = ctx.AssignedEmployeeId.HasValue &&
                                ctx.DetectedEmployeeId.HasValue &&
                                ctx.DetectedEmployeeId.Value != ctx.AssignedEmployeeId.Value;
@@ -161,16 +210,45 @@ public static class SeatStateMachine
                 Message: $"Bộ lọc Anti-Flicker giữ nguyên trạng thái {prevState} (vắng {awaySeconds}s / {awayFrames} frames < ngưỡng 3s / 15 frames).");
         }
 
-        // Nếu vừa rời khỏi trạng thái PRESENT, cộng dồn nốt thời gian làm việc tích cực của phiên PRESENT trước đó
+        // Nếu vừa rời khỏi trạng thái PRESENT hoặc đang trong thời gian công vụ/nghỉ có lương (OFFICIAL_DUTY...),
+        // cộng dồn thời gian làm việc tích cực hợp lệ (chỉ tính khi bàn đã bắt đầu phiên theo dõi != EMPTY)
         int activeSecondsAfterLeaving = ctx.CurrentActiveSecondsToday;
+        if (ctx.HasApprovedExemption && ctx.IsPaidExemption && elapsedSeconds > 0 && prevState != StateEmpty)
+        {
+            activeSecondsAfterLeaving += elapsedSeconds;
+        }
 
-        // 3.3. Kiểm tra ngưỡng vắng mặt quá hạn >= 15 phút (900s) và Cơ chế Mute giờ nghỉ trưa (FR-OCC-04)
+        // 3.3. Kiểm tra ngưỡng vắng mặt quá hạn >= 15 phút (900s), Miễn trừ đơn phép/công vụ & Mute giờ nghỉ trưa (FR-OCC-04)
         var threshold = ctx.ProlongedAbsenceThresholdSeconds > 0
             ? ctx.ProlongedAbsenceThresholdSeconds
             : DefaultProlongedAbsenceSeconds;
 
         if (awaySeconds >= threshold)
         {
+            if (ctx.HasApprovedExemption)
+            {
+                bool changedToTempInExemption = prevState != StateTempAway;
+                var leaveLabel = string.IsNullOrWhiteSpace(ctx.ExemptionLeaveType)
+                    ? "APPROVED_LEAVE"
+                    : ctx.ExemptionLeaveType;
+                var paidLabel = ctx.IsPaidExemption ? "có lương" : "không lương";
+
+                return new StateEvaluationOutcome(
+                    PreviousState: prevState,
+                    NewState: StateTempAway,
+                    StateChanged: changedToTempInExemption,
+                    IsIgnoredOutOfOrder: false,
+                    PreviousStateDurationSeconds: awaySeconds,
+                    UpdatedActiveSecondsToday: activeSecondsAfterLeaving,
+                    UpdatedStateTimestampUtc: (ctx.IsPaidExemption || changedToTempInExemption)
+                        ? ctx.CapturedAtUtc
+                        : ctx.StateUpdatedAtUtc,
+                    IsLunchMuted: isLunchWindow,
+                    ProlongedAbsenceAlertTriggered: false,
+                    WrongSeatAlertTriggered: false,
+                    Message: $"Nhân viên đang vắng mặt có phép ({leaveLabel} - {paidLabel}): Tạm ngắt cảnh báo vắng mặt quá hạn.");
+            }
+
             if (isLunchWindow)
             {
                 // Trong giờ nghỉ trưa (12:00 - 13:30): tạm ngắt chuyển sang PROLONGED_AWAY, giữ ở TEMP_AWAY
@@ -213,11 +291,15 @@ public static class SeatStateMachine
             IsIgnoredOutOfOrder: false,
             PreviousStateDurationSeconds: awaySeconds,
             UpdatedActiveSecondsToday: activeSecondsAfterLeaving,
-            UpdatedStateTimestampUtc: changedToTemp ? ctx.CapturedAtUtc : ctx.StateUpdatedAtUtc,
+            UpdatedStateTimestampUtc: (changedToTemp || (ctx.HasApprovedExemption && ctx.IsPaidExemption))
+                ? ctx.CapturedAtUtc
+                : ctx.StateUpdatedAtUtc,
             IsLunchMuted: isLunchWindow,
             ProlongedAbsenceAlertTriggered: false,
             WrongSeatAlertTriggered: false,
-            Message: $"Nhân viên tạm rời vị trí làm việc ({awaySeconds} giây < {threshold} giây).");
+            Message: ctx.HasApprovedExemption
+                ? $"Nhân viên đang vắng mặt có phép ({ctx.ExemptionLeaveType ?? "APPROVED_LEAVE"} - {(ctx.IsPaidExemption ? "có lương" : "không lương")})."
+                : $"Nhân viên tạm rời vị trí làm việc ({awaySeconds} giây < {threshold} giây).");
     }
 }
 

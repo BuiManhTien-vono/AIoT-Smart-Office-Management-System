@@ -162,6 +162,26 @@ public sealed class AttendanceAbsentMarkedRealtimeHandler(IHubContext<OccupancyH
 }
 
 /// <summary>
+/// Đẩy sự kiện tạo đơn nghỉ phép / công vụ trong ngày tới các client đang theo dõi chấm công.
+/// </summary>
+public sealed class LeaveRequestCreatedRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+    : IIntegrationEventHandler<LeaveRequestCreatedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        LeaveRequestCreatedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (hubContext is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients.All
+            .SendAsync("AttendanceRecorded", integrationEvent, cancellationToken);
+    }
+}
+
+/// <summary>
 /// Đẩy thông báo sự cố an ninh ngoài giờ thời gian thực tới Dashboard và trang An ninh SOC.
 /// </summary>
 public sealed class SecurityIncidentRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)

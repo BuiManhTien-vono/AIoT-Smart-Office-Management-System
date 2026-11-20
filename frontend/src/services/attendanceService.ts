@@ -76,6 +76,32 @@ export async function createLeave(
   });
 }
 
+export async function cancelLeave(
+  token: string,
+  leaveId: string,
+  signal?: AbortSignal
+): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>(`/attendance/leaves/${encodeURIComponent(leaveId)}/cancel`, {
+    method: 'PATCH',
+    token,
+    signal,
+  });
+}
+
+export async function replaceLeave(
+  token: string,
+  leaveId: string,
+  input: CreateLeaveInput,
+  signal?: AbortSignal
+): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>(`/attendance/leaves/${encodeURIComponent(leaveId)}/replace`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify(input),
+    signal,
+  });
+}
+
 export async function markDailyAbsent(
   token: string,
   date?: string,

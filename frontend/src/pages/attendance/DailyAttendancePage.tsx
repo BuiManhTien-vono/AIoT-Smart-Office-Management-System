@@ -12,6 +12,7 @@ import {
 } from '../../types/attendance.types';
 import type { Employee } from '../../types/biometrics.types';
 import {
+  cancelLeave,
   listAttendanceLogs,
   listLeaves,
   markDailyAbsent,
@@ -51,6 +52,8 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
   // Modals
   const [showShiftModal, setShowShiftModal] = useState<boolean>(false);
   const [showLeaveModal, setShowLeaveModal] = useState<boolean>(false);
+  const [editingLeave, setEditingLeave] = useState<LeaveRequest | null>(null);
+  const [cancellingLeaveId, setCancellingLeaveId] = useState<string | null>(null);
   const [isMarkingAbsent, setIsMarkingAbsent] = useState<boolean>(false);
 
   // Fetch data
@@ -153,6 +156,33 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
     }
   };
 
+  const handleCancelLeave = async (leave: LeaveRequest) => {
+    const empLabel = leave.employeeName || leave.employeeCode || 'nhân viên';
+    if (!window.confirm(`Xác nhận hủy đơn nghỉ phép của ${empLabel}?`)) {
+      return;
+    }
+
+    setCancellingLeaveId(leave.id);
+    try {
+      await cancelLeave(session.accessToken, leave.id);
+      void fetchData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Không thể hủy đơn nghỉ phép');
+    } finally {
+      setCancellingLeaveId(null);
+    }
+  };
+
+  const handleOpenCreateLeave = () => {
+    setEditingLeave(null);
+    setShowLeaveModal(true);
+  };
+
+  const handleOpenReplaceLeave = (leave: LeaveRequest) => {
+    setEditingLeave(leave);
+    setShowLeaveModal(true);
+  };
+
   const formatTime = (isoString?: string | null) => {
     if (!isoString) return '---';
     try {
@@ -184,7 +214,7 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
           <button
             type="button"
             className="button button-primary"
-            onClick={() => setShowLeaveModal(true)}
+            onClick={handleOpenCreateLeave}
           >
             <Icon name="calendar" size={17} /> Tạo đơn nghỉ phép
           </button>
@@ -438,77 +468,121 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
           </>
         )}
 
-        {/* Tab 2: Leaves List */}
-        {activeTab === 'leaves' && (
-          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-            <div className="table-wrap">
-              {loading ? (
-                <div className="empty-state">
-                  <p>Đang tải danh sách đơn nghỉ phép...</p>
-                </div>
-              ) : leaves.length === 0 ? (
-                <div className="empty-state">
-                  <Icon name="calendar" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
-                  <p>Không có đơn xin nghỉ phép nào cho khoảng thời gian này.</p>
-                </div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Mã NV</th>
-                      <th>Họ và tên</th>
-                      <th>Loại nghỉ phép</th>
-                      <th>Thời gian nghỉ</th>
-                      <th>Lý do</th>
-                      <th>Trạng thái</th>
+      {/* Tab 2: Leaves List */}
+      {activeTab === 'leaves' && (
+        <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-wrap">
+            {loading ? (
+              <div className="empty-state">
+                <p>Đang tải danh sách đơn nghỉ phép...</p>
+              </div>
+            ) : leaves.length === 0 ? (
+              <div className="empty-state">
+                <Icon name="calendar" size={48} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
+                <p>Không có đơn xin nghỉ phép nào cho khoảng thời gian này.</p>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã NV</th>
+                    <th>Họ và tên</th>
+                    <th>Loại nghỉ phép</th>
+                    <th>Tính lương</th>
+                    <th>Thời gian nghỉ</th>
+                    <th>Lý do</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaves.map((lv) => (
+                    <tr key={lv.id}>
+                      <td>
+                        <strong>{lv.employeeCode || '---'}</strong>
+                      </td>
+                      <td>{lv.employeeName || 'Nhân viên'}</td>
+                      <td>
+                        <span className="badge badge-info">
+                          {leaveTypeLabels[lv.leaveType] || lv.leaveType}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${lv.isPaid ? 'badge-success' : 'badge-warning'}`}>
+                          {lv.isPaid ? 'Có lương' : 'Không lương'}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.875rem' }}>
+                          {new Date(lv.startDate).toLocaleDateString('vi-VN')} -{' '}
+                          {new Date(lv.endDate).toLocaleDateString('vi-VN')}
+                          {lv.startTime && lv.endTime && (
+                            <span className="muted" style={{ display: 'block', fontSize: '0.75rem' }}>
+                              Khung giờ: {lv.startTime.slice(0, 5)} - {lv.endTime.slice(0, 5)}
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="muted" style={{ fontSize: '0.875rem' }}>{lv.reason || '---'}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            lv.approvalStatus === 'APPROVED'
+                              ? 'badge-success'
+                              : lv.approvalStatus === 'REJECTED' || lv.approvalStatus === 'CANCELLED'
+                              ? 'badge-danger'
+                              : 'badge-warning'
+                          }`}
+                        >
+                          {lv.approvalStatus === 'APPROVED'
+                            ? 'Đã duyệt'
+                            : lv.approvalStatus === 'REJECTED'
+                            ? 'Từ chối'
+                            : lv.approvalStatus === 'CANCELLED'
+                            ? 'Đã hủy'
+                            : 'Chờ duyệt'}
+                        </span>
+                      </td>
+                      <td>
+                        {lv.approvalStatus === 'APPROVED' ? (
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="button button-secondary"
+                              style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                              disabled={cancellingLeaveId === lv.id}
+                              onClick={() => handleOpenReplaceLeave(lv)}
+                            >
+                              Điều chỉnh
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-secondary"
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: '0.75rem',
+                                color: 'var(--status-danger, #dc2626)',
+                              }}
+                              disabled={cancellingLeaveId === lv.id}
+                              onClick={() => void handleCancelLeave(lv)}
+                            >
+                              {cancellingLeaveId === lv.id ? 'Đang hủy...' : 'Hủy đơn'}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="muted" style={{ fontSize: '0.75rem' }}>---</span>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {leaves.map((lv) => (
-                      <tr key={lv.id}>
-                        <td>
-                          <strong>{lv.employeeCode || '---'}</strong>
-                        </td>
-                        <td>{lv.employeeName || 'Nhân viên'}</td>
-                        <td>
-                          <span className="badge badge-info">
-                            {leaveTypeLabels[lv.leaveType] || lv.leaveType}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ fontSize: '0.875rem' }}>
-                            {new Date(lv.startDate).toLocaleDateString('vi-VN')} -{' '}
-                            {new Date(lv.endDate).toLocaleDateString('vi-VN')}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="muted" style={{ fontSize: '0.875rem' }}>{lv.reason || '---'}</span>
-                        </td>
-                        <td>
-                          <span
-                            className={`badge ${
-                              lv.approvalStatus === 'APPROVED'
-                                ? 'badge-success'
-                                : lv.approvalStatus === 'REJECTED'
-                                ? 'badge-danger'
-                                : 'badge-warning'
-                            }`}
-                          >
-                            {lv.approvalStatus === 'APPROVED'
-                              ? 'Đã duyệt'
-                              : lv.approvalStatus === 'REJECTED'
-                              ? 'Từ chối'
-                              : 'Chờ duyệt'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-        )}
+        </div>
+      )}
       </div>
 
       {/* Shift Management Modal */}
@@ -520,10 +594,15 @@ export function DailyAttendancePage({ session }: DailyAttendancePageProps) {
 
       {/* Leave Request Modal */}
       <LeaveRequestModal
+        key={`${showLeaveModal}-${editingLeave?.id ?? 'new'}`}
         isOpen={showLeaveModal}
-        onClose={() => setShowLeaveModal(false)}
+        onClose={() => {
+          setShowLeaveModal(false);
+          setEditingLeave(null);
+        }}
         token={session.accessToken}
         employees={employees}
+        editingLeave={editingLeave}
         onSuccess={() => void fetchData()}
       />
     </div>

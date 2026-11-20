@@ -14,7 +14,7 @@ import time
 from modules.face_recognition.pipeline import FaceRecognitionPipeline
 from modules.face_recognition.recognizer import compute_cosine_similarity
 from shared.config import settings
-from shared.backend_client import BackendSyncClient
+from shared.backend_client import BackendHttpError, BackendSyncClient
 
 router = APIRouter(prefix="/api/v1/face", tags=["Face Biometrics"])
 
@@ -259,12 +259,28 @@ def gate_camera_checkin(
                 "security_incident": incident
             }
 
-        attendance_res = backend_client.check_in_out_on_backend(
-            employee_id=str(employee_id),
-            match_confidence=max(similarity, 0.75),
-            gate_camera_id=effective_camera_id,
-            snapshot_object_key=snapshot_object_key
-        )
+        try:
+            attendance_res = backend_client.check_in_out_on_backend(
+                employee_id=str(employee_id),
+                match_confidence=max(similarity, 0.75),
+                gate_camera_id=effective_camera_id,
+                snapshot_object_key=snapshot_object_key
+            )
+        except BackendHttpError as http_exc:
+            if http_exc.error_code == "EMPLOYEE_ON_LEAVE":
+                return {
+                    "success": False,
+                    "status": "ON_LEAVE",
+                    "liveness_score": round(real_score, 4),
+                    "identification": identify_res,
+                    "attendance": {
+                        "status": "ON_LEAVE",
+                        "recorded": False,
+                        "message": http_exc.error_message or "Nhân viên đang trong thời gian nghỉ phép"
+                    }
+                }
+            raise
+
         log_id = attendance_res.get("id") if isinstance(attendance_res, dict) else None
         if log_id and contents and not attendance_res.get("isDebounced", False):
             backend_client.upload_attendance_snapshot_async(str(log_id), contents)

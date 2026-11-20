@@ -34,6 +34,7 @@ public static class SecurityModuleExtensions
         services.AddScoped<IOtService, OtService>();
         services.AddScoped<IOvertimeLookupContract, OtService>();
         services.AddScoped<ISecurityIncidentService, SecurityIncidentService>();
+        services.AddScoped<IIntegrationEventHandler<UnauthorizedSeatAccessDetectedIntegrationEvent>, UnauthorizedSeatAccessEventHandler>();
         services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentDetectedIntegrationEventHandler>();
 
         return services;

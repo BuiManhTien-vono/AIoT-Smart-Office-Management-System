@@ -9,6 +9,7 @@ type LiveScanStatus =
   | 'NO_FACE'
   | 'SPOOF'
   | 'NOT_MATCHED'
+  | 'ON_LEAVE'
   | 'SUCCESS'
   | 'BACKEND_ERROR';
 
@@ -123,35 +124,22 @@ export function LiveGateCheckinCard() {
       const data = await testGateCheckin(payload, cameraId, isAttempt);
       setResult(data);
 
+      const isOnLeave =
+        data.status === 'ON_LEAVE' || data.attendance?.status === 'ON_LEAVE';
+
       const isSuccess =
-        data.status === 'CHECKED_IN_OUT' ||
-        (data.success && Boolean(data.identification?.isMatched));
+        !isOnLeave &&
+        (data.status === 'CHECKED_IN_OUT' ||
+          (data.success && Boolean(data.identification?.isMatched)));
 
       const isSpoof =
         !isSuccess &&
+        !isOnLeave &&
         (data.status === 'SPOOFING_ATTEMPT' ||
           data.liveness?.is_real === false ||
           (data.liveness_score !== undefined && data.liveness_score < 0.6));
 
-      // TRƯỜNG HỢP 1: THÀNH CÔNG (Người thật & Khớp nhân viên)
-      if (isSuccess) {
-        setScanStatus('SUCCESS');
-        const empName = data.identification?.fullName || 'Nhân viên';
-        const isDebounced = Boolean(data.attendance?.isDebounced);
-
-        if (isDebounced) {
-          setStatusMessage(`${empName} đã chấm công trước đó. Chuẩn bị người tiếp theo...`);
-        } else if (data.attendance?.status === 'LATE') {
-          const lateM = data.attendance.lateMinutes ? ` (${data.attendance.lateMinutes} phút)` : '';
-          setStatusMessage(`⚠️ ĐIỂM DANH: ${empName} - ĐI MUỘN${lateM}!`);
-        } else if (data.attendance?.status === 'EARLY_LEAVE') {
-          const earlyM = data.attendance.earlyLeaveMinutes ? ` (${data.attendance.earlyLeaveMinutes} phút)` : '';
-          setStatusMessage(`⏳ ĐIỂM DANH: ${empName} - VỀ SỚM${earlyM}!`);
-        } else {
-          setStatusMessage(`ĐIỂM DANH THÀNH CÔNG: ${empName}!`);
-        }
-
-        // Tạm dừng 3s đếm ngược hiển thị kết quả, rồi TỰ ĐỘNG QUÉT TIẾP NGƯỜI MỚI (chế độ Kiosk Auto)
+      const triggerKioskCooldown = () => {
         cooldownRef.current = true;
         setCooldownRemaining(3);
 
@@ -180,6 +168,36 @@ export function LiveGateCheckinCard() {
             }
           }
         }, 1000);
+      };
+
+      // TRƯỜNG HỢP 0: NHÂN VIÊN ĐANG TRONG THỜI GIAN NGHỈ PHÉP -> KHÔNG GHI NHẬN CHẤM CÔNG
+      if (isOnLeave) {
+        setScanStatus('ON_LEAVE');
+        setStatusMessage(
+          data.attendance?.message || 'Nhân viên đang trong thời gian nghỉ phép'
+        );
+        triggerKioskCooldown();
+      }
+      // TRƯỜNG HỢP 1: THÀNH CÔNG (Người thật & Khớp nhân viên)
+      else if (isSuccess) {
+        setScanStatus('SUCCESS');
+        const empName = data.identification?.fullName || 'Nhân viên';
+        const isDebounced = Boolean(data.attendance?.isDebounced);
+
+        if (isDebounced) {
+          setStatusMessage(`${empName} đã chấm công trước đó. Chuẩn bị người tiếp theo...`);
+        } else if (data.attendance?.status === 'LATE') {
+          const lateM = data.attendance.lateMinutes ? ` (${data.attendance.lateMinutes} phút)` : '';
+          setStatusMessage(`⚠️ ĐIỂM DANH: ${empName} - ĐI MUỘN${lateM}!`);
+        } else if (data.attendance?.status === 'EARLY_LEAVE') {
+          const earlyM = data.attendance.earlyLeaveMinutes ? ` (${data.attendance.earlyLeaveMinutes} phút)` : '';
+          setStatusMessage(`⏳ ĐIỂM DANH: ${empName} - VỀ SỚM${earlyM}!`);
+        } else {
+          setStatusMessage(`ĐIỂM DANH THÀNH CÔNG: ${empName}!`);
+        }
+
+        // Tạm dừng 3s đếm ngược hiển thị kết quả, rồi TỰ ĐỘNG QUÉT TIẾP NGƯỜI MỚI (chế độ Kiosk Auto)
+        triggerKioskCooldown();
       }
       // TRƯỜNG HỢP 2: PHÁT HIỆN GIẢ MẠO (Không phải người thật)
       else if (isSpoof) {
@@ -280,11 +298,12 @@ export function LiveGateCheckinCard() {
     switch (scanStatus) {
       case 'SUCCESS':
         return '#10B981'; // Green
-      case 'SPOOF':
-        return '#EF4444'; // Red
+      case 'ON_LEAVE':
       case 'NOT_MATCHED':
       case 'BACKEND_ERROR':
         return '#F59E0B'; // Amber
+      case 'SPOOF':
+        return '#EF4444'; // Red
       case 'NO_FACE':
         return '#94A3B8'; // Slate/gray indicator for no face
       default:
@@ -427,7 +446,7 @@ export function LiveGateCheckinCard() {
                         ? 'badge-success'
                         : scanStatus === 'SPOOF'
                         ? 'badge-danger'
-                        : scanStatus === 'NOT_MATCHED' || scanStatus === 'BACKEND_ERROR'
+                        : scanStatus === 'NOT_MATCHED' || scanStatus === 'BACKEND_ERROR' || scanStatus === 'ON_LEAVE'
                         ? 'badge-warning'
                         : scanStatus === 'NO_FACE'
                         ? 'badge-warning'
@@ -455,6 +474,8 @@ export function LiveGateCheckinCard() {
                   <span className="guide-hint">
                     {scanStatus === 'SUCCESS'
                       ? (cooldownRemaining ? `✓ ĐÃ ĐIỂM DANH (Tiếp tục sau ${cooldownRemaining}s)` : '✓ NHẬN DIỆN THÀNH CÔNG')
+                      : scanStatus === 'ON_LEAVE'
+                      ? (cooldownRemaining ? `Nhân viên đang trong thời gian nghỉ phép (${cooldownRemaining}s)` : 'Nhân viên đang trong thời gian nghỉ phép')
                       : scanStatus === 'SPOOF'
                       ? '⚠️ KHÔNG PHẢI NGƯỜI THẬT'
                       : scanStatus === 'NOT_MATCHED'
@@ -624,6 +645,32 @@ export function LiveGateCheckinCard() {
                   </h4>
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--status-warning-text)' }}>
                     Đã xác nhận là người thật nhưng khuôn mặt chưa có trong CSDL. Camera đang tiếp tục quét...
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Banner 2.5: ON LEAVE ALERT */}
+          {scanStatus === 'ON_LEAVE' && (
+            <div
+              className="panel"
+              style={{
+                padding: '16px',
+                background: 'var(--status-warning-soft)',
+                border: '2px solid var(--status-warning)',
+                borderRadius: '10px',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Icon name="calendar" size={32} style={{ color: 'var(--status-warning-text)' }} />
+                <div>
+                  <h4 style={{ margin: '0 0 2px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--status-warning-text)' }}>
+                    Nhân viên đang trong thời gian nghỉ phép
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--status-warning-text)' }}>
+                    Không ghi nhận chấm công vào hệ thống trong thời gian nghỉ phép.
                   </p>
                 </div>
               </div>
@@ -832,7 +879,11 @@ export function LiveGateCheckinCard() {
                 <span className="result-label">3. GHI NHẬN CHẤM CÔNG VÀO CSDL</span>
                 {result.attendance?.recorded || result.attendance?.status ? (
                   <div>
-                    {result.attendance.status === 'LATE' ? (
+                    {result.attendance.status === 'ON_LEAVE' ? (
+                      <span className="badge badge-warning" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Icon name="calendar" size={14} /> Nhân viên đang trong thời gian nghỉ phép
+                      </span>
+                    ) : result.attendance.status === 'LATE' ? (
                       <span className="badge badge-warning" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                         <Icon name="clock" size={14} /> Đi muộn {result.attendance.lateMinutes ? `(${result.attendance.lateMinutes} phút)` : ''}
                       </span>
@@ -847,14 +898,16 @@ export function LiveGateCheckinCard() {
                     )}
 
                     {result.attendance.message && (
-                      <div style={{ fontSize: '0.8125rem', marginTop: '4px', fontWeight: 500, color: result.attendance.status === 'LATE' ? 'var(--status-warning-text)' : undefined }}>
+                      <div style={{ fontSize: '0.8125rem', marginTop: '4px', fontWeight: 500, color: result.attendance.status === 'LATE' || result.attendance.status === 'ON_LEAVE' ? 'var(--status-warning-text)' : undefined }}>
                         {result.attendance.message}
                       </div>
                     )}
 
-                    <div className="muted" style={{ fontSize: '0.8125rem', marginTop: '4px' }}>
-                      Thời gian ghi nhận: {result.attendance.timestamp || 'Vừa xong'}
-                    </div>
+                    {result.attendance.status !== 'ON_LEAVE' && (
+                      <div className="muted" style={{ fontSize: '0.8125rem', marginTop: '4px' }}>
+                        Thời gian ghi nhận: {result.attendance.timestamp || 'Vừa xong'}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <span className="badge badge-warning">
