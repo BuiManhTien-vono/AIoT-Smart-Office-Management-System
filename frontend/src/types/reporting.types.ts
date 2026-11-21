@@ -7,6 +7,7 @@ export interface DailyDepartmentSummary {
   presentCount: number
   lateCount: number
   absentCount: number
+  revokedCount?: number
   prolongedAwayEvents: number
   securityAlertsCount: number
   attendanceRatePercent: number
@@ -21,6 +22,7 @@ export interface MonthlyDepartmentReport {
   totalPresentManDays: number
   totalLateEvents: number
   totalAbsentManDays: number
+  totalRevokedManDays?: number
   totalProlongedAwayEvents: number
   totalSecurityAlerts: number
   dailyBreakdown: DailyDepartmentSummary[]
@@ -36,6 +38,7 @@ export interface WeeklyDepartmentReport {
   totalPresentManDays: number
   totalLateEvents: number
   totalAbsentManDays: number
+  totalRevokedManDays?: number
   totalProlongedAwayEvents: number
   totalSecurityAlerts: number
   dailyBreakdown: DailyDepartmentSummary[]
@@ -54,6 +57,7 @@ export interface DepartmentAttendance {
   onTime: number
   late: number
   absent: number
+  revoked: number
   prolongedAway: number
   securityAlerts: number
   total: number
@@ -114,6 +118,7 @@ export interface EmployeeTimesheetRow {
   totalEarlyLeaveMinutes: number
   approvedLeaveDays: number
   absentDays: number
+  revokedDays: number
   totalWorkHours: number
   approvedOtHours: number
   approvedOtSessions: number
@@ -128,6 +133,7 @@ export interface EmployeeTimesheetRow {
   workStatusTone: TimesheetRatingTone
   workingDatesList: string[]
   absentDatesList: string[]
+  revokedDatesList: string[]
   leaveDetailsText: string
   assignedSeatText: string
 }
@@ -150,6 +156,7 @@ export interface TimesheetDepartmentGroup {
   totalEarlyLeaveMinutes: number
   totalLeaveDays: number
   totalAbsentDays: number
+  totalRevokedDays: number
   totalWorkHours: number
   totalOtHours: number
   avgAttendanceRatePercent: number

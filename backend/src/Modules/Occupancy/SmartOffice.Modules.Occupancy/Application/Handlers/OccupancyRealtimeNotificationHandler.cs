@@ -162,6 +162,74 @@ public sealed class AttendanceAbsentMarkedRealtimeHandler(IHubContext<OccupancyH
 }
 
 /// <summary>
+/// Đẩy sự kiện điều chỉnh / bổ sung / phạt hủy công thời gian thực tới Dashboard, Báo cáo Hub và Nhật ký chấm công.
+/// </summary>
+public sealed class AttendanceLogAdjustedRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+    : IIntegrationEventHandler<AttendanceLogAdjustedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceLogAdjustedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (hubContext is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients.All
+            .SendAsync("AttendanceRecorded", new
+            {
+                integrationEvent.EventId,
+                integrationEvent.OccurredOnUtc,
+                integrationEvent.AttendanceLogId,
+                integrationEvent.EmployeeId,
+                integrationEvent.EmployeeCode,
+                integrationEvent.DepartmentId,
+                integrationEvent.WorkDate,
+                Status = integrationEvent.NewStatus,
+                LateMinutes = integrationEvent.NewLateMinutes,
+                IsFirstCheckInOfDay = false,
+                integrationEvent.ActionType,
+                integrationEvent.Reason
+            }, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Đẩy sự kiện gỡ bản ghi chấm công (VOID_ERRONEOUS hoặc trùng đơn nghỉ phép) thời gian thực tới các client.
+/// </summary>
+public sealed class AttendanceLogRemovedRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)
+    : IIntegrationEventHandler<AttendanceLogRemovedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceLogRemovedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        if (hubContext is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients.All
+            .SendAsync("AttendanceRecorded", new
+            {
+                integrationEvent.EventId,
+                integrationEvent.OccurredOnUtc,
+                integrationEvent.AttendanceLogId,
+                integrationEvent.EmployeeId,
+                integrationEvent.EmployeeCode,
+                integrationEvent.DepartmentId,
+                integrationEvent.WorkDate,
+                Status = "VOIDED",
+                LateMinutes = 0,
+                IsFirstCheckInOfDay = false,
+                ActionType = "VOID_ERRONEOUS",
+                integrationEvent.Reason
+            }, cancellationToken);
+    }
+}
+
+/// <summary>
 /// Đẩy sự kiện tạo đơn nghỉ phép / công vụ trong ngày tới các client đang theo dõi chấm công.
 /// </summary>
 public sealed class LeaveRequestCreatedRealtimeHandler(IHubContext<OccupancyHub>? hubContext = null)

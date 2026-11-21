@@ -21,6 +21,7 @@ public sealed class DailyDepartmentSummary : BaseEntity
     public int PresentCount { get; set; }
     public int LateCount { get; set; }
     public int AbsentCount { get; set; }
+    public int RevokedCount { get; set; }
     public int ProlongedAwayEvents { get; set; }
     public int SecurityAlertsCount { get; set; }
 }

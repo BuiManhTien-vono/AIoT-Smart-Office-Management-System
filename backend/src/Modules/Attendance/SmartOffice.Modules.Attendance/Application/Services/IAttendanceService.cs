@@ -1,5 +1,6 @@
 using SmartOffice.Modules.Attendance.Application.DTOs;
 using SmartOffice.SharedKernel.Common;
+using SmartOffice.SharedKernel.Security;
 
 namespace SmartOffice.Modules.Attendance.Application.Services;
 
@@ -11,6 +12,30 @@ public interface IAttendanceService
     Task<Result<AttendanceRecordResponse>> ProcessCheckInOutAsync(CheckAttendanceRequest request, CancellationToken ct = default);
     Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(
         DateOnly? workDate = null,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        CancellationToken ct = default);
+
+    Task<Result<AttendanceRecordResponse>> AdjustAttendanceLogAsync(
+        Guid attendanceLogId,
+        AdjustAttendanceRequest request,
+        ActorContext actor,
+        CancellationToken ct = default);
+
+    Task<Result<AttendanceRecordResponse>> CreateManualAttendanceLogAsync(
+        ManualAttendanceRequest request,
+        ActorContext actor,
+        CancellationToken ct = default);
+
+    Task<Result<CancelAttendanceResponse>> CancelAttendanceLogAsync(
+        Guid attendanceLogId,
+        CancelAttendanceRequest request,
+        ActorContext actor,
+        CancellationToken ct = default);
+
+    Task<Result<IReadOnlyList<AttendanceAdjustmentAuditResponse>>> GetAttendanceAuditsAsync(
+        ActorContext actor,
+        Guid? employeeId = null,
         DateOnly? fromDate = null,
         DateOnly? toDate = null,
         CancellationToken ct = default);

@@ -94,8 +94,37 @@ public sealed class AttendanceCheckedEventHandler(ReportingDbContext dbContext)
 }
 
 /// <summary>
+/// Helper phân loại thống nhất một trạng thái chấm công thành các cờ đếm cho bảng tổng hợp Reporting.
+/// </summary>
+internal static class AttendanceStatusClassifier
+{
+    public static (int Present, int Late, int Absent, int Revoked) Classify(string? status, int lateMinutes)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return (0, 0, 0, 0);
+        }
+
+        var normalized = status.Trim().ToUpperInvariant();
+        if (normalized == "ABSENT")
+        {
+            return (0, 0, 1, 0);
+        }
+
+        if (normalized == "REVOKED")
+        {
+            return (0, 0, 0, 1);
+        }
+
+        var isLate = normalized == "LATE" || (normalized == "EARLY_LEAVE" && lateMinutes > 0);
+        return (1, isLate ? 1 : 0, 0, 0);
+    }
+}
+
+/// <summary>
 /// Bộ lắng nghe sự kiện tích hợp tại Module Reporting:
-/// Trừ lại PresentCount / LateCount khi bản ghi lỡ chấm công trong thời gian nghỉ phép bị xóa.
+/// Trừ lại PresentCount / LateCount / AbsentCount / RevokedCount khi bản ghi bị gỡ bỏ
+/// (trùng đơn nghỉ phép hoặc hủy công do lỗi hệ thống VOID_ERRONEOUS).
 /// </summary>
 public sealed class AttendanceLogRemovedEventHandler(ReportingDbContext dbContext)
     : IIntegrationEventHandler<AttendanceLogRemovedIntegrationEvent>
@@ -114,17 +143,93 @@ public sealed class AttendanceLogRemovedEventHandler(ReportingDbContext dbContex
             return;
         }
 
-        if (integrationEvent.PreviousStatus != "ABSENT" && summary.PresentCount > 0)
-        {
-            summary.PresentCount -= 1;
-        }
+        var (prevPresent, prevLate, prevAbsent, prevRevoked) =
+            AttendanceStatusClassifier.Classify(integrationEvent.PreviousStatus, integrationEvent.PreviousLateMinutes);
 
-        if (integrationEvent.PreviousStatus == "LATE" && summary.LateCount > 0)
-        {
-            summary.LateCount -= 1;
-        }
-
+        summary.PresentCount = Math.Max(0, summary.PresentCount - prevPresent);
+        summary.LateCount = Math.Max(0, summary.LateCount - prevLate);
+        summary.AbsentCount = Math.Max(0, summary.AbsentCount - prevAbsent);
+        summary.RevokedCount = Math.Max(0, summary.RevokedCount - prevRevoked);
         summary.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Bộ lắng nghe sự kiện tích hợp tại Module Reporting:
+/// Đồng bộ chính xác delta PresentCount / LateCount / AbsentCount / RevokedCount
+/// khi quản trị viên / HR / Trưởng phòng chỉnh sửa giờ công, bổ sung công thủ công hoặc phạt hủy công (REVOKE_PENALTY).
+/// </summary>
+public sealed class AttendanceLogAdjustedEventHandler(ReportingDbContext dbContext)
+    : IIntegrationEventHandler<AttendanceLogAdjustedIntegrationEvent>
+{
+    public async Task HandleAsync(
+        AttendanceLogAdjustedIntegrationEvent integrationEvent,
+        CancellationToken cancellationToken = default)
+    {
+        var (prevPresent, prevLate, prevAbsent, prevRevoked) =
+            AttendanceStatusClassifier.Classify(integrationEvent.PreviousStatus, integrationEvent.PreviousLateMinutes);
+        var (newPresent, newLate, newAbsent, newRevoked) =
+            AttendanceStatusClassifier.Classify(integrationEvent.NewStatus, integrationEvent.NewLateMinutes);
+
+        var deltaPresent = newPresent - prevPresent;
+        var deltaLate = newLate - prevLate;
+        var deltaAbsent = newAbsent - prevAbsent;
+        var deltaRevoked = newRevoked - prevRevoked;
+
+        var summary = await dbContext.DailyDepartmentSummaries
+            .FirstOrDefaultAsync(
+                x => x.SummaryDate == integrationEvent.WorkDate && x.DepartmentId == integrationEvent.DepartmentId,
+                cancellationToken);
+
+        if (summary is null)
+        {
+            if (deltaPresent <= 0 && deltaLate <= 0 && deltaAbsent <= 0 && deltaRevoked <= 0)
+            {
+                return;
+            }
+
+            var deptCode = string.IsNullOrWhiteSpace(integrationEvent.DepartmentCode)
+                ? "DEPT"
+                : integrationEvent.DepartmentCode;
+
+            var latestTotalEmployees = await dbContext.DailyDepartmentSummaries
+                .Where(x => x.DepartmentId == integrationEvent.DepartmentId)
+                .OrderByDescending(x => x.SummaryDate)
+                .Select(x => x.TotalEmployees)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            summary = new DailyDepartmentSummary
+            {
+                SummaryDate = integrationEvent.WorkDate,
+                DepartmentId = integrationEvent.DepartmentId,
+                DepartmentCode = deptCode,
+                TotalEmployees = Math.Max(1, latestTotalEmployees),
+                PresentCount = Math.Max(0, deltaPresent),
+                LateCount = Math.Max(0, deltaLate),
+                AbsentCount = Math.Max(0, deltaAbsent),
+                RevokedCount = Math.Max(0, deltaRevoked),
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            dbContext.DailyDepartmentSummaries.Add(summary);
+        }
+        else
+        {
+            if ((string.IsNullOrWhiteSpace(summary.DepartmentCode) || summary.DepartmentCode == "DEPT")
+                && !string.IsNullOrWhiteSpace(integrationEvent.DepartmentCode)
+                && integrationEvent.DepartmentCode != "DEPT")
+            {
+                summary.DepartmentCode = integrationEvent.DepartmentCode;
+            }
+
+            summary.PresentCount = Math.Max(0, summary.PresentCount + deltaPresent);
+            summary.LateCount = Math.Max(0, summary.LateCount + deltaLate);
+            summary.AbsentCount = Math.Max(0, summary.AbsentCount + deltaAbsent);
+            summary.RevokedCount = Math.Max(0, summary.RevokedCount + deltaRevoked);
+            summary.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

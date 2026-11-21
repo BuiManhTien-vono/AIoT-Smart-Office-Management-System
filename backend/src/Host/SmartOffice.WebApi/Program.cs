@@ -57,6 +57,7 @@ await SeedInitialDemoDataAsync(app.Services);
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseCors("AllowFrontend");
+app.UseMiddleware<JwtAuthenticationMiddleware>();
 app.UseAuthorization();
 
 // 5. Map Swagger UI (/swagger) và OpenAPI JSON (/swagger/v1/swagger.json)
@@ -118,6 +119,56 @@ static async Task SeedInitialDemoDataAsync(IServiceProvider rootProvider)
                     ADD COLUMN IF NOT EXISTS start_time TIME NOT NULL DEFAULT '08:00:00',
                     ADD COLUMN IF NOT EXISTS end_time TIME NOT NULL DEFAULT '17:30:00',
                     ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT TRUE;
+
+                ALTER TABLE IF EXISTS attendance.attendance_logs
+                    ADD COLUMN IF NOT EXISTS is_manually_adjusted BOOLEAN NOT NULL DEFAULT FALSE,
+                    ADD COLUMN IF NOT EXISTS adjustment_reason VARCHAR(500),
+                    ADD COLUMN IF NOT EXISTS adjusted_by_user_id UUID,
+                    ADD COLUMN IF NOT EXISTS adjusted_by_name VARCHAR(100),
+                    ADD COLUMN IF NOT EXISTS adjusted_at TIMESTAMPTZ;
+
+                CREATE TABLE IF NOT EXISTS attendance.attendance_adjustment_audits (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    attendance_log_id UUID NOT NULL,
+                    employee_id UUID NOT NULL,
+                    employee_code VARCHAR(20) NOT NULL,
+                    employee_full_name VARCHAR(100) NOT NULL,
+                    department_id UUID NOT NULL,
+                    work_date DATE NOT NULL,
+                    action_type VARCHAR(30) NOT NULL,
+                    previous_status VARCHAR(20),
+                    new_status VARCHAR(20),
+                    previous_check_in_time TIMESTAMPTZ,
+                    new_check_in_time TIMESTAMPTZ,
+                    previous_check_out_time TIMESTAMPTZ,
+                    new_check_out_time TIMESTAMPTZ,
+                    previous_late_minutes INT NOT NULL DEFAULT 0,
+                    new_late_minutes INT NOT NULL DEFAULT 0,
+                    previous_early_leave_minutes INT NOT NULL DEFAULT 0,
+                    new_early_leave_minutes INT NOT NULL DEFAULT 0,
+                    previous_snapshot_key VARCHAR(255),
+                    is_status_overridden BOOLEAN NOT NULL DEFAULT FALSE,
+                    reason VARCHAR(500) NOT NULL,
+                    source_screen VARCHAR(50),
+                    adjusted_by_user_id UUID NOT NULL,
+                    adjusted_by_username VARCHAR(50) NOT NULL,
+                    adjusted_by_name VARCHAR(100) NOT NULL,
+                    adjusted_by_role VARCHAR(20) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_attendance_audits_date
+                    ON attendance.attendance_adjustment_audits(work_date DESC, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_attendance_audits_employee
+                    ON attendance.attendance_adjustment_audits(employee_id, work_date DESC);
+                """);
+        }
+
+        if (repDb.Database.IsRelational())
+        {
+            await repDb.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE IF EXISTS reporting.daily_department_summaries
+                    ADD COLUMN IF NOT EXISTS revoked_count INT NOT NULL DEFAULT 0;
                 """);
         }
 

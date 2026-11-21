@@ -100,6 +100,7 @@ export async function monthlyReport(
     totalPresentManDays: rows.reduce((sum, row) => sum + row.presentCount, 0),
     totalLateEvents: rows.reduce((sum, row) => sum + row.lateCount, 0),
     totalAbsentManDays: rows.reduce((sum, row) => sum + row.absentCount, 0),
+    totalRevokedManDays: rows.reduce((sum, row) => sum + (row.revokedCount ?? 0), 0),
     totalProlongedAwayEvents: rows.reduce((sum, row) => sum + row.prolongedAwayEvents, 0),
     totalSecurityAlerts: rows.reduce((sum, row) => sum + row.securityAlertsCount, 0),
   }
@@ -128,6 +129,7 @@ export async function weeklyReport(
     totalPresentManDays: rows.reduce((sum, row) => sum + row.presentCount, 0),
     totalLateEvents: rows.reduce((sum, row) => sum + row.lateCount, 0),
     totalAbsentManDays: rows.reduce((sum, row) => sum + row.absentCount, 0),
+    totalRevokedManDays: rows.reduce((sum, row) => sum + (row.revokedCount ?? 0), 0),
     totalProlongedAwayEvents: rows.reduce((sum, row) => sum + row.prolongedAwayEvents, 0),
     totalSecurityAlerts: rows.reduce((sum, row) => sum + row.securityAlertsCount, 0),
   }
@@ -174,6 +176,7 @@ export function summarizeDepartments(rows: DailyDepartmentSummary[]): Department
       onTime: 0,
       late: 0,
       absent: 0,
+      revoked: 0,
       prolongedAway: 0,
       securityAlerts: 0,
       total: 0,
@@ -181,9 +184,10 @@ export function summarizeDepartments(rows: DailyDepartmentSummary[]): Department
     group.onTime += onTimeCount(row)
     group.late += row.lateCount
     group.absent += row.absentCount
+    group.revoked += row.revokedCount ?? 0
     group.prolongedAway += row.prolongedAwayEvents
     group.securityAlerts += row.securityAlertsCount
-    group.total = group.onTime + group.late + group.absent
+    group.total = group.onTime + group.late + group.absent + group.revoked
     const days = daysByDepartment.get(row.departmentId) ?? new Set<string>()
     days.add(row.summaryDate)
     daysByDepartment.set(row.departmentId, days)
@@ -318,7 +322,7 @@ function formatMinutesAsClock(totalMinutes: number | null): string {
 }
 
 function computeRecordWorkHours(record: AttendanceRecord, shift?: Shift): number {
-  if (record.status === 'ABSENT') return 0
+  if (record.status === 'ABSENT' || record.status === 'REVOKED') return 0
 
   const shiftStart = parseTimeToMinutes(shift?.startTime) ?? 8 * 60
   const shiftEnd = parseTimeToMinutes(shift?.endTime) ?? 17 * 60 + 30
@@ -453,10 +457,12 @@ export function buildEmployeeTimesheet(params: {
     let earlyLeaveDays = 0
     let totalEarlyLeaveMinutes = 0
     let absentDays = 0
+    let revokedDays = 0
     let totalWorkHours = 0
 
     const workingDatesSet = new Set<string>()
     const absentDatesSet = new Set<string>()
+    const revokedDatesSet = new Set<string>()
     const inMinutesList: number[] = []
     const outMinutesList: number[] = []
     const confidenceList: number[] = []
@@ -465,6 +471,12 @@ export function buildEmployeeTimesheet(params: {
       if (log.status === 'ABSENT') {
         absentDays += 1
         absentDatesSet.add(formatShortDayMonth(log.workDate))
+        continue
+      }
+
+      if (log.status === 'REVOKED') {
+        revokedDays += 1
+        revokedDatesSet.add(formatShortDayMonth(log.workDate))
         continue
       }
 
@@ -540,7 +552,7 @@ export function buildEmployeeTimesheet(params: {
       ? Math.round((confidenceList.reduce((a, b) => a + b, 0) / confidenceList.length) * 10) / 10
       : 0
 
-    const totalConsideredDays = presentDays + absentDays
+    const totalConsideredDays = presentDays + absentDays + revokedDays
     const attendanceRatePercent = totalConsideredDays > 0
       ? Math.round((presentDays / totalConsideredDays) * 1000) / 10
       : (approvedLeaveDays > 0 ? 100 : 0)
@@ -548,7 +560,7 @@ export function buildEmployeeTimesheet(params: {
     let ratingLabel: TimesheetRatingLabel = 'Đạt chuẩn'
     let ratingTone: TimesheetRatingTone = 'info'
 
-    if (absentDays > 0) {
+    if (absentDays > 0 || revokedDays > 0) {
       ratingLabel = 'Vi phạm'
       ratingTone = 'danger'
     } else if (lateDays > 0 || earlyLeaveDays > 0) {
@@ -568,7 +580,10 @@ export function buildEmployeeTimesheet(params: {
 
     if (presentDays > 0) {
       workStatusCategory = 'WORKING'
-      if (absentDays > 0) {
+      if (revokedDays > 0) {
+        workStatusLabel = 'Đi làm & Có hủy công'
+        workStatusTone = 'danger'
+      } else if (absentDays > 0) {
         workStatusLabel = 'Đi làm & Có ngày vắng'
         workStatusTone = 'warning'
       } else if (lateDays > 0 || earlyLeaveDays > 0) {
@@ -578,6 +593,10 @@ export function buildEmployeeTimesheet(params: {
         workStatusLabel = 'Đi làm (Đúng giờ)'
         workStatusTone = 'success'
       }
+    } else if (revokedDays > 0) {
+      workStatusCategory = 'ABSENT_UNEXCUSED'
+      workStatusLabel = 'Hủy công (Trừ lương)'
+      workStatusTone = 'danger'
     } else if (approvedLeaveDays > 0) {
       workStatusCategory = 'ON_LEAVE'
       workStatusLabel = 'Nghỉ có phép'
@@ -605,6 +624,7 @@ export function buildEmployeeTimesheet(params: {
       totalEarlyLeaveMinutes,
       approvedLeaveDays,
       absentDays,
+      revokedDays,
       totalWorkHours: Math.round(totalWorkHours * 10) / 10,
       approvedOtHours: Math.round(approvedOtHours * 10) / 10,
       approvedOtSessions: empOts.length,
@@ -619,6 +639,7 @@ export function buildEmployeeTimesheet(params: {
       workStatusTone,
       workingDatesList: [...workingDatesSet],
       absentDatesList: [...absentDatesSet],
+      revokedDatesList: [...revokedDatesSet],
       leaveDetailsText,
       assignedSeatText,
     }
@@ -666,6 +687,7 @@ export function groupTimesheetRowsByDepartment(rows: EmployeeTimesheetRow[]): Ti
           totalEarlyLeaveMinutes: 0,
           totalLeaveDays: 0,
           totalAbsentDays: 0,
+          totalRevokedDays: 0,
           totalWorkHours: 0,
           totalOtHours: 0,
           avgAttendanceRatePercent: 0,
@@ -679,14 +701,14 @@ export function groupTimesheetRowsByDepartment(rows: EmployeeTimesheetRow[]): Ti
     group.rows.push(row)
     if (row.presentDays > 0) {
       group.workingCount += 1
-      if (row.lateDays === 0 && row.earlyLeaveDays === 0) {
+      if (row.lateDays === 0 && row.earlyLeaveDays === 0 && row.revokedDays === 0) {
         group.onTimePeopleCount += 1
       } else {
         group.latePeopleCount += 1
       }
     }
     if (row.approvedLeaveDays > 0) group.onLeaveCount += 1
-    if (row.absentDays > 0 || (row.presentDays === 0 && row.approvedLeaveDays === 0)) {
+    if (row.absentDays > 0 || row.revokedDays > 0 || (row.presentDays === 0 && row.approvedLeaveDays === 0)) {
       group.absentCount += 1
     }
 
@@ -698,6 +720,7 @@ export function groupTimesheetRowsByDepartment(rows: EmployeeTimesheetRow[]): Ti
     group.totalEarlyLeaveMinutes += row.totalEarlyLeaveMinutes
     group.totalLeaveDays += row.approvedLeaveDays
     group.totalAbsentDays += row.absentDays
+    group.totalRevokedDays += row.revokedDays
     group.totalWorkHours += row.totalWorkHours
     group.totalOtHours += row.approvedOtHours
     entry.rateSum += row.attendanceRatePercent
@@ -1420,6 +1443,7 @@ export function exportMultiSheetExcelWorkbook(payload: MultiSheetExcelReportPayl
             r.workingDatesList.length > 0 ? `Làm: ${r.workingDatesList.join(', ')}` : '',
             r.leaveDetailsText !== '—' ? `Phép: ${r.leaveDetailsText}` : '',
             r.absentDatesList.length > 0 ? `Vắng KP: ${r.absentDatesList.join(', ')}` : '',
+            r.revokedDatesList.length > 0 ? `Hủy công: ${r.revokedDatesList.join(', ')}` : '',
             r.assignedSeatText !== 'Chưa gán bàn' ? `Bàn: ${r.assignedSeatText}` : '',
           ]
             .filter(Boolean)
@@ -1656,6 +1680,7 @@ export function exportMultiSheetExcelWorkbook(payload: MultiSheetExcelReportPayl
           r.workingDatesList.length > 0 ? `Làm: ${r.workingDatesList.join(', ')}` : '',
           r.leaveDetailsText !== '—' ? `Phép: ${r.leaveDetailsText}` : '',
           r.absentDatesList.length > 0 ? `Vắng KP: ${r.absentDatesList.join(', ')}` : '',
+          r.revokedDatesList.length > 0 ? `Hủy công (Trừ lương): ${r.revokedDatesList.join(', ')}` : '',
         ]
           .filter(Boolean)
           .join(' | ') || 'Chưa ghi nhận phát sinh'

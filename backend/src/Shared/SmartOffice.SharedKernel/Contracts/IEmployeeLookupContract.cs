@@ -9,7 +9,8 @@ public sealed record EmployeeContractDto(
     string FullName,
     Guid DepartmentId,
     Guid? DefaultShiftId,
-    bool IsActive);
+    bool IsActive,
+    string DepartmentCode = "DEPT");
 
 /// <summary>
 /// PHƯƠNG THỨC GIAO TIẾP 2 (Contract Interface):

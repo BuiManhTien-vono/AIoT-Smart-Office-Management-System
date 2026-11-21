@@ -31,8 +31,9 @@ public sealed record AttendanceCheckedIntegrationEvent(
     bool IsFirstCheckInOfDay) : IIntegrationEvent;
 
 /// <summary>
-/// Sự kiện phát ra từ Module 2 (Attendance) khi một bản ghi chấm công lỡ tạo trong thời gian nghỉ phép bị xóa.
-/// Module Reporting lắng nghe để trừ lại số lượng đi làm / đi muộn trong bảng tổng hợp.
+/// Sự kiện phát ra từ Module 2 (Attendance) khi một bản ghi chấm công bị gỡ bỏ
+/// (lỡ tạo trong thời gian nghỉ phép hoặc bị hủy công do lỗi hệ thống / ghi nhầm - VOID_ERRONEOUS).
+/// Module Reporting lắng nghe để trừ lại số liệu tương ứng trong bảng tổng hợp.
 /// </summary>
 public sealed record AttendanceLogRemovedIntegrationEvent(
     Guid EventId,
@@ -42,7 +43,31 @@ public sealed record AttendanceLogRemovedIntegrationEvent(
     string EmployeeCode,
     Guid DepartmentId,
     DateOnly WorkDate,
-    string PreviousStatus) : IIntegrationEvent;
+    string PreviousStatus,
+    int PreviousLateMinutes = 0,
+    string DepartmentCode = "DEPT",
+    string? Reason = null) : IIntegrationEvent;
+
+/// <summary>
+/// Sự kiện phát ra từ Module 2 (Attendance) khi quản trị viên / HR / Trưởng phòng
+/// điều chỉnh giờ công, bổ sung công thủ công hoặc phạt hủy công trừ lương (REVOKE_PENALTY).
+/// Module Reporting lắng nghe để cập nhật chính xác delta trên bảng tổng hợp phòng ban.
+/// </summary>
+public sealed record AttendanceLogAdjustedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredOnUtc,
+    Guid AttendanceLogId,
+    Guid EmployeeId,
+    string EmployeeCode,
+    Guid DepartmentId,
+    string DepartmentCode,
+    DateOnly WorkDate,
+    string? PreviousStatus,
+    int PreviousLateMinutes,
+    string NewStatus,
+    int NewLateMinutes,
+    string ActionType,
+    string? Reason = null) : IIntegrationEvent;
 
 /// <summary>
 /// Sự kiện phát ra từ Module 2 (Attendance) khi tiến trình cuối ngày đánh dấu nhân viên vắng mặt không phép (ABSENT - FR-ATT-06).

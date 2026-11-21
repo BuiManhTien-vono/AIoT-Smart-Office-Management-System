@@ -21,7 +21,7 @@ export interface CreateShiftInput {
   isDefault?: boolean
 }
 
-export type AttendanceStatus = 'ON_TIME' | 'LATE' | 'EARLY_LEAVE' | 'ABSENT'
+export type AttendanceStatus = 'ON_TIME' | 'LATE' | 'EARLY_LEAVE' | 'ABSENT' | 'REVOKED'
 
 export interface AttendanceRecord {
   id: string
@@ -40,6 +40,88 @@ export interface AttendanceRecord {
   message: string
   checkinSnapshotKey?: string | null
   checkinSnapshotPresignedUrl?: string | null
+  isManuallyAdjusted?: boolean
+  adjustmentReason?: string | null
+  adjustedByUserId?: string | null
+  adjustedByName?: string | null
+  adjustedAt?: string | null
+  departmentId?: string | null
+}
+
+export interface AdjustAttendanceInput {
+  checkInTime: string | null
+  checkOutTime: string | null
+  shiftId?: string | null
+  isStatusOverridden: boolean
+  overrideStatus?: AttendanceStatus | null
+  overrideLateMinutes?: number | null
+  overrideEarlyLeaveMinutes?: number | null
+  reason: string
+  sourceScreen?: string
+}
+
+export interface ManualAttendanceInput {
+  employeeId: string
+  workDate: string
+  checkInTime: string | null
+  checkOutTime: string | null
+  shiftId?: string | null
+  isStatusOverridden: boolean
+  overrideStatus?: AttendanceStatus | null
+  overrideLateMinutes?: number | null
+  overrideEarlyLeaveMinutes?: number | null
+  reason: string
+  sourceScreen?: string
+}
+
+export type CancelAttendanceMode = 'VOID_ERRONEOUS' | 'REVOKE_PENALTY'
+
+export interface CancelAttendanceInput {
+  cancelMode: CancelAttendanceMode
+  reason: string
+  sourceScreen?: string
+}
+
+export interface CancelAttendanceResponse {
+  attendanceLogId: string
+  employeeId: string
+  employeeCode: string
+  workDate: string
+  cancelMode: CancelAttendanceMode | string
+  previousStatus?: string | null
+  newStatus?: string | null
+  reason: string
+  message: string
+  updatedRecord?: AttendanceRecord | null
+}
+
+export interface AttendanceAdjustmentAudit {
+  id: string
+  attendanceLogId: string
+  employeeId: string
+  employeeCode: string
+  employeeFullName: string
+  departmentId: string
+  workDate: string
+  actionType: 'MANUAL_CREATE' | 'ADJUST' | 'REVOKE_PENALTY' | 'VOID_ERRONEOUS' | string
+  previousStatus?: string | null
+  newStatus?: string | null
+  previousCheckInTime?: string | null
+  newCheckInTime?: string | null
+  previousCheckOutTime?: string | null
+  newCheckOutTime?: string | null
+  previousLateMinutes: number
+  newLateMinutes: number
+  previousEarlyLeaveMinutes: number
+  newEarlyLeaveMinutes: number
+  isStatusOverridden: boolean
+  reason: string
+  sourceScreen?: string | null
+  adjustedByUserId: string
+  adjustedByUsername: string
+  adjustedByName: string
+  adjustedByRole: string
+  createdAt: string
 }
 
 export type LeaveType =
@@ -100,4 +182,12 @@ export const attendanceStatusLabels: Record<string, { label: string; class: stri
   LATE: { label: 'Đi muộn', class: 'badge-warning' },
   EARLY_LEAVE: { label: 'Về sớm', class: 'badge-special' },
   ABSENT: { label: 'Vắng mặt', class: 'badge-danger' },
+  REVOKED: { label: 'Hủy công (Trừ lương)', class: 'badge-danger' },
+}
+
+export const auditActionLabels: Record<string, { label: string; class: string }> = {
+  MANUAL_CREATE: { label: 'Bổ sung công', class: 'badge-info' },
+  ADJUST: { label: 'Điều chỉnh công', class: 'badge-warning' },
+  REVOKE_PENALTY: { label: 'Phạt hủy công (Trừ lương)', class: 'badge-danger' },
+  VOID_ERRONEOUS: { label: 'Gỡ bản ghi nhầm', class: 'badge-neutral' },
 }

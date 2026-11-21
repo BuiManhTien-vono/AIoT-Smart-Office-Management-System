@@ -46,6 +46,7 @@ public sealed class ReportingDbContext(DbContextOptions<ReportingDbContext> opti
             entity.Property(x => x.PresentCount).HasColumnName("present_count");
             entity.Property(x => x.LateCount).HasColumnName("late_count");
             entity.Property(x => x.AbsentCount).HasColumnName("absent_count");
+            entity.Property(x => x.RevokedCount).HasColumnName("revoked_count");
             entity.Property(x => x.ProlongedAwayEvents).HasColumnName("prolonged_away_events");
             entity.Property(x => x.SecurityAlertsCount).HasColumnName("security_alerts_count");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");

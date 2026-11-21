@@ -8,13 +8,14 @@ interface Props {
 
 export function AttendanceCharts({ groups }: Props) {
   const [hoveredDept, setHoveredDept] = useState<string | null>(null)
-  const [hoveredSegment, setHoveredSegment] = useState<'onTime' | 'late' | 'absent' | null>(null)
+  const [hoveredSegment, setHoveredSegment] = useState<'onTime' | 'late' | 'absent' | 'revoked' | null>(null)
 
   // 1. Tính toán số liệu tổng thể toàn công ty
   const totals = useMemo(() => {
     let onTime = 0
     let late = 0
     let absent = 0
+    let revoked = 0
     let prolongedAway = 0
     let securityAlerts = 0
 
@@ -22,25 +23,29 @@ export function AttendanceCharts({ groups }: Props) {
       onTime += g.onTime
       late += g.late
       absent += g.absent
+      revoked += g.revoked ?? 0
       prolongedAway += g.prolongedAway
       securityAlerts += g.securityAlerts
     })
 
-    const grandTotal = onTime + late + absent
+    const grandTotal = onTime + late + absent + revoked
     const onTimeRate = grandTotal > 0 ? (onTime / grandTotal) * 100 : 0
     const lateRate = grandTotal > 0 ? (late / grandTotal) * 100 : 0
     const absentRate = grandTotal > 0 ? (absent / grandTotal) * 100 : 0
+    const revokedRate = grandTotal > 0 ? (revoked / grandTotal) * 100 : 0
 
     return {
       onTime,
       late,
       absent,
+      revoked,
       prolongedAway,
       securityAlerts,
       grandTotal,
       onTimeRate,
       lateRate,
       absentRate,
+      revokedRate,
     }
   }, [groups])
 
@@ -54,13 +59,15 @@ export function AttendanceCharts({ groups }: Props) {
     const onTimeDash = (totals.onTimeRate / 100) * circumference
     const lateDash = (totals.lateRate / 100) * circumference
     const absentDash = (totals.absentRate / 100) * circumference
+    const revokedDash = (totals.revokedRate / 100) * circumference
 
     // Offset tích lũy
     const onTimeOffset = 0
     const lateOffset = -onTimeDash
     const absentOffset = -(onTimeDash + lateDash)
+    const revokedOffset = -(onTimeDash + lateDash + absentDash)
 
-    return [
+    const items = [
       {
         key: 'onTime',
         label: 'Đúng giờ',
@@ -89,6 +96,20 @@ export function AttendanceCharts({ groups }: Props) {
         rate: totals.absentRate,
       },
     ]
+
+    if (totals.revoked > 0) {
+      items.push({
+        key: 'revoked',
+        label: 'Hủy công',
+        dash: `${revokedDash} ${circumference}`,
+        offset: revokedOffset,
+        color: '#991b1b', // Đỏ sậm kỷ luật
+        count: totals.revoked,
+        rate: totals.revokedRate,
+      })
+    }
+
+    return items
   }, [totals])
 
   // Chi tiết hiển thị động ở tâm Donut khi rê chuột
@@ -177,7 +198,7 @@ export function AttendanceCharts({ groups }: Props) {
                       opacity: hoveredSegment && !isSelected ? 0.35 : 1,
                       cursor: 'pointer',
                     }}
-                    onMouseEnter={() => setHoveredSegment(item.key as 'onTime' | 'late' | 'absent')}
+                    onMouseEnter={() => setHoveredSegment(item.key as 'onTime' | 'late' | 'absent' | 'revoked')}
                     onMouseLeave={() => setHoveredSegment(null)}
                   >
                     <title>{`${item.label}: ${item.count} lượt (${item.rate.toFixed(1)}%)`}</title>
@@ -237,7 +258,7 @@ export function AttendanceCharts({ groups }: Props) {
                   <div
                     key={item.key}
                     className={`legend-item ${isSelected ? 'active' : ''}`}
-                    onMouseEnter={() => setHoveredSegment(item.key as 'onTime' | 'late' | 'absent')}
+                    onMouseEnter={() => setHoveredSegment(item.key as 'onTime' | 'late' | 'absent' | 'revoked')}
                     onMouseLeave={() => setHoveredSegment(null)}
                     style={{ cursor: 'pointer' }}
                   >
@@ -268,9 +289,12 @@ export function AttendanceCharts({ groups }: Props) {
             <span className="legend-badge"><span className="legend-dot" style={{ background: '#16a34a' }} /> Đúng giờ</span>
             <span className="legend-badge"><span className="legend-dot" style={{ background: '#f59e0b' }} /> Đi muộn</span>
             <span className="legend-badge"><span className="legend-dot" style={{ background: '#ef4444' }} /> Vắng mặt</span>
+            {totals.revoked > 0 && (
+              <span className="legend-badge"><span className="legend-dot" style={{ background: '#991b1b' }} /> Hủy công</span>
+            )}
             {hoveredGroup && (
               <span className="hovered-dept-pill">
-                <strong>{hoveredGroup.departmentCode}</strong>: {hoveredGroup.onTime} đúng giờ ({((hoveredGroup.total > 0 ? (hoveredGroup.onTime / hoveredGroup.total) * 100 : 0)).toFixed(0)}%) · {hoveredGroup.late} đi muộn · {hoveredGroup.absent} vắng
+                <strong>{hoveredGroup.departmentCode}</strong>: {hoveredGroup.onTime} đúng giờ ({((hoveredGroup.total > 0 ? (hoveredGroup.onTime / hoveredGroup.total) * 100 : 0)).toFixed(0)}%) · {hoveredGroup.late} đi muộn · {hoveredGroup.absent} vắng{(hoveredGroup.revoked ?? 0) > 0 ? ` · ${hoveredGroup.revoked} hủy công` : ''}
               </span>
             )}
           </div>
@@ -292,6 +316,7 @@ export function AttendanceCharts({ groups }: Props) {
                 const onTimePct = group.total > 0 ? (group.onTime / total) * 100 : 0
                 const latePct = group.total > 0 ? (group.late / total) * 100 : 0
                 const absentPct = group.total > 0 ? (group.absent / total) * 100 : 0
+                const revokedPct = group.total > 0 ? ((group.revoked ?? 0) / total) * 100 : 0
                 const isHovered = hoveredDept === group.departmentId
 
                 return (
@@ -305,9 +330,12 @@ export function AttendanceCharts({ groups }: Props) {
                     {isHovered && (
                       <div className="dept-bar-tooltip">
                         <strong>{group.departmentCode}</strong>
-                        <div>🟢 Đúng giờ: {group.onTime} ({onTimePct.toFixed(1)}%)</div>
-                        <div>🟡 Đi muộn: {group.late} ({latePct.toFixed(1)}%)</div>
-                        <div>🔴 Vắng mặt: {group.absent} ({absentPct.toFixed(1)}%)</div>
+                        <div>Đúng giờ: {group.onTime} ({onTimePct.toFixed(1)}%)</div>
+                        <div>Đi muộn: {group.late} ({latePct.toFixed(1)}%)</div>
+                        <div>Vắng mặt: {group.absent} ({absentPct.toFixed(1)}%)</div>
+                        {(group.revoked ?? 0) > 0 && (
+                          <div>Hủy công: {group.revoked} ({revokedPct.toFixed(1)}%)</div>
+                        )}
                         <div>Tổng lượt: {group.total}</div>
                       </div>
                     )}
@@ -336,6 +364,15 @@ export function AttendanceCharts({ groups }: Props) {
                           >
                             {absentPct >= 18 && <span>{absentPct.toFixed(0)}%</span>}
                           </div>
+                          {revokedPct > 0 && (
+                            <div
+                              className="dept-bar-segment"
+                              style={{ height: `${revokedPct}%`, background: '#991b1b', color: '#ffffff' }}
+                              title={`Hủy công: ${revokedPct.toFixed(1)}%`}
+                            >
+                              {revokedPct >= 18 && <span>{revokedPct.toFixed(0)}%</span>}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="dept-bar-empty">0</div>

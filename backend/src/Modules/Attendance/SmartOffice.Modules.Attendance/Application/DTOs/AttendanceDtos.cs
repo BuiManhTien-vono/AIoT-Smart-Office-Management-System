@@ -44,7 +44,82 @@ public sealed record AttendanceRecordResponse(
     bool IsDebounced,
     string Message,
     string? CheckinSnapshotKey = null,
-    string? CheckinSnapshotPresignedUrl = null);
+    string? CheckinSnapshotPresignedUrl = null,
+    bool IsManuallyAdjusted = false,
+    string? AdjustmentReason = null,
+    Guid? AdjustedByUserId = null,
+    string? AdjustedByName = null,
+    DateTimeOffset? AdjustedAt = null,
+    Guid? DepartmentId = null);
+
+public sealed record AdjustAttendanceRequest(
+    DateTimeOffset? CheckInTime,
+    DateTimeOffset? CheckOutTime,
+    Guid? ShiftId,
+    bool IsStatusOverridden,
+    string? OverrideStatus,
+    int? OverrideLateMinutes,
+    int? OverrideEarlyLeaveMinutes,
+    string Reason,
+    string? SourceScreen = null);
+
+public sealed record ManualAttendanceRequest(
+    Guid EmployeeId,
+    DateOnly WorkDate,
+    DateTimeOffset? CheckInTime,
+    DateTimeOffset? CheckOutTime,
+    Guid? ShiftId,
+    bool IsStatusOverridden,
+    string? OverrideStatus,
+    int? OverrideLateMinutes,
+    int? OverrideEarlyLeaveMinutes,
+    string Reason,
+    string? SourceScreen = null);
+
+public sealed record CancelAttendanceRequest(
+    string CancelMode,
+    string Reason,
+    string? SourceScreen = null);
+
+public sealed record CancelAttendanceResponse(
+    Guid AttendanceLogId,
+    Guid EmployeeId,
+    string EmployeeCode,
+    DateOnly WorkDate,
+    string CancelMode,
+    string? PreviousStatus,
+    string? NewStatus,
+    string Reason,
+    string Message,
+    AttendanceRecordResponse? UpdatedRecord = null);
+
+public sealed record AttendanceAdjustmentAuditResponse(
+    Guid Id,
+    Guid AttendanceLogId,
+    Guid EmployeeId,
+    string EmployeeCode,
+    string EmployeeFullName,
+    Guid DepartmentId,
+    DateOnly WorkDate,
+    string ActionType,
+    string? PreviousStatus,
+    string? NewStatus,
+    DateTimeOffset? PreviousCheckInTime,
+    DateTimeOffset? NewCheckInTime,
+    DateTimeOffset? PreviousCheckOutTime,
+    DateTimeOffset? NewCheckOutTime,
+    int PreviousLateMinutes,
+    int NewLateMinutes,
+    int PreviousEarlyLeaveMinutes,
+    int NewEarlyLeaveMinutes,
+    bool IsStatusOverridden,
+    string Reason,
+    string? SourceScreen,
+    Guid AdjustedByUserId,
+    string AdjustedByUsername,
+    string AdjustedByName,
+    string AdjustedByRole,
+    DateTimeOffset CreatedAt);
 
 public sealed record AttendanceSnapshotUploadResponse(
     Guid AttendanceLogId,
