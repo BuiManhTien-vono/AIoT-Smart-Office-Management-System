@@ -88,15 +88,53 @@ CREATE TABLE IF NOT EXISTS attendance.attendance_logs (
     check_in_time TIMESTAMPTZ,
     check_out_time TIMESTAMPTZ,
     last_seen_time TIMESTAMPTZ,
-    status VARCHAR(20) NOT NULL DEFAULT 'ON_TIME', -- ON_TIME, LATE, EARLY_LEAVE, ABSENT
+    status VARCHAR(20) NOT NULL DEFAULT 'ON_TIME', -- ON_TIME, LATE, EARLY_LEAVE, ABSENT, REVOKED
     late_minutes INT NOT NULL DEFAULT 0,
     early_leave_minutes INT NOT NULL DEFAULT 0,
     match_confidence REAL NOT NULL DEFAULT 0.0,
     checkin_snapshot_key VARCHAR(255),
+    is_manually_adjusted BOOLEAN NOT NULL DEFAULT FALSE,
+    adjustment_reason VARCHAR(500),
+    adjusted_by_user_id UUID,
+    adjusted_by_name VARCHAR(100),
+    adjusted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ,
     CONSTRAINT uq_attendance_employee_date UNIQUE (employee_id, work_date)
 );
+
+CREATE TABLE IF NOT EXISTS attendance.attendance_adjustment_audits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    attendance_log_id UUID NOT NULL,
+    employee_id UUID NOT NULL,
+    employee_code VARCHAR(20) NOT NULL,
+    employee_full_name VARCHAR(100) NOT NULL,
+    department_id UUID NOT NULL,
+    work_date DATE NOT NULL,
+    action_type VARCHAR(30) NOT NULL, -- MANUAL_CREATE, ADJUST, REVOKE_PENALTY, VOID_ERRONEOUS
+    previous_status VARCHAR(20),
+    new_status VARCHAR(20),
+    previous_check_in_time TIMESTAMPTZ,
+    new_check_in_time TIMESTAMPTZ,
+    previous_check_out_time TIMESTAMPTZ,
+    new_check_out_time TIMESTAMPTZ,
+    previous_late_minutes INT NOT NULL DEFAULT 0,
+    new_late_minutes INT NOT NULL DEFAULT 0,
+    previous_early_leave_minutes INT NOT NULL DEFAULT 0,
+    new_early_leave_minutes INT NOT NULL DEFAULT 0,
+    previous_snapshot_key VARCHAR(255),
+    is_status_overridden BOOLEAN NOT NULL DEFAULT FALSE,
+    reason VARCHAR(500) NOT NULL,
+    source_screen VARCHAR(50),
+    adjusted_by_user_id UUID NOT NULL,
+    adjusted_by_username VARCHAR(50) NOT NULL,
+    adjusted_by_name VARCHAR(100) NOT NULL,
+    adjusted_by_role VARCHAR(20) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_audits_date ON attendance.attendance_adjustment_audits(work_date DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_attendance_audits_employee ON attendance.attendance_adjustment_audits(employee_id, work_date DESC);
 
 CREATE TABLE IF NOT EXISTS attendance.leave_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -227,6 +265,7 @@ CREATE TABLE IF NOT EXISTS reporting.daily_department_summaries (
     present_count INT NOT NULL DEFAULT 0,
     late_count INT NOT NULL DEFAULT 0,
     absent_count INT NOT NULL DEFAULT 0,
+    revoked_count INT NOT NULL DEFAULT 0,
     prolonged_away_events INT NOT NULL DEFAULT 0,
     security_alerts_count INT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

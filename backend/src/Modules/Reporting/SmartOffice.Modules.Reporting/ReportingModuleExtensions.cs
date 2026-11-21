@@ -35,6 +35,7 @@ public static class ReportingModuleExtensions
         services.AddScoped<IIntegrationEventHandler<EmployeeRegisteredIntegrationEvent>, EmployeeRegisteredEventHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceCheckedIntegrationEvent>, AttendanceCheckedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceLogRemovedIntegrationEvent>, AttendanceLogRemovedEventHandler>();
+        services.AddScoped<IIntegrationEventHandler<AttendanceLogAdjustedIntegrationEvent>, AttendanceLogAdjustedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<AttendanceAbsentMarkedIntegrationEvent>, AttendanceAbsentMarkedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<ProlongedAbsenceDetectedIntegrationEvent>, ProlongedAbsenceDetectedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentDetectedEventHandler>();

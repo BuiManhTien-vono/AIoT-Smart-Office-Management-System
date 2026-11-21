@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartOffice.Modules.Reporting.Application.DTOs;
 using SmartOffice.Modules.Reporting.Domain;
 using SmartOffice.Modules.Reporting.Infrastructure;
 using SmartOffice.SharedKernel.Common;
+using SmartOffice.SharedKernel.Security;
 
 namespace SmartOffice.Modules.Reporting.Application.Services;
 
@@ -25,8 +25,8 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
         "SECURITY"
     };
 
-    private const int TokenExpirySeconds = 3600 * 8; // 8 giờ
-    private const string JwtSigningKey = "SmartOffice_ModularMonolith_JwtSigningKey_2026_Secure!";
+    private const int TokenExpirySeconds = JwtTokenHelper.DefaultExpirySeconds;
+    private const string JwtSigningKey = JwtTokenHelper.DefaultSigningKey;
 
     public async Task<Result<AppUserResponse>> CreateUserAsync(
         CreateAppUserRequest request,
@@ -177,7 +177,8 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
             TotalAbsentManDays: dtos.Sum(x => x.AbsentCount),
             TotalProlongedAwayEvents: dtos.Sum(x => x.ProlongedAwayEvents),
             TotalSecurityAlerts: dtos.Sum(x => x.SecurityAlertsCount),
-            DailyBreakdown: dtos);
+            DailyBreakdown: dtos,
+            TotalRevokedManDays: dtos.Sum(x => x.RevokedCount));
     }
 
     public async Task<WeeklyDepartmentReportDto> GetWeeklyReportAsync(
@@ -222,7 +223,8 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
             TotalAbsentManDays: dtos.Sum(x => x.AbsentCount),
             TotalProlongedAwayEvents: dtos.Sum(x => x.ProlongedAwayEvents),
             TotalSecurityAlerts: dtos.Sum(x => x.SecurityAlertsCount),
-            DailyBreakdown: dtos);
+            DailyBreakdown: dtos,
+            TotalRevokedManDays: dtos.Sum(x => x.RevokedCount));
     }
 
     public async Task<byte[]> ExportMonthlyReportCsvAsync(
@@ -234,12 +236,12 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
         var report = await GetMonthlyReportAsync(year, month, departmentId, ct);
 
         var sb = new StringBuilder();
-        sb.AppendLine("SummaryDate,DepartmentCode,TotalEmployees,PresentCount,LateCount,AbsentCount,ProlongedAwayEvents,SecurityAlertsCount,AttendanceRatePercent");
+        sb.AppendLine("SummaryDate,DepartmentCode,TotalEmployees,PresentCount,LateCount,AbsentCount,RevokedCount,ProlongedAwayEvents,SecurityAlertsCount,AttendanceRatePercent");
 
         foreach (var row in report.DailyBreakdown)
         {
             sb.AppendLine(
-                $"{row.SummaryDate:yyyy-MM-dd},{row.DepartmentCode},{row.TotalEmployees},{row.PresentCount},{row.LateCount},{row.AbsentCount},{row.ProlongedAwayEvents},{row.SecurityAlertsCount},{row.AttendanceRatePercent:F1}");
+                $"{row.SummaryDate:yyyy-MM-dd},{row.DepartmentCode},{row.TotalEmployees},{row.PresentCount},{row.LateCount},{row.AbsentCount},{row.RevokedCount},{row.ProlongedAwayEvents},{row.SecurityAlertsCount},{row.AttendanceRatePercent:F1}");
         }
 
         var preamble = Encoding.UTF8.GetPreamble();
@@ -290,36 +292,14 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
 
     private static string GenerateJwtToken(AppUser user)
     {
-        var headerJson = JsonSerializer.Serialize(new { alg = "HS256", typ = "JWT" });
-        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var payloadJson = JsonSerializer.Serialize(new
-        {
-            sub = user.Id.ToString(),
-            unique_name = user.Username,
-            full_name = user.FullName,
-            role = user.Role,
-            department_id = user.DepartmentId?.ToString(),
-            iat = nowUnix,
-            exp = nowUnix + TokenExpirySeconds
-        });
-
-        var headerB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(headerJson));
-        var payloadB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(payloadJson));
-        var unsignedToken = $"{headerB64}.{payloadB64}";
-        var sigBytes = HMACSHA256.HashData(
-            Encoding.UTF8.GetBytes(JwtSigningKey),
-            Encoding.UTF8.GetBytes(unsignedToken));
-        var sigB64 = Base64UrlEncode(sigBytes);
-
-        return $"{unsignedToken}.{sigB64}";
-    }
-
-    private static string Base64UrlEncode(byte[] input)
-    {
-        return Convert.ToBase64String(input)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return JwtTokenHelper.GenerateToken(
+            user.Id,
+            user.Username,
+            user.FullName,
+            user.Role,
+            user.DepartmentId,
+            JwtSigningKey,
+            TokenExpirySeconds);
     }
 
     private static AppUserResponse MapUser(AppUser user)
@@ -352,7 +332,8 @@ public sealed class ReportingService(ReportingDbContext dbContext) : IReportingS
             s.ProlongedAwayEvents,
             s.SecurityAlertsCount,
             rate,
-            s.UpdatedAt ?? DateTimeOffset.UtcNow);
+            s.UpdatedAt ?? DateTimeOffset.UtcNow,
+            s.RevokedCount);
     }
 }
 

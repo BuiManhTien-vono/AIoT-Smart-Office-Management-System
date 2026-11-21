@@ -60,6 +60,7 @@ public class Week2OccupancyStorageAndOtTests
         services.AddScoped<IIntegrationEventHandler<LeaveRequestCreatedIntegrationEvent>, LeaveRequestCreatedRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<ProlongedAbsenceDetectedIntegrationEvent>, ProlongedAbsenceDetectedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<UnauthorizedSeatAccessDetectedIntegrationEvent>, UnauthorizedSeatAccessEventHandler>();
+        services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentDetectedIntegrationEventHandler>();
         services.AddScoped<IIntegrationEventHandler<SecurityIncidentDetectedIntegrationEvent>, SecurityIncidentDetectedEventHandler>();
         services.AddScoped<IIntegrationEventHandler<SeatStateChangedIntegrationEvent>, SeatStateChangedRealtimeHandler>();
         services.AddScoped<IIntegrationEventHandler<WrongSeatDetectedIntegrationEvent>, WrongSeatRealtimeHandler>();
@@ -283,7 +284,7 @@ public class Week2OccupancyStorageAndOtTests
             empWithOt.Id, workDate, new TimeOnly(22, 0), new TimeOnly(2, 0), "Trực nâng cấp server", "APPROVED"));
 
         var cameraId = Guid.NewGuid();
-        var nightTime = new DateTimeOffset(2026, 11, 3, 23, 15, 0, TimeSpan.Zero);
+        var nightTime = new DateTimeOffset(2026, 11, 3, 23, 15, 0, TimeSpan.FromHours(7));
 
         // Nhánh Mức 1: NV201 có OT hợp lệ -> LEVEL_1_OT (Tự động ACKNOWLEDGED, không tính cảnh báo vi phạm)
         var level1 = (await incidentService.EvaluateAndRecordDetectionAsync(new EvaluateNightGuardDetectionRequest(
@@ -672,9 +673,9 @@ public class Week2OccupancyStorageAndOtTests
     }
 
     [Fact]
-    public async Task Occupancy_UncheckedInEmployee_Leaving_Should_NOT_Trigger_ProlongedAlert()
+    public async Task Occupancy_UncheckedInDesk_Should_Record_Stranger_And_Trigger_ProlongedAbsence_Once_When_Leaving()
     {
-        using var provider = BuildFullModularServiceProvider(nameof(Occupancy_UncheckedInEmployee_Leaving_Should_NOT_Trigger_ProlongedAlert));
+        using var provider = BuildFullModularServiceProvider(nameof(Occupancy_UncheckedInDesk_Should_Record_Stranger_And_Trigger_ProlongedAbsence_Once_When_Leaving));
         using var scope = provider.CreateScope();
 
         var biometricsService = scope.ServiceProvider.GetRequiredService<IBiometricsService>();
@@ -693,9 +694,9 @@ public class Week2OccupancyStorageAndOtTests
         var polygon = new List<PolygonPointDto> { new(0.1, 0.1), new(0.9, 0.1), new(0.9, 0.9), new(0.1, 0.9) };
         await occupancyService.CreateSeatAsync(new CreateSeatRequest("SEAT_NO_CHECKIN", "Bàn 1", camera.Id, dept.Id, emp.Id, polygon));
 
-        var t0 = new DateTimeOffset(2026, 11, 4, 9, 0, 0, TimeSpan.Zero);
+        var t0 = new DateTimeOffset(2026, 11, 4, 9, 0, 0, TimeSpan.FromHours(7));
 
-        // 1. Người lạ ngồi vào bàn khi nhân viên CHƯA check-in -> Báo STRANGER_AT_UNCHECKED_DESK
+        // 1. Người lạ ngồi vào bàn khi nhân viên CHƯA check-in -> Lưu sự cố STRANGER_AT_UNCHECKED_DESK (LEVEL_3_BREACH)
         await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
             "CAM_NO_CHECKIN",
             t0,
@@ -705,8 +706,9 @@ public class Week2OccupancyStorageAndOtTests
         var strangerIncident = await securityDb.SecurityIncidents
             .FirstOrDefaultAsync(x => x.IncidentType == "STRANGER_AT_UNCHECKED_DESK");
         Assert.NotNull(strangerIncident);
+        Assert.Equal("LEVEL_3_BREACH", strangerIncident.AlertLevel);
 
-        // 2. Người đó đứng dậy rời bàn > 10 giây (vắng mặt) -> Vì nhân viên chưa check-in nên KHÔNG BÁO PROLONGED_ABSENCE
+        // 2. Rời bàn >= ngưỡng 10s (hành vi demo nhanh commit 7b3f3e3 không yêu cầu check-in trước) -> Lưu sự cố PROLONGED_ABSENCE
         await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
             "CAM_NO_CHECKIN",
             t0.AddSeconds(15),
@@ -714,8 +716,18 @@ public class Week2OccupancyStorageAndOtTests
             [new SeatObservationInput("SEAT_NO_CHECKIN", IsOccupied: false, UnoccupiedContinuousFrames: 50, UnoccupiedContinuousSeconds: 15)],
             ProlongedAbsenceThresholdSeconds: 10));
 
-        var prolongedIncident = await securityDb.SecurityIncidents
-            .FirstOrDefaultAsync(x => x.IncidentType == "PROLONGED_ABSENCE");
-        Assert.Null(prolongedIncident); // Phải không có sự cố rời bàn quá lâu!
+        // 3. Tiếp tục vắng mặt ở khung hình tiếp theo -> Debounce giữ đúng 1 sự cố PROLONGED_ABSENCE, không bắn lặp
+        await occupancyService.SyncOccupancyStateAsync(new OccupancyStateSyncRequest(
+            "CAM_NO_CHECKIN",
+            t0.AddSeconds(30),
+            FrameSequence: 3,
+            [new SeatObservationInput("SEAT_NO_CHECKIN", IsOccupied: false, UnoccupiedContinuousFrames: 100, UnoccupiedContinuousSeconds: 30)],
+            ProlongedAbsenceThresholdSeconds: 10));
+
+        var prolongedIncidents = await securityDb.SecurityIncidents
+            .Where(x => x.IncidentType == "PROLONGED_ABSENCE")
+            .ToListAsync();
+        Assert.Single(prolongedIncidents);
+        Assert.Equal("LEVEL_2_UNAUTH", prolongedIncidents[0].AlertLevel);
     }
 }

@@ -5,6 +5,7 @@ using SmartOffice.Modules.Attendance.Infrastructure;
 using SmartOffice.SharedKernel.Common;
 using SmartOffice.SharedKernel.Contracts;
 using SmartOffice.SharedKernel.Events;
+using SmartOffice.SharedKernel.Security;
 using SmartOffice.SharedKernel.Storage;
 
 namespace SmartOffice.Modules.Attendance.Application.Services;
@@ -36,6 +37,28 @@ public sealed class AttendanceService(
         "UNPAID_LEAVE",
         "OFFICIAL_DUTY",
         "SUDDENLY_ALLOWED_LEAVE"
+    };
+
+    public static readonly HashSet<string> AllowedAdjustmentRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ADMIN",
+        "HR",
+        "DEPT_LEAD"
+    };
+
+    public static readonly HashSet<string> AllowedAttendanceStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ON_TIME",
+        "LATE",
+        "EARLY_LEAVE",
+        "ABSENT",
+        "REVOKED"
+    };
+
+    public static readonly HashSet<string> AllowedCancelModes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "VOID_ERRONEOUS",
+        "REVOKE_PENALTY"
     };
 
     public async Task<Result<ShiftResponse>> CreateShiftAsync(
@@ -163,36 +186,17 @@ public sealed class AttendanceService(
         var existingLog = await dbContext.AttendanceLogs
             .FirstOrDefaultAsync(x => x.EmployeeId == employee.EmployeeId && x.WorkDate == workDate, ct);
 
-        // Kiểm tra các đơn vắng mặt / công vụ trong ngày đã được duyệt để điều chỉnh mốc đầu/cuối ca hợp lệ
-        var approvedLeavesToday = await dbContext.LeaveRequests
-            .Where(l => l.EmployeeId == employee.EmployeeId &&
-                        l.ApprovalStatus == "APPROVED" &&
-                        l.StartDate <= workDate &&
-                        l.EndDate >= workDate)
-            .ToListAsync(ct);
-
-        var effectiveStartTime = shift.StartTime;
-        var effectiveEndTime = shift.EndTime;
-
-        foreach (var lv in approvedLeavesToday.OrderBy(x => x.StartDate).ThenBy(x => x.StartTime))
+        if (existingLog is not null && string.Equals(existingLog.Status, "REVOKED", StringComparison.OrdinalIgnoreCase))
         {
-            var dayStart = lv.StartDate < workDate ? TimeOnly.MinValue : lv.StartTime;
-            var dayEnd = lv.EndDate > workDate ? TimeOnly.MaxValue : lv.EndTime;
-            if (dayStart <= effectiveStartTime && dayEnd > effectiveStartTime)
-            {
-                effectiveStartTime = dayEnd < shift.EndTime ? dayEnd : shift.EndTime;
-            }
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("ATTENDANCE_REVOKED", "Ngày công của nhân viên đã bị hủy/trừ công kỷ luật, không thể ghi đè tự động bằng camera."));
         }
 
-        foreach (var lv in approvedLeavesToday.OrderByDescending(x => x.EndDate).ThenByDescending(x => x.EndTime))
-        {
-            var dayStart = lv.StartDate < workDate ? TimeOnly.MinValue : lv.StartTime;
-            var dayEnd = lv.EndDate > workDate ? TimeOnly.MaxValue : lv.EndTime;
-            if (dayEnd >= effectiveEndTime && dayStart < effectiveEndTime)
-            {
-                effectiveEndTime = dayStart > shift.StartTime ? dayStart : shift.StartTime;
-            }
-        }
+        var (effectiveStartTime, effectiveEndTime) = await ResolveEffectiveShiftWindowAsync(
+            employee.EmployeeId,
+            workDate,
+            shift,
+            ct);
 
         // 4. Trường hợp Lượt chấm công đầu tiên trong ngày (Check-in vào ca - FR-ATT-04)
         if (existingLog is null)
@@ -244,7 +248,8 @@ public sealed class AttendanceService(
                 message: isLate
                     ? $"Ghi nhận vào ca (Đi muộn {lateMinutes} phút)."
                     : "Ghi nhận vào ca đúng giờ.",
-                ct));
+                ct,
+                employee.DepartmentId));
         }
 
         // 5. Kiểm tra bộ lọc chống trùng lặp 5 phút (FR-ATT-03: Debounce 300 giây)
@@ -258,7 +263,8 @@ public sealed class AttendanceService(
                     employee.FullName,
                     isDebounced: true,
                     message: $"Bỏ qua quét trùng lặp trong cửa sổ 5 phút (cách lần trước {elapsedSeconds:F0} giây).",
-                    ct));
+                    ct,
+                    employee.DepartmentId));
             }
         }
 
@@ -303,7 +309,8 @@ public sealed class AttendanceService(
             employee.FullName,
             isDebounced: false,
             message: "Cập nhật giờ ra ca thành công.",
-            ct));
+            ct,
+            employee.DepartmentId));
     }
 
     public async Task<IReadOnlyList<AttendanceRecordResponse>> GetDailyAttendanceLogsAsync(
@@ -352,11 +359,796 @@ public sealed class AttendanceService(
                 log,
                 emp?.FullName ?? log.EmployeeCode,
                 isDebounced: false,
-                message: string.Empty,
-                ct));
+                message: log.IsManuallyAdjusted && !string.IsNullOrWhiteSpace(log.AdjustmentReason)
+                    ? log.AdjustmentReason
+                    : string.Empty,
+                ct,
+                emp?.DepartmentId));
         }
 
         return responses;
+    }
+
+    public async Task<Result<AttendanceRecordResponse>> AdjustAttendanceLogAsync(
+        Guid attendanceLogId,
+        AdjustAttendanceRequest request,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        var log = await dbContext.AttendanceLogs.FirstOrDefaultAsync(x => x.Id == attendanceLogId, ct);
+        if (log is null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("ATTENDANCE_LOG_NOT_FOUND", "Không tìm thấy bản ghi chấm công cần điều chỉnh."));
+        }
+
+        var employee = await employeeLookup.GetByIdAsync(log.EmployeeId, ct);
+        if (employee is null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên tương ứng với bản ghi chấm công."));
+        }
+
+        var authError = ValidateAdjustmentAuthorization(actor, employee.DepartmentId, log.WorkDate);
+        if (authError is not null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(authError);
+        }
+
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < 5)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("INVALID_REASON", "Vui lòng nhập lý do điều chỉnh công tối thiểu 5 ký tự."));
+        }
+
+        var shift = await ResolveShiftAsync(request.ShiftId ?? log.ShiftId, employee.DefaultShiftId, ct);
+        if (shift is null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("SHIFT_NOT_CONFIGURED", "Hệ thống chưa được cấu hình ca làm việc."));
+        }
+
+        var evaluated = await EvaluateAdjustedAttendanceAsync(
+            employee.EmployeeId,
+            log.WorkDate,
+            shift,
+            request.CheckInTime,
+            request.CheckOutTime,
+            request.IsStatusOverridden,
+            request.OverrideStatus,
+            request.OverrideLateMinutes,
+            request.OverrideEarlyLeaveMinutes,
+            ct);
+
+        if (evaluated.IsFailure)
+        {
+            return Result.Failure<AttendanceRecordResponse>(evaluated.Error);
+        }
+
+        var eval = evaluated.Value;
+        var previousStatus = log.Status;
+        var previousCheckIn = log.CheckInTime;
+        var previousCheckOut = log.CheckOutTime;
+        var previousLateMinutes = log.LateMinutes;
+        var previousEarlyLeaveMinutes = log.EarlyLeaveMinutes;
+        var nowUtc = DateTimeOffset.UtcNow;
+
+        log.ShiftId = shift.Id;
+        log.CheckInTime = eval.CheckInTimeUtc;
+        log.CheckOutTime = eval.CheckOutTimeUtc;
+        log.LastSeenTime = eval.CheckOutTimeUtc ?? eval.CheckInTimeUtc;
+        log.Status = eval.Status;
+        log.LateMinutes = eval.LateMinutes;
+        log.EarlyLeaveMinutes = eval.EarlyLeaveMinutes;
+        log.IsManuallyAdjusted = true;
+        log.AdjustmentReason = trimmedReason;
+        log.AdjustedByUserId = actor.UserId;
+        log.AdjustedByName = string.IsNullOrWhiteSpace(actor.FullName) ? actor.Username : actor.FullName;
+        log.AdjustedAt = nowUtc;
+        log.UpdatedAt = nowUtc;
+
+        var actionType = string.Equals(eval.Status, "REVOKED", StringComparison.OrdinalIgnoreCase)
+            ? "REVOKE_PENALTY"
+            : "ADJUST";
+
+        dbContext.AttendanceAdjustmentAudits.Add(new AttendanceAdjustmentAudit
+        {
+            AttendanceLogId = log.Id,
+            EmployeeId = employee.EmployeeId,
+            EmployeeCode = employee.EmployeeCode,
+            EmployeeFullName = employee.FullName,
+            DepartmentId = employee.DepartmentId,
+            WorkDate = log.WorkDate,
+            ActionType = actionType,
+            PreviousStatus = previousStatus,
+            NewStatus = log.Status,
+            PreviousCheckInTime = previousCheckIn,
+            NewCheckInTime = log.CheckInTime,
+            PreviousCheckOutTime = previousCheckOut,
+            NewCheckOutTime = log.CheckOutTime,
+            PreviousLateMinutes = previousLateMinutes,
+            NewLateMinutes = log.LateMinutes,
+            PreviousEarlyLeaveMinutes = previousEarlyLeaveMinutes,
+            NewEarlyLeaveMinutes = log.EarlyLeaveMinutes,
+            PreviousSnapshotKey = log.CheckinSnapshotKey,
+            IsStatusOverridden = request.IsStatusOverridden,
+            Reason = trimmedReason,
+            SourceScreen = NormalizeSourceScreen(request.SourceScreen),
+            AdjustedByUserId = actor.UserId,
+            AdjustedByUsername = actor.Username,
+            AdjustedByName = log.AdjustedByName!,
+            AdjustedByRole = actor.Role,
+            CreatedAt = nowUtc
+        });
+
+        await dbContext.SaveChangesAsync(ct);
+
+        await eventBus.PublishAsync(new AttendanceLogAdjustedIntegrationEvent(
+            Guid.NewGuid(),
+            nowUtc,
+            log.Id,
+            employee.EmployeeId,
+            employee.EmployeeCode,
+            employee.DepartmentId,
+            employee.DepartmentCode,
+            log.WorkDate,
+            previousStatus,
+            previousLateMinutes,
+            log.Status,
+            log.LateMinutes,
+            actionType,
+            trimmedReason), ct);
+
+        return Result.Success(await MapAttendanceRecordResponseAsync(
+            log,
+            employee.FullName,
+            isDebounced: false,
+            message: trimmedReason,
+            ct,
+            employee.DepartmentId));
+    }
+
+    public async Task<Result<AttendanceRecordResponse>> CreateManualAttendanceLogAsync(
+        ManualAttendanceRequest request,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        var employee = await employeeLookup.GetByIdAsync(request.EmployeeId, ct);
+        if (employee is null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên để bổ sung công."));
+        }
+
+        var authError = ValidateAdjustmentAuthorization(actor, employee.DepartmentId, request.WorkDate);
+        if (authError is not null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(authError);
+        }
+
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < 5)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("INVALID_REASON", "Vui lòng nhập lý do bổ sung công tối thiểu 5 ký tự."));
+        }
+
+        var existingLog = await dbContext.AttendanceLogs
+            .FirstOrDefaultAsync(x => x.EmployeeId == employee.EmployeeId && x.WorkDate == request.WorkDate, ct);
+        if (existingLog is not null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("ATTENDANCE_LOG_EXISTS", $"Nhân viên {employee.EmployeeCode} đã có bản ghi chấm công ngày {request.WorkDate:dd/MM/yyyy}. Vui lòng dùng chức năng chỉnh sửa bản ghi hiện có."));
+        }
+
+        var shift = await ResolveShiftAsync(request.ShiftId, employee.DefaultShiftId, ct);
+        if (shift is null)
+        {
+            return Result.Failure<AttendanceRecordResponse>(
+                new Error("SHIFT_NOT_CONFIGURED", "Hệ thống chưa được cấu hình ca làm việc."));
+        }
+
+        var evaluated = await EvaluateAdjustedAttendanceAsync(
+            employee.EmployeeId,
+            request.WorkDate,
+            shift,
+            request.CheckInTime,
+            request.CheckOutTime,
+            request.IsStatusOverridden,
+            request.OverrideStatus,
+            request.OverrideLateMinutes,
+            request.OverrideEarlyLeaveMinutes,
+            ct);
+
+        if (evaluated.IsFailure)
+        {
+            return Result.Failure<AttendanceRecordResponse>(evaluated.Error);
+        }
+
+        var eval = evaluated.Value;
+        var nowUtc = DateTimeOffset.UtcNow;
+        var actorName = string.IsNullOrWhiteSpace(actor.FullName) ? actor.Username : actor.FullName;
+
+        var newLog = new AttendanceLog
+        {
+            EmployeeId = employee.EmployeeId,
+            EmployeeCode = employee.EmployeeCode,
+            ShiftId = shift.Id,
+            WorkDate = request.WorkDate,
+            CheckInTime = eval.CheckInTimeUtc,
+            CheckOutTime = eval.CheckOutTimeUtc,
+            LastSeenTime = eval.CheckOutTimeUtc ?? eval.CheckInTimeUtc,
+            Status = eval.Status,
+            LateMinutes = eval.LateMinutes,
+            EarlyLeaveMinutes = eval.EarlyLeaveMinutes,
+            MatchConfidence = 0f,
+            IsManuallyAdjusted = true,
+            AdjustmentReason = trimmedReason,
+            AdjustedByUserId = actor.UserId,
+            AdjustedByName = actorName,
+            AdjustedAt = nowUtc,
+            CreatedAt = nowUtc,
+            UpdatedAt = nowUtc
+        };
+
+        dbContext.AttendanceLogs.Add(newLog);
+
+        dbContext.AttendanceAdjustmentAudits.Add(new AttendanceAdjustmentAudit
+        {
+            AttendanceLogId = newLog.Id,
+            EmployeeId = employee.EmployeeId,
+            EmployeeCode = employee.EmployeeCode,
+            EmployeeFullName = employee.FullName,
+            DepartmentId = employee.DepartmentId,
+            WorkDate = newLog.WorkDate,
+            ActionType = "MANUAL_CREATE",
+            PreviousStatus = null,
+            NewStatus = newLog.Status,
+            PreviousCheckInTime = null,
+            NewCheckInTime = newLog.CheckInTime,
+            PreviousCheckOutTime = null,
+            NewCheckOutTime = newLog.CheckOutTime,
+            PreviousLateMinutes = 0,
+            NewLateMinutes = newLog.LateMinutes,
+            PreviousEarlyLeaveMinutes = 0,
+            NewEarlyLeaveMinutes = newLog.EarlyLeaveMinutes,
+            PreviousSnapshotKey = null,
+            IsStatusOverridden = request.IsStatusOverridden,
+            Reason = trimmedReason,
+            SourceScreen = NormalizeSourceScreen(request.SourceScreen),
+            AdjustedByUserId = actor.UserId,
+            AdjustedByUsername = actor.Username,
+            AdjustedByName = actorName,
+            AdjustedByRole = actor.Role,
+            CreatedAt = nowUtc
+        });
+
+        await dbContext.SaveChangesAsync(ct);
+
+        await eventBus.PublishAsync(new AttendanceLogAdjustedIntegrationEvent(
+            Guid.NewGuid(),
+            nowUtc,
+            newLog.Id,
+            employee.EmployeeId,
+            employee.EmployeeCode,
+            employee.DepartmentId,
+            employee.DepartmentCode,
+            newLog.WorkDate,
+            PreviousStatus: null,
+            PreviousLateMinutes: 0,
+            NewStatus: newLog.Status,
+            NewLateMinutes: newLog.LateMinutes,
+            ActionType: "MANUAL_CREATE",
+            Reason: trimmedReason), ct);
+
+        return Result.Success(await MapAttendanceRecordResponseAsync(
+            newLog,
+            employee.FullName,
+            isDebounced: false,
+            message: trimmedReason,
+            ct,
+            employee.DepartmentId));
+    }
+
+    public async Task<Result<CancelAttendanceResponse>> CancelAttendanceLogAsync(
+        Guid attendanceLogId,
+        CancelAttendanceRequest request,
+        ActorContext actor,
+        CancellationToken ct = default)
+    {
+        var log = await dbContext.AttendanceLogs.FirstOrDefaultAsync(x => x.Id == attendanceLogId, ct);
+        if (log is null)
+        {
+            return Result.Failure<CancelAttendanceResponse>(
+                new Error("ATTENDANCE_LOG_NOT_FOUND", "Không tìm thấy bản ghi chấm công cần hủy."));
+        }
+
+        var employee = await employeeLookup.GetByIdAsync(log.EmployeeId, ct);
+        if (employee is null)
+        {
+            return Result.Failure<CancelAttendanceResponse>(
+                new Error("EMPLOYEE_NOT_FOUND", "Không tìm thấy hồ sơ nhân viên tương ứng với bản ghi chấm công."));
+        }
+
+        var authError = ValidateAdjustmentAuthorization(actor, employee.DepartmentId, log.WorkDate);
+        if (authError is not null)
+        {
+            return Result.Failure<CancelAttendanceResponse>(authError);
+        }
+
+        var cancelMode = (request.CancelMode ?? string.Empty).Trim().ToUpperInvariant();
+        if (!AllowedCancelModes.Contains(cancelMode))
+        {
+            return Result.Failure<CancelAttendanceResponse>(
+                new Error("INVALID_CANCEL_MODE", "Chế độ hủy công không hợp lệ. Chỉ chấp nhận VOID_ERRONEOUS hoặc REVOKE_PENALTY."));
+        }
+
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < 5)
+        {
+            return Result.Failure<CancelAttendanceResponse>(
+                new Error("INVALID_REASON", "Vui lòng nhập lý do hủy công tối thiểu 5 ký tự."));
+        }
+
+        var nowUtc = DateTimeOffset.UtcNow;
+        var actorName = string.IsNullOrWhiteSpace(actor.FullName) ? actor.Username : actor.FullName;
+        var previousStatus = log.Status;
+        var previousLateMinutes = log.LateMinutes;
+        var previousEarlyLeaveMinutes = log.EarlyLeaveMinutes;
+        var previousCheckIn = log.CheckInTime;
+        var previousCheckOut = log.CheckOutTime;
+        var previousSnapshotKey = log.CheckinSnapshotKey;
+
+        if (cancelMode == "VOID_ERRONEOUS")
+        {
+            dbContext.AttendanceAdjustmentAudits.Add(new AttendanceAdjustmentAudit
+            {
+                AttendanceLogId = log.Id,
+                EmployeeId = employee.EmployeeId,
+                EmployeeCode = employee.EmployeeCode,
+                EmployeeFullName = employee.FullName,
+                DepartmentId = employee.DepartmentId,
+                WorkDate = log.WorkDate,
+                ActionType = "VOID_ERRONEOUS",
+                PreviousStatus = previousStatus,
+                NewStatus = null,
+                PreviousCheckInTime = previousCheckIn,
+                NewCheckInTime = null,
+                PreviousCheckOutTime = previousCheckOut,
+                NewCheckOutTime = null,
+                PreviousLateMinutes = previousLateMinutes,
+                NewLateMinutes = 0,
+                PreviousEarlyLeaveMinutes = previousEarlyLeaveMinutes,
+                NewEarlyLeaveMinutes = 0,
+                PreviousSnapshotKey = previousSnapshotKey,
+                IsStatusOverridden = false,
+                Reason = trimmedReason,
+                SourceScreen = NormalizeSourceScreen(request.SourceScreen),
+                AdjustedByUserId = actor.UserId,
+                AdjustedByUsername = actor.Username,
+                AdjustedByName = actorName,
+                AdjustedByRole = actor.Role,
+                CreatedAt = nowUtc
+            });
+
+            dbContext.AttendanceLogs.Remove(log);
+            await dbContext.SaveChangesAsync(ct);
+
+            await eventBus.PublishAsync(new AttendanceLogRemovedIntegrationEvent(
+                Guid.NewGuid(),
+                nowUtc,
+                log.Id,
+                employee.EmployeeId,
+                employee.EmployeeCode,
+                employee.DepartmentId,
+                log.WorkDate,
+                previousStatus,
+                previousLateMinutes,
+                employee.DepartmentCode,
+                trimmedReason), ct);
+
+            return Result.Success(new CancelAttendanceResponse(
+                log.Id,
+                employee.EmployeeId,
+                employee.EmployeeCode,
+                log.WorkDate,
+                cancelMode,
+                previousStatus,
+                NewStatus: null,
+                trimmedReason,
+                "Đã gỡ bản ghi chấm công bị ghi nhầm và lưu đầy đủ vết kiểm toán."));
+        }
+
+        // Chế độ 2: REVOKE_PENALTY (Phạt kỷ luật / Trừ toàn bộ lương ngày công — giữ bản ghi đối chứng, chuyển trạng thái REVOKED)
+        if (string.Equals(log.Status, "REVOKED", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<CancelAttendanceResponse>(
+                new Error("ALREADY_REVOKED", "Bản ghi chấm công này đã ở trạng thái Hủy công (Trừ lương)."));
+        }
+
+        log.Status = "REVOKED";
+        log.LateMinutes = 0;
+        log.EarlyLeaveMinutes = 0;
+        log.IsManuallyAdjusted = true;
+        log.AdjustmentReason = trimmedReason;
+        log.AdjustedByUserId = actor.UserId;
+        log.AdjustedByName = actorName;
+        log.AdjustedAt = nowUtc;
+        log.UpdatedAt = nowUtc;
+
+        dbContext.AttendanceAdjustmentAudits.Add(new AttendanceAdjustmentAudit
+        {
+            AttendanceLogId = log.Id,
+            EmployeeId = employee.EmployeeId,
+            EmployeeCode = employee.EmployeeCode,
+            EmployeeFullName = employee.FullName,
+            DepartmentId = employee.DepartmentId,
+            WorkDate = log.WorkDate,
+            ActionType = "REVOKE_PENALTY",
+            PreviousStatus = previousStatus,
+            NewStatus = "REVOKED",
+            PreviousCheckInTime = previousCheckIn,
+            NewCheckInTime = log.CheckInTime,
+            PreviousCheckOutTime = previousCheckOut,
+            NewCheckOutTime = log.CheckOutTime,
+            PreviousLateMinutes = previousLateMinutes,
+            NewLateMinutes = 0,
+            PreviousEarlyLeaveMinutes = previousEarlyLeaveMinutes,
+            NewEarlyLeaveMinutes = 0,
+            PreviousSnapshotKey = previousSnapshotKey,
+            IsStatusOverridden = true,
+            Reason = trimmedReason,
+            SourceScreen = NormalizeSourceScreen(request.SourceScreen),
+            AdjustedByUserId = actor.UserId,
+            AdjustedByUsername = actor.Username,
+            AdjustedByName = actorName,
+            AdjustedByRole = actor.Role,
+            CreatedAt = nowUtc
+        });
+
+        await dbContext.SaveChangesAsync(ct);
+
+        await eventBus.PublishAsync(new AttendanceLogAdjustedIntegrationEvent(
+            Guid.NewGuid(),
+            nowUtc,
+            log.Id,
+            employee.EmployeeId,
+            employee.EmployeeCode,
+            employee.DepartmentId,
+            employee.DepartmentCode,
+            log.WorkDate,
+            previousStatus,
+            previousLateMinutes,
+            "REVOKED",
+            NewLateMinutes: 0,
+            ActionType: "REVOKE_PENALTY",
+            Reason: trimmedReason), ct);
+
+        var updatedRecord = await MapAttendanceRecordResponseAsync(
+            log,
+            employee.FullName,
+            isDebounced: false,
+            message: trimmedReason,
+            ct,
+            employee.DepartmentId);
+
+        return Result.Success(new CancelAttendanceResponse(
+            log.Id,
+            employee.EmployeeId,
+            employee.EmployeeCode,
+            log.WorkDate,
+            cancelMode,
+            previousStatus,
+            NewStatus: "REVOKED",
+            trimmedReason,
+            "Đã hủy công (trừ lương ngày công) và giữ nguyên giờ/ảnh đối chứng.",
+            updatedRecord));
+    }
+
+    public async Task<Result<IReadOnlyList<AttendanceAdjustmentAuditResponse>>> GetAttendanceAuditsAsync(
+        ActorContext actor,
+        Guid? employeeId = null,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        CancellationToken ct = default)
+    {
+        if (!AllowedAdjustmentRoles.Contains(actor.Role))
+        {
+            return Result.Failure<IReadOnlyList<AttendanceAdjustmentAuditResponse>>(
+                new Error("FORBIDDEN_ROLE", "Vai trò của bạn không có quyền xem lịch sử điều chỉnh công."));
+        }
+
+        IQueryable<AttendanceAdjustmentAudit> query = dbContext.AttendanceAdjustmentAudits;
+
+        if (string.Equals(actor.Role, "DEPT_LEAD", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!actor.DepartmentId.HasValue)
+            {
+                return Result.Failure<IReadOnlyList<AttendanceAdjustmentAuditResponse>>(
+                    new Error("FORBIDDEN_DEPARTMENT", "Tài khoản Trưởng bộ phận chưa được gán phòng ban."));
+            }
+
+            var deptId = actor.DepartmentId.Value;
+            query = query.Where(a => a.DepartmentId == deptId);
+        }
+
+        if (employeeId.HasValue)
+        {
+            query = query.Where(a => a.EmployeeId == employeeId.Value);
+        }
+
+        if (fromDate.HasValue || toDate.HasValue)
+        {
+            var start = fromDate ?? toDate!.Value;
+            var end = toDate ?? fromDate!.Value;
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            query = query.Where(a => a.WorkDate >= start && a.WorkDate <= end);
+        }
+
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(500)
+            .Select(a => new AttendanceAdjustmentAuditResponse(
+                a.Id,
+                a.AttendanceLogId,
+                a.EmployeeId,
+                a.EmployeeCode,
+                a.EmployeeFullName,
+                a.DepartmentId,
+                a.WorkDate,
+                a.ActionType,
+                a.PreviousStatus,
+                a.NewStatus,
+                a.PreviousCheckInTime,
+                a.NewCheckInTime,
+                a.PreviousCheckOutTime,
+                a.NewCheckOutTime,
+                a.PreviousLateMinutes,
+                a.NewLateMinutes,
+                a.PreviousEarlyLeaveMinutes,
+                a.NewEarlyLeaveMinutes,
+                a.IsStatusOverridden,
+                a.Reason,
+                a.SourceScreen,
+                a.AdjustedByUserId,
+                a.AdjustedByUsername,
+                a.AdjustedByName,
+                a.AdjustedByRole,
+                a.CreatedAt))
+            .ToListAsync(ct);
+
+        return Result.Success<IReadOnlyList<AttendanceAdjustmentAuditResponse>>(items);
+    }
+
+    public static DateOnly GetStartOfCurrentWeek(DateOnly today)
+    {
+        var dayOfWeek = (int)today.DayOfWeek;
+        var daysFromMonday = dayOfWeek == 0 ? 6 : dayOfWeek - 1;
+        return today.AddDays(-daysFromMonday);
+    }
+
+    public static Error? ValidateAdjustmentAuthorization(
+        ActorContext actor,
+        Guid targetDepartmentId,
+        DateOnly workDate,
+        DateOnly? referenceToday = null)
+    {
+        if (!AllowedAdjustmentRoles.Contains(actor.Role))
+        {
+            return new Error("FORBIDDEN_ROLE", "Chỉ ADMIN, HR hoặc Trưởng bộ phận (DEPT_LEAD) mới có quyền điều chỉnh/hủy công.");
+        }
+
+        if (string.Equals(actor.Role, "DEPT_LEAD", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!actor.DepartmentId.HasValue || actor.DepartmentId.Value != targetDepartmentId)
+            {
+                return new Error("FORBIDDEN_DEPARTMENT", "Trưởng bộ phận chỉ được phép chỉnh sửa hoặc hủy công cho nhân sự thuộc phòng ban của mình.");
+            }
+        }
+
+        var today = referenceToday ?? VietnamDateTime.Today;
+        if (workDate > today)
+        {
+            return new Error("INVALID_WORK_DATE", "Không thể chỉnh sửa hoặc bổ sung công cho ngày trong tương lai.");
+        }
+
+        var currentWeekStart = GetStartOfCurrentWeek(today);
+        if (workDate < currentWeekStart && !string.Equals(actor.Role, "ADMIN", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Error(
+                "FORBIDDEN_HISTORICAL_LOCK",
+                $"Dữ liệu công từ tuần trước trở về trước (trước ngày {currentWeekStart:dd/MM/yyyy}) đã bị khóa. Chỉ Quản trị viên (ADMIN) mới có quyền chỉnh sửa hoặc hủy.");
+        }
+
+        return null;
+    }
+
+    private async Task<Shift?> ResolveShiftAsync(Guid? requestedShiftId, Guid? defaultShiftId, CancellationToken ct)
+    {
+        Shift? shift = null;
+        if (requestedShiftId.HasValue)
+        {
+            shift = await dbContext.Shifts.FirstOrDefaultAsync(s => s.Id == requestedShiftId.Value, ct);
+        }
+
+        if (shift is null && defaultShiftId.HasValue)
+        {
+            shift = await dbContext.Shifts.FirstOrDefaultAsync(s => s.Id == defaultShiftId.Value, ct);
+        }
+
+        return shift ?? await dbContext.Shifts.OrderByDescending(s => s.IsDefault).FirstOrDefaultAsync(ct);
+    }
+
+    private async Task<(TimeOnly EffectiveStartTime, TimeOnly EffectiveEndTime)> ResolveEffectiveShiftWindowAsync(
+        Guid employeeId,
+        DateOnly workDate,
+        Shift shift,
+        CancellationToken ct)
+    {
+        var approvedLeavesToday = await dbContext.LeaveRequests
+            .Where(l => l.EmployeeId == employeeId &&
+                        l.ApprovalStatus == "APPROVED" &&
+                        l.StartDate <= workDate &&
+                        l.EndDate >= workDate)
+            .ToListAsync(ct);
+
+        var effectiveStartTime = shift.StartTime;
+        var effectiveEndTime = shift.EndTime;
+
+        foreach (var lv in approvedLeavesToday.OrderBy(x => x.StartDate).ThenBy(x => x.StartTime))
+        {
+            var dayStart = lv.StartDate < workDate ? TimeOnly.MinValue : lv.StartTime;
+            var dayEnd = lv.EndDate > workDate ? TimeOnly.MaxValue : lv.EndTime;
+            if (dayStart <= effectiveStartTime && dayEnd > effectiveStartTime)
+            {
+                effectiveStartTime = dayEnd < shift.EndTime ? dayEnd : shift.EndTime;
+            }
+        }
+
+        foreach (var lv in approvedLeavesToday.OrderByDescending(x => x.EndDate).ThenByDescending(x => x.EndTime))
+        {
+            var dayStart = lv.StartDate < workDate ? TimeOnly.MinValue : lv.StartTime;
+            var dayEnd = lv.EndDate > workDate ? TimeOnly.MaxValue : lv.EndTime;
+            if (dayEnd >= effectiveEndTime && dayStart < effectiveEndTime)
+            {
+                effectiveEndTime = dayStart > shift.StartTime ? dayStart : shift.StartTime;
+            }
+        }
+
+        return (effectiveStartTime, effectiveEndTime);
+    }
+
+    private sealed record EvaluatedAttendance(
+        DateTimeOffset? CheckInTimeUtc,
+        DateTimeOffset? CheckOutTimeUtc,
+        string Status,
+        int LateMinutes,
+        int EarlyLeaveMinutes);
+
+    private async Task<Result<EvaluatedAttendance>> EvaluateAdjustedAttendanceAsync(
+        Guid employeeId,
+        DateOnly workDate,
+        Shift shift,
+        DateTimeOffset? checkInTime,
+        DateTimeOffset? checkOutTime,
+        bool isStatusOverridden,
+        string? overrideStatus,
+        int? overrideLateMinutes,
+        int? overrideEarlyLeaveMinutes,
+        CancellationToken ct)
+    {
+        var checkInUtc = checkInTime?.ToUniversalTime();
+        var checkOutUtc = checkOutTime?.ToUniversalTime();
+
+        if (checkInUtc.HasValue && checkOutUtc.HasValue && checkOutUtc.Value <= checkInUtc.Value)
+        {
+            return Result.Failure<EvaluatedAttendance>(
+                new Error("INVALID_TIME_RANGE", "Giờ ra (Check-out) phải lớn hơn giờ vào (Check-in)."));
+        }
+
+        var (effectiveStartTime, effectiveEndTime) = await ResolveEffectiveShiftWindowAsync(
+            employeeId,
+            workDate,
+            shift,
+            ct);
+
+        string computedStatus;
+        int computedLateMinutes = 0;
+        int computedEarlyLeaveMinutes = 0;
+
+        if (!checkInUtc.HasValue)
+        {
+            if (checkOutUtc.HasValue && !isStatusOverridden)
+            {
+                return Result.Failure<EvaluatedAttendance>(
+                    new Error("CHECKIN_REQUIRED", "Vui lòng nhập giờ vào (Check-in) khi đã có giờ ra (Check-out)."));
+            }
+
+            computedStatus = "ABSENT";
+        }
+        else
+        {
+            var checkInLocal = VietnamDateTime.ToVietnamTimeOnly(checkInUtc.Value);
+            var latestAllowedTime = effectiveStartTime.AddMinutes(shift.GraceMinutes);
+            var isLate = checkInLocal > latestAllowedTime;
+            computedLateMinutes = isLate
+                ? Math.Max(1, (int)Math.Ceiling((checkInLocal - effectiveStartTime).TotalMinutes))
+                : 0;
+            computedStatus = isLate ? "LATE" : "ON_TIME";
+
+            if (checkOutUtc.HasValue)
+            {
+                var checkOutLocal = VietnamDateTime.ToVietnamTimeOnly(checkOutUtc.Value);
+                if (checkOutLocal < effectiveEndTime)
+                {
+                    computedEarlyLeaveMinutes = Math.Max(1, (int)Math.Ceiling((effectiveEndTime - checkOutLocal).TotalMinutes));
+                    if (computedStatus == "ON_TIME")
+                    {
+                        computedStatus = "EARLY_LEAVE";
+                    }
+                }
+            }
+        }
+
+        if (!isStatusOverridden)
+        {
+            return Result.Success(new EvaluatedAttendance(
+                checkInUtc,
+                checkOutUtc,
+                computedStatus,
+                computedLateMinutes,
+                computedEarlyLeaveMinutes));
+        }
+
+        var normalizedOverride = (overrideStatus ?? string.Empty).Trim().ToUpperInvariant();
+        if (!AllowedAttendanceStatuses.Contains(normalizedOverride))
+        {
+            return Result.Failure<EvaluatedAttendance>(
+                new Error("INVALID_STATUS", $"Trạng thái ghi đè '{overrideStatus}' không hợp lệ."));
+        }
+
+        if (normalizedOverride == "ABSENT")
+        {
+            return Result.Success(new EvaluatedAttendance(null, null, "ABSENT", 0, 0));
+        }
+
+        if (normalizedOverride == "REVOKED")
+        {
+            return Result.Success(new EvaluatedAttendance(checkInUtc, checkOutUtc, "REVOKED", 0, 0));
+        }
+
+        if (normalizedOverride == "ON_TIME")
+        {
+            return Result.Success(new EvaluatedAttendance(
+                checkInUtc,
+                checkOutUtc,
+                "ON_TIME",
+                Math.Max(0, overrideLateMinutes ?? 0),
+                Math.Max(0, overrideEarlyLeaveMinutes ?? 0)));
+        }
+
+        return Result.Success(new EvaluatedAttendance(
+            checkInUtc,
+            checkOutUtc,
+            normalizedOverride,
+            Math.Max(0, overrideLateMinutes ?? computedLateMinutes),
+            Math.Max(0, overrideEarlyLeaveMinutes ?? computedEarlyLeaveMinutes)));
+    }
+
+    private static string? NormalizeSourceScreen(string? sourceScreen)
+    {
+        if (string.IsNullOrWhiteSpace(sourceScreen))
+        {
+            return null;
+        }
+
+        var trimmed = sourceScreen.Trim().ToUpperInvariant();
+        return trimmed.Length > 50 ? trimmed[..50] : trimmed;
     }
 
     public async Task<Result<AttendanceSnapshotUploadResponse>> UploadAttendanceSnapshotAsync(
@@ -518,7 +1310,10 @@ public sealed class AttendanceService(
                     log.EmployeeCode,
                     employee.DepartmentId,
                     log.WorkDate,
-                    log.Status));
+                    log.Status,
+                    log.LateMinutes,
+                    employee.DepartmentCode,
+                    leave.Reason));
                 continue;
             }
 
@@ -538,7 +1333,10 @@ public sealed class AttendanceService(
                         log.EmployeeCode,
                         employee.DepartmentId,
                         log.WorkDate,
-                        log.Status));
+                        log.Status,
+                        log.LateMinutes,
+                        employee.DepartmentCode,
+                        leave.Reason));
                     continue;
                 }
             }
@@ -911,7 +1709,8 @@ public sealed class AttendanceService(
         string fullName,
         bool isDebounced,
         string message,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid? departmentId = null)
     {
         string? snapshotPresignedUrl = null;
         if (!string.IsNullOrWhiteSpace(log.CheckinSnapshotKey))
@@ -938,7 +1737,13 @@ public sealed class AttendanceService(
             isDebounced,
             message,
             log.CheckinSnapshotKey,
-            snapshotPresignedUrl);
+            snapshotPresignedUrl,
+            log.IsManuallyAdjusted,
+            log.AdjustmentReason,
+            log.AdjustedByUserId,
+            log.AdjustedByName,
+            log.AdjustedAt,
+            departmentId);
     }
 
     public async Task<bool> HasEmployeeCheckedInTodayAsync(
@@ -951,7 +1756,8 @@ public sealed class AttendanceService(
             .AnyAsync(x => x.EmployeeId == employeeId &&
                            (x.WorkDate == workDate || x.WorkDate == previousDate) &&
                            x.CheckInTime != null &&
-                           x.Status != "ABSENT", ct);
+                           x.Status != "ABSENT" &&
+                           x.Status != "REVOKED", ct);
     }
 
     public async Task<WorkScheduleValidationResult> ValidateEmployeePresenceTimeAsync(

@@ -46,7 +46,8 @@ public sealed record DailyDepartmentSummaryDto(
     int ProlongedAwayEvents,
     int SecurityAlertsCount,
     double AttendanceRatePercent,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int RevokedCount = 0);
 
 public sealed record MonthlyDepartmentReportDto(
     int Year,
@@ -58,7 +59,8 @@ public sealed record MonthlyDepartmentReportDto(
     int TotalAbsentManDays,
     int TotalProlongedAwayEvents,
     int TotalSecurityAlerts,
-    IReadOnlyList<DailyDepartmentSummaryDto> DailyBreakdown);
+    IReadOnlyList<DailyDepartmentSummaryDto> DailyBreakdown,
+    int TotalRevokedManDays = 0);
 
 public sealed record WeeklyDepartmentReportDto(
     DateOnly StartDate,
@@ -72,5 +74,6 @@ public sealed record WeeklyDepartmentReportDto(
     int TotalAbsentManDays,
     int TotalProlongedAwayEvents,
     int TotalSecurityAlerts,
-    IReadOnlyList<DailyDepartmentSummaryDto> DailyBreakdown);
+    IReadOnlyList<DailyDepartmentSummaryDto> DailyBreakdown,
+    int TotalRevokedManDays = 0);
 
