@@ -43,9 +43,17 @@ export function DashboardPage({ session }: { session: Session }) {
         second: '2-digit',
       })
       const isAbsent = evt.status === 'ABSENT'
+      const isRevoked = evt.status === 'REVOKED'
+      const isVoided = evt.status === 'VOIDED'
       const label = isAbsent
         ? `Đã chốt vắng mặt (${evt.employeeCode})`
-        : `Vừa ghi nhận chấm công (${evt.employeeCode} - ${evt.status})`
+        : isRevoked
+          ? `Đã hủy công trừ lương (${evt.employeeCode})`
+          : isVoided
+            ? `Đã gỡ bản ghi công nhầm (${evt.employeeCode})`
+            : evt.actionType
+              ? `Đã điều chỉnh công (${evt.employeeCode} → ${evt.status})`
+              : `Vừa ghi nhận chấm công (${evt.employeeCode} - ${evt.status})`
       setRealtimeNotice(`⚡ ${label} lúc ${timeStr}. Số liệu đã tự động cập nhật!`)
       const timer = setTimeout(() => setRealtimeNotice(null), 5000)
       return () => clearTimeout(timer)
@@ -134,6 +142,7 @@ export function DashboardPage({ session }: { session: Session }) {
                       <th scope="col" className="numeric">Đúng giờ</th>
                       <th scope="col" className="numeric">Đi muộn</th>
                       <th scope="col" className="numeric">Vắng mặt</th>
+                      <th scope="col" className="numeric">Hủy công</th>
                     </>}
                   </tr>
                 </thead>
@@ -146,6 +155,7 @@ export function DashboardPage({ session }: { session: Session }) {
                         <td className="numeric">{onTimeCount(row).toLocaleString('vi-VN')}</td>
                         <td className="numeric">{row.lateCount.toLocaleString('vi-VN')}</td>
                         <td className="numeric">{row.absentCount.toLocaleString('vi-VN')}</td>
+                        <td className="numeric">{(row.revokedCount ?? 0).toLocaleString('vi-VN')}</td>
                       </>}
                     </tr>
                   ))}

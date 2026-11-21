@@ -36,6 +36,8 @@ export interface AttendanceRecordedEvent {
   status: string
   lateMinutes: number
   isFirstCheckInOfDay: boolean
+  actionType?: string
+  reason?: string
 }
 export type AttendanceRecordedListener = (event: AttendanceRecordedEvent) => void
 

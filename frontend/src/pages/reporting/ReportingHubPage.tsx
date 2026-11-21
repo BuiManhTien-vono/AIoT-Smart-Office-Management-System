@@ -26,9 +26,12 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { KpiStatCards } from '../../components/common/KpiStatCards'
 import type { KpiStat } from '../../components/common/KpiStatCards'
 import { useQuery } from '../../components/common/useQuery'
+import { AttendanceAdjustmentModal } from '../../components/attendance/AttendanceAdjustmentModal'
 import { AttendanceCharts } from '../../components/reporting/AttendanceCharts'
 import { WeeklyTrendChart } from '../../components/reporting/WeeklyTrendChart'
 import {
+  evaluateAttendanceEditPermission,
+  listAttendanceAudits,
   listAttendanceLogs,
   listLeaves,
   listShifts,
@@ -63,8 +66,8 @@ import {
   listSecurityIncidents,
 } from '../../services/securityService'
 import { signalrService } from '../../services/signalrService'
-import { attendanceStatusLabels } from '../../types/attendance.types'
-import type { AttendanceRecord, LeaveRequest, Shift } from '../../types/attendance.types'
+import { attendanceStatusLabels, auditActionLabels } from '../../types/attendance.types'
+import type { AttendanceAdjustmentAudit, AttendanceRecord, LeaveRequest, Shift } from '../../types/attendance.types'
 import type { Session } from '../../types/auth.types'
 import type { Employee } from '../../types/biometrics.types'
 import type { Camera, Seat, SeatOccupancyLog } from '../../types/occupancy.types'
@@ -704,8 +707,14 @@ export function ReportingHubPage({ session }: { session: Session }) {
   const [specialFilter, setSpecialFilter] = useState<TimesheetSpecialFilter>('ALL')
   const [sortBy, setSortBy] = useState<TimesheetSortBy>('DEFAULT')
   const [overviewChartMode, setOverviewChartMode] = useState<'department' | 'weekly_trend'>('department')
-  const [timesheetSubView, setTimesheetSubView] = useState<'table' | 'roster_cards' | 'gate_logs'>('table')
+  const [timesheetSubView, setTimesheetSubView] = useState<'table' | 'roster_cards' | 'gate_logs' | 'adjustment_audits'>('table')
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null)
+  const [showAdjustModal, setShowAdjustModal] = useState(false)
+  const [adjustingRecord, setAdjustingRecord] = useState<AttendanceRecord | null>(null)
+  const [adjustDefaultEmployeeId, setAdjustDefaultEmployeeId] = useState<string>('')
+  const [adjustDefaultDate, setAdjustDefaultDate] = useState<string>('')
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditPageSize, setAuditPageSize] = useState(15)
   const [occupancySubView, setOccupancySubView] = useState<'seats' | 'transitions'>('seats')
   const [securitySubView, setSecuritySubView] = useState<'ot_list' | 'incidents'>('ot_list')
   const [printMode, setPrintMode] = useState<'exceptions_only' | 'top_50' | 'all'>('exceptions_only')
@@ -849,10 +858,13 @@ export function ReportingHubPage({ session }: { session: Session }) {
     return queryCustomRange.data?.key === key ? queryCustomRange.data.rows : []
   }, [queryCustomRange.data, periodBounds.fromDate, periodBounds.toDate, departmentId])
 
+  const canManageAdjustments =
+    session.user.role === 'ADMIN' || session.user.role === 'HR' || session.user.role === 'DEPT_LEAD'
+
   // 3. Dữ liệu chi tiết từ các phân hệ Biometrics, Attendance, Occupancy, Security
   const loadOperationalData = useCallback(async (signal: AbortSignal) => {
     departmentScope(session)
-    const [employees, attendanceLogs, leaveRequests, shifts, cameras, seats, occupancyLogs, incidents, otRegistrations] =
+    const [employees, attendanceLogs, leaveRequests, shifts, cameras, seats, occupancyLogs, incidents, otRegistrations, attendanceAudits] =
       await Promise.all([
         listEmployees(session.accessToken, departmentId, signal).catch(() => [] as Employee[]),
         listAttendanceLogs(session.accessToken, undefined, signal, {
@@ -866,6 +878,13 @@ export function ReportingHubPage({ session }: { session: Session }) {
         listOccupancyLogs(session.accessToken, 150, undefined, signal).catch(() => [] as SeatOccupancyLog[]),
         listSecurityIncidents(session.accessToken, { limit: 200 }, signal).catch(() => [] as SecurityIncident[]),
         listOtRegistrations(session.accessToken, undefined, signal).catch(() => [] as OtRegistration[]),
+        canManageAdjustments
+          ? listAttendanceAudits(
+              session.accessToken,
+              { fromDate: periodBounds.fromDate, toDate: periodBounds.toDate },
+              signal,
+            ).catch(() => [] as AttendanceAdjustmentAudit[])
+          : Promise.resolve([] as AttendanceAdjustmentAudit[]),
       ])
 
     return {
@@ -879,8 +898,9 @@ export function ReportingHubPage({ session }: { session: Session }) {
       occupancyLogs,
       incidents,
       otRegistrations,
+      attendanceAudits,
     }
-  }, [session, departmentId, periodBounds.fromDate, periodBounds.toDate])
+  }, [session, departmentId, periodBounds.fromDate, periodBounds.toDate, canManageAdjustments])
 
   const queryOperational = useQuery(loadOperationalData)
   const opData = queryOperational.data
@@ -906,6 +926,28 @@ export function ReportingHubPage({ session }: { session: Session }) {
     noticeTimerRef.current = window.setTimeout(() => setRealtimeNotice(null), 6000)
   }, [])
 
+  const handleOpenManualAttendance = (empId?: string, dateStr?: string) => {
+    setAdjustingRecord(null)
+    setAdjustDefaultEmployeeId(empId ?? effectiveEmployeeId ?? '')
+    const fallbackDate = periodBounds.toDate <= todayStr ? periodBounds.toDate : todayStr
+    setAdjustDefaultDate(dateStr ?? (periodMode === 'daily' ? selectedDate : fallbackDate))
+    setShowAdjustModal(true)
+  }
+
+  const handleOpenAdjustRecord = (record: AttendanceRecord) => {
+    setAdjustingRecord(record)
+    setAdjustDefaultEmployeeId(record.employeeId)
+    setAdjustDefaultDate(record.workDate)
+    setShowAdjustModal(true)
+  }
+
+  const handleAdjustmentSuccess = (notice?: string) => {
+    handleRefresh()
+    if (notice) {
+      pushRealtimeToast(notice)
+    }
+  }
+
   useEffect(() => {
     const unsubAtt = signalrService.onAttendanceRecorded(evt => {
       handleRefresh()
@@ -916,7 +958,13 @@ export function ReportingHubPage({ session }: { session: Session }) {
       })
       const label = evt.status === 'ABSENT'
         ? `Đã chốt vắng mặt (${evt.employeeCode})`
-        : `Vừa ghi nhận chấm công (${evt.employeeCode} · ${evt.status})`
+        : evt.status === 'REVOKED'
+          ? `Đã phạt hủy công trừ lương (${evt.employeeCode})`
+          : evt.status === 'VOIDED'
+            ? `Đã gỡ bản ghi công nhầm (${evt.employeeCode})`
+            : evt.actionType
+              ? `Đã điều chỉnh công (${evt.employeeCode} · ${evt.status})`
+              : `Vừa ghi nhận chấm công (${evt.employeeCode} · ${evt.status})`
       pushRealtimeToast(`⚡ ${label} lúc ${timeStr}. Số liệu báo cáo vừa tự động cập nhật!`)
     })
 
@@ -1131,10 +1179,34 @@ export function ReportingHubPage({ session }: { session: Session }) {
     return periodAttendanceLogs.filter(log => {
       if (effectiveEmployeeId && log.employeeId !== effectiveEmployeeId) return false
       if (!normalizedSearch) return true
-      const hay = `${log.employeeCode} ${log.employeeFullName} ${log.status}`.toLowerCase()
+      const hay = `${log.employeeCode} ${log.employeeFullName} ${log.status} ${log.adjustmentReason ?? ''}`.toLowerCase()
       return hay.includes(normalizedSearch)
     })
   }, [periodAttendanceLogs, effectiveEmployeeId, normalizedSearch])
+
+  const logsByEmployeeMap = useMemo(() => {
+    const map = new Map<string, AttendanceRecord[]>()
+    for (const log of periodAttendanceLogs) {
+      const list = map.get(log.employeeId) ?? []
+      list.push(log)
+      map.set(log.employeeId, list)
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => b.workDate.localeCompare(a.workDate))
+    }
+    return map
+  }, [periodAttendanceLogs])
+
+  const scopedAudits = useMemo(() => {
+    const raw = opData?.attendanceAudits ?? []
+    return raw.filter(a => {
+      if (departmentId && a.departmentId !== departmentId) return false
+      if (effectiveEmployeeId && a.employeeId !== effectiveEmployeeId) return false
+      if (!normalizedSearch) return true
+      const hay = `${a.employeeCode} ${a.employeeFullName} ${a.actionType} ${a.reason} ${a.adjustedByName}`.toLowerCase()
+      return hay.includes(normalizedSearch)
+    })
+  }, [opData?.attendanceAudits, departmentId, effectiveEmployeeId, normalizedSearch])
 
   // Tổng hợp Occupancy & Space Utilization
   const periodProlongedEvents = useMemo(
@@ -1227,6 +1299,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
     (sortBy !== 'DEFAULT' ? 1 : 0)
 
   const pagedAttLogs = paginateSlice(scopedAttendanceLogs, attLogPage, attLogPageSize)
+  const pagedAudits = paginateSlice(scopedAudits, auditPage, auditPageSize)
   const pagedSeats = paginateSlice(filteredSeatRows, seatPage, seatPageSize)
   const pagedOccLogs = paginateSlice(scopedOccupancyLogs, occLogPage, occLogPageSize)
   const pagedOtList = paginateSlice(filteredOtList, otPage, otPageSize)
@@ -1239,6 +1312,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
         r =>
           r.approvedLeaveDays > 0 ||
           r.absentDays > 0 ||
+          r.revokedDays > 0 ||
           r.lateDays > 0 ||
           r.earlyLeaveDays > 0 ||
           r.approvedOtHours > 0 ||
@@ -1278,6 +1352,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
     const totalLateDays = allTimesheetRows.reduce((s, r) => s + r.lateDays, 0)
     const totalLateMinutes = allTimesheetRows.reduce((s, r) => s + r.totalLateMinutes, 0)
     const totalAbsentDays = allTimesheetRows.reduce((s, r) => s + r.absentDays, 0)
+    const totalRevokedDays = allTimesheetRows.reduce((s, r) => s + r.revokedDays, 0)
     const totalLeaveDays = allTimesheetRows.reduce((s, r) => s + r.approvedLeaveDays, 0)
     const totalWorkHours = Math.round(allTimesheetRows.reduce((s, r) => s + r.totalWorkHours, 0) * 10) / 10
     const totalOtHours = Math.round(allTimesheetRows.reduce((s, r) => s + r.approvedOtHours, 0) * 10) / 10
@@ -1285,7 +1360,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
     const avgAiConf = withConf.length > 0
       ? Math.round((withConf.reduce((s, r) => s + r.avgMatchConfidence, 0) / withConf.length) * 10) / 10
       : 0
-    const considered = totalPresentDays + totalAbsentDays
+    const considered = totalPresentDays + totalAbsentDays + totalRevokedDays
     const attendanceRate = considered > 0 ? Math.round((totalPresentDays / considered) * 1000) / 10 : 0
     const onTimeRate = totalPresentDays > 0 ? Math.round((totalOnTimeDays / totalPresentDays) * 1000) / 10 : 0
 
@@ -1296,6 +1371,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
       totalLateDays,
       totalLateMinutes,
       totalAbsentDays,
+      totalRevokedDays,
       totalLeaveDays,
       totalWorkHours,
       totalOtHours,
@@ -1460,6 +1536,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
       'DungGio',
       'DiMuon',
       'VangMat',
+      'HuyCongTruLuong',
       'RoiBanQuaHan',
       'CanhBaoAnNinh',
       'TongGioLam(h)',
@@ -1469,6 +1546,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
     let sumOnTime = 0
     let sumLate = 0
     let sumAbsent = 0
+    let sumRevoked = 0
     let sumProlonged = 0
     let sumAlerts = 0
     let sumHours = 0
@@ -1482,9 +1560,11 @@ export function ReportingHubPage({ session }: { session: Session }) {
       const extra = deptWorkHoursMap.get(g.departmentId)
       const workH = extra ? extra.workHours : 0
       const otH = extra ? extra.otHours : 0
+      const revoked = g.revoked ?? 0
       sumOnTime += g.onTime
       sumLate += g.late
       sumAbsent += g.absent
+      sumRevoked += revoked
       sumProlonged += g.prolongedAway
       sumAlerts += g.securityAlerts
       sumHours += workH
@@ -1496,6 +1576,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
         g.onTime,
         g.late,
         g.absent,
+        revoked,
         g.prolongedAway,
         g.securityAlerts,
         workH.toFixed(1),
@@ -1511,6 +1592,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
       sumOnTime,
       sumLate,
       sumAbsent,
+      sumRevoked,
       sumProlonged,
       sumAlerts,
       sumHours.toFixed(1),
@@ -2604,6 +2686,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
                         <th scope="col" className="numeric">Đúng giờ</th>
                         <th scope="col" className="numeric">Đi muộn</th>
                         <th scope="col" className="numeric">Vắng mặt</th>
+                        <th scope="col" className="numeric">Hủy công</th>
                         <th scope="col" className="numeric">Tổng giờ công (+OT)</th>
                         <th scope="col" className="numeric">Cảnh báo (Bàn / AN)</th>
                         <th scope="col" className="numeric">Tỷ lệ chuyên cần</th>
@@ -2632,6 +2715,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
                             <td className="numeric text-success">{grp.onTime}</td>
                             <td className="numeric text-warning">{grp.late}</td>
                             <td className="numeric text-danger">{grp.absent}</td>
+                            <td className="numeric text-danger">{grp.revoked ?? 0}</td>
                             <td className="numeric">
                               <strong>{extra ? extra.workHours.toFixed(1) : '0.0'}h</strong>
                               {extra && extra.otHours > 0 && (
@@ -2757,9 +2841,30 @@ export function ReportingHubPage({ session }: { session: Session }) {
                   >
                     Nhật ký quét mặt ({scopedAttendanceLogs.length.toLocaleString('vi-VN')})
                   </button>
+                  {canManageAdjustments && (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={timesheetSubView === 'adjustment_audits'}
+                      className={`subview-tab-btn ${timesheetSubView === 'adjustment_audits' ? 'active' : ''}`}
+                      onClick={() => setTimesheetSubView('adjustment_audits')}
+                    >
+                      Lịch sử sửa/hủy công ({scopedAudits.length.toLocaleString('vi-VN')})
+                    </button>
+                  )}
                 </div>
 
                 <div className="subview-actions">
+                  {canManageAdjustments && (
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => handleOpenManualAttendance()}
+                      title="Bổ sung bản ghi công thủ công cho nhân viên trong kỳ"
+                    >
+                      <CalendarCheck size={16} /> Bổ sung công
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="button button-secondary"
@@ -2952,11 +3057,19 @@ export function ReportingHubPage({ session }: { session: Session }) {
                                                 <small className="muted">Tổng ngày nghỉ phép giao trong kỳ: {row.approvedLeaveDays} ngày</small>
                                               </div>
                                               <div className="expanded-detail-box">
-                                                <span className="detail-box-label">Vắng không phép &amp; Đi muộn</span>
+                                                <span className="detail-box-label">Vắng không phép, Hủy công &amp; Đi muộn</span>
                                                 <p>
                                                   {row.absentDatesList.length > 0
                                                     ? `Ngày chốt ABSENT: ${row.absentDatesList.join(', ')}`
                                                     : 'Không có ngày vắng không phép.'}
+                                                  {row.revokedDatesList.length > 0 && (
+                                                    <>
+                                                      <br />
+                                                      <span className="text-danger">
+                                                        Hủy công (Trừ lương): {row.revokedDatesList.join(', ')}
+                                                      </span>
+                                                    </>
+                                                  )}
                                                 </p>
                                                 <small className="muted">
                                                   Tổng phút đi muộn: {row.totalLateMinutes} phút · Về sớm: {row.totalEarlyLeaveMinutes} phút
@@ -2968,16 +3081,122 @@ export function ReportingHubPage({ session }: { session: Session }) {
                                                 <small className="muted">
                                                   OT đã duyệt: {row.approvedOtSessions} ca ({row.approvedOtHours.toFixed(1)} giờ)
                                                 </small>
-                                                <button
-                                                  type="button"
-                                                  className="row-expand-btn"
-                                                  style={{ alignSelf: 'flex-start', marginTop: 4 }}
-                                                  onClick={() => handleSelectEmployeeFilter(row.employeeId)}
-                                                >
-                                                  Mở Hồ sơ 360° NV này →
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: 6 }}>
+                                                  <button
+                                                    type="button"
+                                                    className="row-expand-btn"
+                                                    onClick={() => handleSelectEmployeeFilter(row.employeeId)}
+                                                  >
+                                                    Mở Hồ sơ 360° NV này →
+                                                  </button>
+                                                  {canManageAdjustments && (
+                                                    <button
+                                                      type="button"
+                                                      className="button button-secondary"
+                                                      style={{ padding: '4px 10px', fontSize: '0.75rem', height: 'auto' }}
+                                                      onClick={e => {
+                                                        e.stopPropagation()
+                                                        handleOpenManualAttendance(row.employeeId)
+                                                      }}
+                                                    >
+                                                      + Bổ sung công NV này
+                                                    </button>
+                                                  )}
+                                                </div>
                                               </div>
                                             </div>
+                                            {canManageAdjustments && (
+                                              <div
+                                                style={{
+                                                  marginTop: '12px',
+                                                  paddingTop: '10px',
+                                                  borderTop: '1px solid var(--color-border)',
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    marginBottom: '8px',
+                                                    gap: '8px',
+                                                    flexWrap: 'wrap',
+                                                  }}
+                                                >
+                                                  <strong style={{ fontSize: '0.82rem' }}>
+                                                    Bản ghi công từng ngày trong kỳ ({(logsByEmployeeMap.get(row.employeeId) ?? []).length})
+                                                  </strong>
+                                                  <span className="muted" style={{ fontSize: '0.76rem' }}>
+                                                    Nhấn &ldquo;Sửa / Hủy&rdquo; để chỉnh giờ công, ghi đè trạng thái hoặc hủy công có lưu Audit.
+                                                  </span>
+                                                </div>
+                                                {(logsByEmployeeMap.get(row.employeeId) ?? []).length === 0 ? (
+                                                  <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>
+                                                    Chưa có bản ghi công nào trong kỳ này. Bạn có thể bấm &ldquo;+ Bổ sung công NV này&rdquo; ở trên.
+                                                  </p>
+                                                ) : (
+                                                  <div style={{ display: 'grid', gap: '6px' }}>
+                                                    {(logsByEmployeeMap.get(row.employeeId) ?? []).slice(0, 15).map(empLog => {
+                                                      const stMeta = attendanceStatusLabels[empLog.status] ?? {
+                                                        label: empLog.status,
+                                                        class: 'badge-neutral',
+                                                      }
+                                                      const perm = evaluateAttendanceEditPermission(
+                                                        session,
+                                                        empLog.workDate,
+                                                        empLog.departmentId ?? row.departmentId,
+                                                      )
+                                                      return (
+                                                        <div
+                                                          key={empLog.id}
+                                                          style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            gap: '10px',
+                                                            flexWrap: 'wrap',
+                                                            padding: '6px 10px',
+                                                            borderRadius: '8px',
+                                                            background: 'var(--color-surface)',
+                                                            border: '1px solid var(--color-border)',
+                                                            fontSize: '0.8rem',
+                                                          }}
+                                                        >
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <strong>{formatViDate(empLog.workDate)}</strong>
+                                                            <span className="clock-pair">
+                                                              {formatTimeClock(empLog.checkInTime)} – {formatTimeClock(empLog.checkOutTime)}
+                                                            </span>
+                                                            <span className={`badge ${stMeta.class}`}>{stMeta.label}</span>
+                                                            {empLog.isManuallyAdjusted && (
+                                                              <span className="badge badge-info">Đã sửa tay</span>
+                                                            )}
+                                                            {empLog.adjustmentReason && (
+                                                              <span className="muted">· {empLog.adjustmentReason}</span>
+                                                            )}
+                                                          </div>
+                                                          <button
+                                                            type="button"
+                                                            className="button button-secondary"
+                                                            style={{ padding: '3px 10px', fontSize: '0.74rem', height: 'auto' }}
+                                                            title={perm.reason ?? 'Điều chỉnh hoặc hủy ngày công này'}
+                                                            onClick={e => {
+                                                              e.stopPropagation()
+                                                              handleOpenAdjustRecord({
+                                                                ...empLog,
+                                                                departmentId: empLog.departmentId ?? row.departmentId,
+                                                              })
+                                                            }}
+                                                          >
+                                                            {perm.allowed ? 'Sửa / Hủy' : 'Xem lịch sử'}
+                                                          </button>
+                                                        </div>
+                                                      )
+                                                    })}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
                                           </td>
                                         </tr>
                                       )}
@@ -3093,6 +3312,8 @@ export function ReportingHubPage({ session }: { session: Session }) {
                               <th scope="col">Trạng thái</th>
                               <th scope="col" className="numeric">Đi muộn / Về sớm</th>
                               <th scope="col" className="numeric">Độ tin cậy AI</th>
+                              <th scope="col">Điều chỉnh / Ghi chú</th>
+                              {canManageAdjustments && <th scope="col">Thao tác</th>}
                             </tr>
                           </thead>
                           <tbody>
@@ -3101,6 +3322,7 @@ export function ReportingHubPage({ session }: { session: Session }) {
                               const confPct = log.matchConfidence > 0
                                 ? (log.matchConfidence <= 1 ? log.matchConfidence * 100 : log.matchConfidence).toFixed(1)
                                 : null
+                              const rowPerm = evaluateAttendanceEditPermission(session, log.workDate, log.departmentId)
                               return (
                                 <tr key={log.id}>
                                   <td>{formatViDate(log.workDate)}</td>
@@ -3115,6 +3337,34 @@ export function ReportingHubPage({ session }: { session: Session }) {
                                     {log.lateMinutes > 0 ? `Muộn ${log.lateMinutes}p` : log.earlyLeaveMinutes > 0 ? `Sớm ${log.earlyLeaveMinutes}p` : '—'}
                                   </td>
                                   <td className="numeric">{confPct ? `${confPct}%` : '—'}</td>
+                                  <td>
+                                    {log.isManuallyAdjusted ? (
+                                      <div style={{ display: 'grid', gap: '2px', fontSize: '0.8rem' }}>
+                                        <span className="badge badge-info" style={{ width: 'fit-content', fontSize: '0.7rem' }}>
+                                          Đã điều chỉnh tay
+                                        </span>
+                                        <span className="muted">{log.adjustmentReason || '—'}</span>
+                                        {log.adjustedByName && (
+                                          <small className="muted">Bởi {log.adjustedByName}</small>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="muted">—</span>
+                                    )}
+                                  </td>
+                                  {canManageAdjustments && (
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="button button-secondary"
+                                        style={{ padding: '4px 10px', fontSize: '0.75rem', height: 'auto' }}
+                                        title={rowPerm.reason ?? 'Điều chỉnh giờ công, ghi đè trạng thái hoặc hủy công'}
+                                        onClick={() => handleOpenAdjustRecord(log)}
+                                      >
+                                        {rowPerm.allowed ? 'Sửa / Hủy' : 'Xem lịch sử'}
+                                      </button>
+                                    </td>
+                                  )}
                                 </tr>
                               )
                             })}
@@ -3128,6 +3378,101 @@ export function ReportingHubPage({ session }: { session: Session }) {
                         onPageChange={setAttLogPage}
                         onPageSizeChange={setAttLogPageSize}
                         itemLabel="lượt điểm danh"
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* SUB-VIEW 4: LỊCH SỬ ĐIỀU CHỈNH & HỦY CÔNG TRONG KỲ (AUDIT TRAIL) */}
+              {timesheetSubView === 'adjustment_audits' && canManageAdjustments && (
+                <>
+                  <div className="report-panel-heading-inline">
+                    <h2 id="timesheet-main-title">Lịch sử Điều chỉnh &amp; Hủy công · {periodBounds.label}</h2>
+                    <span className="muted">
+                      Tổng {scopedAudits.length.toLocaleString('vi-VN')} lượt thay đổi (bao gồm cả bản ghi đã gỡ do ghi nhầm)
+                    </span>
+                  </div>
+
+                  {scopedAudits.length === 0 ? (
+                    <div className="empty-state">
+                      <p className="muted">
+                        Chưa có lượt chỉnh sửa, bổ sung hoặc hủy công nào trong khoảng {formatViDate(periodBounds.fromDate)} – {formatViDate(periodBounds.toDate)}.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng lịch sử điều chỉnh công">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th scope="col">Thời điểm</th>
+                              <th scope="col">Ngày công</th>
+                              <th scope="col">Nhân viên</th>
+                              <th scope="col">Hành động</th>
+                              <th scope="col">Trạng thái (Cũ → Mới)</th>
+                              <th scope="col">Giờ vào – ra mới</th>
+                              <th scope="col">Lý do</th>
+                              <th scope="col">Người thực hiện</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedAudits.sliced.map(audit => {
+                              const actionMeta = auditActionLabels[audit.actionType] ?? {
+                                label: audit.actionType,
+                                class: 'badge-neutral',
+                              }
+                              const prevSt = audit.previousStatus
+                                ? attendanceStatusLabels[audit.previousStatus]?.label ?? audit.previousStatus
+                                : 'Chưa có'
+                              const nextSt = audit.newStatus
+                                ? attendanceStatusLabels[audit.newStatus]?.label ?? audit.newStatus
+                                : 'Đã gỡ bản ghi'
+                              return (
+                                <tr key={audit.id}>
+                                  <td>{formatDateTime(audit.createdAt)}</td>
+                                  <td><strong>{formatViDate(audit.workDate)}</strong></td>
+                                  <td>
+                                    <strong>{audit.employeeCode}</strong>
+                                    <span className="table-cell-note muted">{audit.employeeFullName}</span>
+                                  </td>
+                                  <td>
+                                    <span className={`badge ${actionMeta.class}`}>{actionMeta.label}</span>
+                                    {audit.isStatusOverridden && (
+                                      <span className="table-cell-note">
+                                        <span className="badge badge-special" style={{ fontSize: '0.7rem' }}>Ghi đè thủ công</span>
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <span className="muted">{prevSt}</span> → <strong>{nextSt}</strong>
+                                  </td>
+                                  <td>
+                                    <span className="clock-pair">
+                                      {formatTimeClock(audit.newCheckInTime)} – {formatTimeClock(audit.newCheckOutTime)}
+                                    </span>
+                                  </td>
+                                  <td style={{ maxWidth: '280px' }}>{audit.reason}</td>
+                                  <td>
+                                    <strong>{audit.adjustedByName}</strong>
+                                    <span className="table-cell-note muted">
+                                      {audit.adjustedByRole}
+                                      {audit.sourceScreen ? ` · ${audit.sourceScreen}` : ''}
+                                    </span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <TablePagination
+                        totalItems={scopedAudits.length}
+                        page={pagedAudits.safePage}
+                        pageSize={auditPageSize}
+                        onPageChange={setAuditPage}
+                        onPageSizeChange={setAuditPageSize}
+                        itemLabel="lượt điều chỉnh"
                       />
                     </>
                   )}
@@ -4307,6 +4652,25 @@ export function ReportingHubPage({ session }: { session: Session }) {
             </div>
           </article>
         </div>
+      )}
+
+      {canManageAdjustments && (
+        <AttendanceAdjustmentModal
+          key={`${showAdjustModal}-${adjustingRecord?.id ?? 'new'}-${adjustDefaultEmployeeId}-${adjustDefaultDate}`}
+          isOpen={showAdjustModal}
+          onClose={() => {
+            setShowAdjustModal(false)
+            setAdjustingRecord(null)
+          }}
+          session={session}
+          employees={employeesList}
+          shifts={opData?.shifts ?? []}
+          record={adjustingRecord}
+          defaultDate={adjustDefaultDate || selectedDate}
+          defaultEmployeeId={adjustDefaultEmployeeId}
+          sourceScreen="REPORTING_HUB"
+          onSuccess={handleAdjustmentSuccess}
+        />
       )}
     </div>
   )

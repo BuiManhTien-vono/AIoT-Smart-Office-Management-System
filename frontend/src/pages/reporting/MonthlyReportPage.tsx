@@ -78,6 +78,7 @@ export function MonthlyReportPage({ session }: { session: Session }) {
                 <div className="monthly-summary-strip" aria-label="Tóm tắt báo cáo tháng">
                   <div><span>Ngày có dữ liệu</span><strong>{new Set(rows.map(row => row.summaryDate)).size}</strong></div>
                   <div><span>Tổng lượt có mặt</span><strong>{rows.reduce((sum, row) => sum + row.presentCount, 0).toLocaleString('vi-VN')}</strong></div>
+                  <div><span>Hủy công (Trừ lương)</span><strong>{rows.reduce((sum, row) => sum + (row.revokedCount ?? 0), 0).toLocaleString('vi-VN')}</strong></div>
                   <div><span>Rời bàn quá hạn</span><strong>{rows.reduce((sum, row) => sum + row.prolongedAwayEvents, 0).toLocaleString('vi-VN')}</strong></div>
                   <div><span>Cảnh báo an ninh</span><strong>{rows.reduce((sum, row) => sum + row.securityAlertsCount, 0).toLocaleString('vi-VN')}</strong></div>
                 </div>
@@ -87,13 +88,14 @@ export function MonthlyReportPage({ session }: { session: Session }) {
                     <div className="report-panel-heading"><p className="eyebrow">SỐ LIỆU CHI TIẾT</p><h2 id="monthly-table-title">Tổng hợp theo phòng ban</h2><p className="muted">Số lượt và tỷ lệ trên tổng dữ liệu đã ghi nhận.</p></div>
                     <div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng chuyên cần theo phòng ban">
                       <table>
-                        <caption className="sr-only">{periodLabel}, {scopeLabel}. Mỗi ô ghi số lượt và tỷ lệ, mẫu số là tổng lượt đúng giờ, đi muộn, vắng mặt của phòng ban.</caption>
+                        <caption className="sr-only">{periodLabel}, {scopeLabel}. Mỗi ô ghi số lượt và tỷ lệ, mẫu số là tổng lượt đúng giờ, đi muộn, vắng mặt và hủy công của phòng ban.</caption>
                         <thead>
                           <tr>
                             <th scope="col">Phòng ban</th>
                             <th scope="col" className="numeric">Đúng giờ</th>
                             <th scope="col" className="numeric">Đi muộn</th>
                             <th scope="col" className="numeric">Vắng mặt</th>
+                            <th scope="col" className="numeric">Hủy công</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -103,7 +105,7 @@ export function MonthlyReportPage({ session }: { session: Session }) {
                                 <span>{group.departmentCode}</span>
                                 <small className="muted table-cell-note">{group.daysRecorded} ngày</small>
                               </th>
-                              {(['onTime', 'late', 'absent'] as const).map(key => (
+                              {(['onTime', 'late', 'absent', 'revoked'] as const).map(key => (
                                 <td className="numeric" key={key}>
                                   <span>{group[key].toLocaleString('vi-VN')}</span>
                                   <small className="muted table-cell-note">
@@ -119,7 +121,7 @@ export function MonthlyReportPage({ session }: { session: Session }) {
                         </tbody>
                       </table>
                     </div>
-                    <p className="chart-footnote muted">Mẫu số bằng tổng lượt đúng giờ + đi muộn + vắng mặt. Đây là lượt trong kỳ, không phải số nhân viên duy nhất.</p>
+                    <p className="chart-footnote muted">Mẫu số bằng tổng lượt đúng giờ + đi muộn + vắng mặt + hủy công. Đây là lượt trong kỳ, không phải số nhân viên duy nhất.</p>
                   </section>
                 </div>
               </>}

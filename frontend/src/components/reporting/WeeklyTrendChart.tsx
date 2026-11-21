@@ -23,6 +23,7 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
       onTime: number
       late: number
       absent: number
+      revoked: number
       prolongedAway: number
       securityAlerts: number
       total: number
@@ -45,9 +46,10 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
       const onTime = dayRows.reduce((sum, r) => sum + onTimeCount(r), 0)
       const late = dayRows.reduce((sum, r) => sum + r.lateCount, 0)
       const absent = dayRows.reduce((sum, r) => sum + r.absentCount, 0)
+      const revoked = dayRows.reduce((sum, r) => sum + (r.revokedCount ?? 0), 0)
       const prolongedAway = dayRows.reduce((sum, r) => sum + r.prolongedAwayEvents, 0)
       const securityAlerts = dayRows.reduce((sum, r) => sum + r.securityAlertsCount, 0)
-      const total = onTime + late + absent
+      const total = onTime + late + absent + revoked
       const onTimeRate = total > 0 ? (onTime / total) * 100 : 0
 
       list.push({
@@ -57,6 +59,7 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
         onTime,
         late,
         absent,
+        revoked,
         prolongedAway,
         securityAlerts,
         total,
@@ -114,6 +117,9 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
         <span className="legend-badge"><span className="legend-dot" style={{ background: '#16a34a' }} /> Đúng giờ</span>
         <span className="legend-badge"><span className="legend-dot" style={{ background: '#f59e0b' }} /> Đi muộn</span>
         <span className="legend-badge"><span className="legend-dot" style={{ background: '#ef4444' }} /> Vắng mặt</span>
+        {days.some(d => d.revoked > 0) && (
+          <span className="legend-badge"><span className="legend-dot" style={{ background: '#991b1b' }} /> Hủy công</span>
+        )}
       </div>
 
       {/* Khung Biểu đồ Mô hình hóa 7 ngày */}
@@ -132,6 +138,7 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
             const onTimePct = day.total > 0 ? (day.onTime / day.total) * 100 : 0
             const latePct = day.total > 0 ? (day.late / day.total) * 100 : 0
             const absentPct = day.total > 0 ? (day.absent / day.total) * 100 : 0
+            const revokedPct = day.total > 0 ? (day.revoked / day.total) * 100 : 0
             const isActive = activeDayIdx === idx
 
             return (
@@ -145,12 +152,13 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
                 {isActive && (
                   <div className="weekly-col-tooltip">
                     <strong>{day.dayName} · {day.label}</strong>
-                    <div>🟢 Đúng giờ: {day.onTime}</div>
-                    <div>🟡 Đi muộn: {day.late}</div>
-                    <div>🔴 Vắng mặt: {day.absent}</div>
+                    <div>Đúng giờ: {day.onTime}</div>
+                    <div>Đi muộn: {day.late}</div>
+                    <div>Vắng mặt: {day.absent}</div>
+                    {day.revoked > 0 && <div>Hủy công (Trừ lương): {day.revoked}</div>}
                     <div>Tổng: {day.total} lượt ({day.onTimeRate.toFixed(1)}% đúng giờ)</div>
-                    {day.prolongedAway > 0 && <div>⚠️ Rời bàn quá hạn: {day.prolongedAway}</div>}
-                    {day.securityAlerts > 0 && <div>🚨 Cảnh báo an ninh: {day.securityAlerts}</div>}
+                    {day.prolongedAway > 0 && <div>Rời bàn quá hạn: {day.prolongedAway}</div>}
+                    {day.securityAlerts > 0 && <div>Cảnh báo an ninh: {day.securityAlerts}</div>}
                   </div>
                 )}
 
@@ -179,6 +187,13 @@ export function WeeklyTrendChart({ startDate, endDate, rows }: WeeklyTrendChartP
                           style={{ height: `${absentPct}%` }}
                           title={`Vắng mặt: ${day.absent}`}
                         />
+                        {revokedPct > 0 && (
+                          <div
+                            className="bar-sub-segment"
+                            style={{ height: `${revokedPct}%`, background: '#991b1b' }}
+                            title={`Hủy công: ${day.revoked}`}
+                          />
+                        )}
                       </>
                     ) : (
                       <div className="bar-zero-mark">—</div>
