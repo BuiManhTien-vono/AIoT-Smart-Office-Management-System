@@ -41,3 +41,6 @@ env/
 Thumbs.db
 .idea/
 *.swp
+
+# Local harness run artifacts
+harness/runs/
