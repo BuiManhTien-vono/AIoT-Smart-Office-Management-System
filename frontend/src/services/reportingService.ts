@@ -326,9 +326,9 @@ function computeRecordWorkHours(record: AttendanceRecord, shift?: Shift): number
 
   const shiftStart = parseTimeToMinutes(shift?.startTime) ?? 8 * 60
   const shiftEnd = parseTimeToMinutes(shift?.endTime) ?? 17 * 60 + 30
-  const lunchStart = parseTimeToMinutes(shift?.lunchStart) ?? 12 * 60
-  const lunchEnd = parseTimeToMinutes(shift?.lunchEnd) ?? 13 * 60 + 30
-  const lunchDuration = Math.max(0, lunchEnd - lunchStart)
+  const lunchStart = shift ? parseTimeToMinutes(shift.lunchStart) : 12 * 60
+  const lunchEnd = shift ? parseTimeToMinutes(shift.lunchEnd) : 13 * 60 + 30
+  const lunchDuration = lunchStart !== null && lunchEnd !== null ? Math.max(0, lunchEnd - lunchStart) : 0
   const expectedShiftMinutes = Math.max(60, shiftEnd - shiftStart - lunchDuration)
 
   if (record.checkInTime && record.checkOutTime) {
@@ -338,7 +338,7 @@ function computeRecordWorkHours(record: AttendanceRecord, shift?: Shift): number
       let workedMinutes = (endMs - startMs) / 60_000
       const inMin = minutesOfDayInOfficeZone(record.checkInTime)
       const outMin = minutesOfDayInOfficeZone(record.checkOutTime)
-      if (inMin !== null && outMin !== null && lunchDuration > 0) {
+      if (inMin !== null && outMin !== null && lunchStart !== null && lunchEnd !== null && lunchDuration > 0) {
         const overlapStart = Math.max(inMin, lunchStart)
         const overlapEnd = Math.min(outMin, lunchEnd)
         if (overlapEnd > overlapStart) {

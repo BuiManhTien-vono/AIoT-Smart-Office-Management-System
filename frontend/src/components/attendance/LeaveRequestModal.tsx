@@ -1,9 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../common/Icon';
 import type { CreateLeaveInput, LeaveRequest } from '../../types/attendance.types';
 import { leaveTypeLabels } from '../../types/attendance.types';
 import { createLeave, replaceLeave } from '../../services/attendanceService';
 import type { Employee } from '../../types/biometrics.types';
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
+function formatEmployeeLabel(emp: Employee): string {
+  return `${emp.fullName} (${emp.employeeCode})${emp.departmentCode ? ` - ${emp.departmentCode}` : ''}`;
+}
 
 interface LeaveRequestModalProps {
   isOpen: boolean;
@@ -24,7 +38,14 @@ export function LeaveRequestModal({
 }: LeaveRequestModalProps) {
   const isEditing = Boolean(editingLeave);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const employeeDropdownRef = useRef<HTMLDivElement>(null);
   const [employeeId, setEmployeeId] = useState<string>(() => editingLeave?.employeeId ?? '');
+  const [employeeSearch, setEmployeeSearch] = useState<string>(() => {
+    if (!editingLeave?.employeeId) return '';
+    const found = employees.find((emp) => emp.id === editingLeave.employeeId);
+    return found ? formatEmployeeLabel(found) : '';
+  });
+  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState<boolean>(false);
   const [leaveType, setLeaveType] = useState<string>(() => editingLeave?.leaveType ?? 'ANNUAL_LEAVE');
   const [startDate, setStartDate] = useState<string>(
     () => editingLeave?.startDate?.slice(0, 10) ?? new Date().toISOString().split('T')[0]
@@ -44,6 +65,36 @@ export function LeaveRequestModal({
 
   const isPaidLeaveType =
     leaveType !== 'UNPAID_LEAVE' && leaveType !== 'SUDDENLY_ALLOWED_LEAVE';
+
+  const selectableEmployees = useMemo(
+    () => employees.filter((emp) => emp.isActive || emp.id === employeeId),
+    [employees, employeeId]
+  );
+
+  const filteredEmployees = useMemo(() => {
+    const query = normalizeSearchText(employeeSearch);
+    if (!query) return selectableEmployees;
+    return selectableEmployees.filter((emp) => {
+      const searchable = normalizeSearchText(
+        `${emp.fullName} ${emp.employeeCode} ${emp.departmentCode ?? ''}`
+      );
+      return searchable.includes(query);
+    });
+  }, [selectableEmployees, employeeSearch]);
+
+  useEffect(() => {
+    if (!isEmployeeDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        employeeDropdownRef.current &&
+        !employeeDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsEmployeeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isEmployeeDropdownOpen]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -144,24 +195,128 @@ export function LeaveRequestModal({
         )}
 
         <div style={{ display: 'grid', gap: '16px' }}>
-          <label className="field">
+          <div className="field" ref={employeeDropdownRef} style={{ position: 'relative' }}>
             <span>Chọn nhân viên *</span>
-            <select
-              required
-              value={employeeId}
-              disabled={isSubmitting || isEditing}
-              onChange={(e) => setEmployeeId(e.target.value)}
-            >
-              <option value="">-- Chọn nhân viên nghỉ phép --</option>
-              {employees
-                .filter((emp) => emp.isActive || emp.id === employeeId)
-                .map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.fullName} ({emp.employeeCode}) - {emp.departmentCode}
-                  </option>
-                ))}
-            </select>
-          </label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                role="combobox"
+                aria-expanded={isEmployeeDropdownOpen}
+                aria-autocomplete="list"
+                placeholder="Nhập tên, mã nhân viên hoặc nhấn để chọn..."
+                disabled={isSubmitting || isEditing}
+                value={employeeSearch}
+                onFocus={() => {
+                  if (!isSubmitting && !isEditing) {
+                    setIsEmployeeDropdownOpen(true);
+                  }
+                }}
+                onChange={(e) => {
+                  setEmployeeSearch(e.target.value);
+                  setEmployeeId('');
+                  setIsEmployeeDropdownOpen(true);
+                }}
+                style={{ width: '100%', paddingRight: '60px' }}
+              />
+              {!isSubmitting && !isEditing && employeeSearch && (
+                <button
+                  type="button"
+                  aria-label="Xóa lựa chọn nhân viên"
+                  onClick={() => {
+                    setEmployeeSearch('');
+                    setEmployeeId('');
+                    setIsEmployeeDropdownOpen(true);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '32px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    color: 'var(--text-muted, #64748b)',
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Mở danh sách nhân viên"
+                disabled={isSubmitting || isEditing}
+                onClick={() => setIsEmployeeDropdownOpen((prev) => !prev)}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: isSubmitting || isEditing ? 'default' : 'pointer',
+                  padding: '4px',
+                  color: 'var(--text-muted, #64748b)',
+                  lineHeight: 1,
+                }}
+              >
+                ▾
+              </button>
+            </div>
+
+            {isEmployeeDropdownOpen && !isSubmitting && !isEditing && (
+              <div
+                role="listbox"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 30,
+                  marginTop: '4px',
+                  maxHeight: '220px',
+                  overflowY: 'auto',
+                  background: 'var(--surface, #ffffff)',
+                  border: '1px solid var(--border, #cbd5e1)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
+                }}
+              >
+                {filteredEmployees.length === 0 ? (
+                  <div style={{ padding: '10px 12px', color: 'var(--text-muted, #64748b)', fontSize: '0.9rem' }}>
+                    Không tìm thấy nhân viên phù hợp.
+                  </div>
+                ) : (
+                  filteredEmployees.map((emp) => {
+                    const isSelected = emp.id === employeeId;
+                    return (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setEmployeeId(emp.id);
+                          setEmployeeSearch(formatEmployeeLabel(emp));
+                          setIsEmployeeDropdownOpen(false);
+                        }}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '9px 12px',
+                          border: 'none',
+                          background: isSelected ? 'var(--primary-soft, #eff6ff)' : 'transparent',
+                          color: 'inherit',
+                          cursor: 'pointer',
+                          fontWeight: isSelected ? 600 : 400,
+                        }}
+                      >
+                        {formatEmployeeLabel(emp)}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
 
           <label className="field">
             <span>Loại nghỉ phép / vắng mặt *</span>
@@ -179,7 +334,7 @@ export function LeaveRequestModal({
             <small className="muted" style={{ marginTop: '4px' }}>
               Chế độ tính lương:{' '}
               <strong>
-                {isPaidLeaveType ? 'Có tính lương (IsPaid = true)' : 'Không tính lương (IsPaid = false)'}
+                {isPaidLeaveType ? 'Có tính lương' : 'Không tính lương'}
               </strong>
             </small>
           </label>

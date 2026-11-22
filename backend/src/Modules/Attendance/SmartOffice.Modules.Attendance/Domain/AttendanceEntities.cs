@@ -9,8 +9,8 @@ public sealed class Shift : BaseEntity
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public int GraceMinutes { get; set; } = 15;
-    public TimeOnly LunchStart { get; set; } = new(12, 0);
-    public TimeOnly LunchEnd { get; set; } = new(13, 30);
+    public TimeOnly? LunchStart { get; set; }
+    public TimeOnly? LunchEnd { get; set; }
     public bool IsDefault { get; set; }
 }
 

@@ -161,6 +161,10 @@ static async Task SeedInitialDemoDataAsync(IServiceProvider rootProvider)
                     ON attendance.attendance_adjustment_audits(work_date DESC, created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_attendance_audits_employee
                     ON attendance.attendance_adjustment_audits(employee_id, work_date DESC);
+
+                ALTER TABLE IF EXISTS attendance.shifts
+                    ALTER COLUMN lunch_start DROP NOT NULL,
+                    ALTER COLUMN lunch_end DROP NOT NULL;
                 """);
         }
 
