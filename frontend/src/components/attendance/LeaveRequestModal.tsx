@@ -334,7 +334,7 @@ export function LeaveRequestModal({
             <small className="muted" style={{ marginTop: '4px' }}>
               Chế độ tính lương:{' '}
               <strong>
-                {isPaidLeaveType ? 'Có tính lương (IsPaid = true)' : 'Không tính lương (IsPaid = false)'}
+                {isPaidLeaveType ? 'Có tính lương' : 'Không tính lương'}
               </strong>
             </small>
           </label>
