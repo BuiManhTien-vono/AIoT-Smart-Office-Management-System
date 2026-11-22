@@ -72,8 +72,8 @@ CREATE TABLE IF NOT EXISTS attendance.shifts (
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     grace_minutes INT NOT NULL DEFAULT 15,
-    lunch_start TIME NOT NULL DEFAULT '12:00:00',
-    lunch_end TIME NOT NULL DEFAULT '13:30:00',
+    lunch_start TIME NULL,
+    lunch_end TIME NULL,
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

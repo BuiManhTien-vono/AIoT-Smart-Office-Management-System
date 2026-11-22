@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../common/Icon';
 import type { Shift, CreateShiftInput } from '../../types/attendance.types';
-import { listShifts, createShift } from '../../services/attendanceService';
+import { listShifts, createShift, updateShift, deleteShift } from '../../services/attendanceService';
+
+function toTimeInput(value?: string): string {
+  if (!value) return '';
+  return value.length >= 5 ? value.slice(0, 5) : value;
+}
 
 interface ShiftManagementModalProps {
   isOpen: boolean;
@@ -17,15 +22,18 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
 
   // Form state
   const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [shiftCode, setShiftCode] = useState<string>('CA_HC');
   const [shiftName, setShiftName] = useState<string>('Hành chính 8h-17h');
   const [startTime, setStartTime] = useState<string>('08:00');
   const [endTime, setEndTime] = useState<string>('17:00');
   const [graceMinutes, setGraceMinutes] = useState<number>(15);
-  const [lunchStart, setLunchStart] = useState<string>('12:00');
-  const [lunchEnd, setLunchEnd] = useState<string>('13:00');
+  const [hasBreak, setHasBreak] = useState<boolean>(false);
+  const [lunchStart, setLunchStart] = useState<string>('');
+  const [lunchEnd, setLunchEnd] = useState<string>('');
   const [isDefault, setIsDefault] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
 
   const loadShifts = useCallback(async () => {
     setLoading(true);
@@ -50,12 +58,70 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
       }
       void loadShifts();
       setShowCreateForm(false);
+      setEditingShiftId(null);
     } else {
       if (dialog.open) {
         dialog.close();
       }
     }
   }, [isOpen, loadShifts]);
+
+  const openCreateForm = () => {
+    setEditingShiftId(null);
+    setShiftCode('CA_HC');
+    setShiftName('Hành chính 8h-17h');
+    setStartTime('08:00');
+    setEndTime('17:00');
+    setGraceMinutes(15);
+    setHasBreak(false);
+    setLunchStart('');
+    setLunchEnd('');
+    setIsDefault(false);
+    setError(null);
+    setShowCreateForm(true);
+  };
+
+  const openEditForm = (shift: Shift) => {
+    const startBreak = toTimeInput(shift.lunchStart);
+    const endBreak = toTimeInput(shift.lunchEnd);
+    setEditingShiftId(shift.id);
+    setShiftCode(shift.shiftCode);
+    setShiftName(shift.shiftName);
+    setStartTime(toTimeInput(shift.startTime));
+    setEndTime(toTimeInput(shift.endTime));
+    setGraceMinutes(shift.graceMinutes);
+    setHasBreak(Boolean(startBreak && endBreak));
+    setLunchStart(startBreak);
+    setLunchEnd(endBreak);
+    setIsDefault(shift.isDefault);
+    setError(null);
+    setShowCreateForm(true);
+  };
+
+  const closeForm = () => {
+    setShowCreateForm(false);
+    setEditingShiftId(null);
+  };
+
+  const handleDeleteShift = async (shift: Shift) => {
+    if (!window.confirm(`Xác nhận xóa ca làm việc "${shift.shiftCode} - ${shift.shiftName}"?`)) {
+      return;
+    }
+
+    setDeletingShiftId(shift.id);
+    setError(null);
+    try {
+      await deleteShift(token, shift.id);
+      if (editingShiftId === shift.id) {
+        closeForm();
+      }
+      void loadShifts();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể xóa ca làm việc');
+    } finally {
+      setDeletingShiftId(null);
+    }
+  };
 
   const handleCreateShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,16 +135,26 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
         startTime: `${startTime}:00`,
         endTime: `${endTime}:00`,
         graceMinutes,
-        lunchStart: lunchStart ? `${lunchStart}:00` : undefined,
-        lunchEnd: lunchEnd ? `${lunchEnd}:00` : undefined,
+        lunchStart: hasBreak && lunchStart ? `${lunchStart}:00` : undefined,
+        lunchEnd: hasBreak && lunchEnd ? `${lunchEnd}:00` : undefined,
         isDefault,
       };
 
-      await createShift(token, payload);
-      setShowCreateForm(false);
+      if (editingShiftId) {
+        await updateShift(token, editingShiftId, payload);
+      } else {
+        await createShift(token, payload);
+      }
+      closeForm();
       void loadShifts();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Lỗi khi tạo ca làm việc');
+      setError(
+        err instanceof Error
+          ? err.message
+          : editingShiftId
+            ? 'Lỗi khi cập nhật ca làm việc'
+            : 'Lỗi khi tạo ca làm việc'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -121,16 +197,22 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
           <button
             type="button"
             className="button button-primary"
-            onClick={() => setShowCreateForm(!showCreateForm)}
+            onClick={() => (showCreateForm ? closeForm() : openCreateForm())}
           >
             <Icon name={showCreateForm ? 'close' : 'userPlus'} size={16} />
-            {showCreateForm ? 'Đóng biểu mẫu tạo ca' : 'Thêm ca làm việc mới'}
+            {showCreateForm
+              ? editingShiftId
+                ? 'Đóng biểu mẫu chỉnh sửa'
+                : 'Đóng biểu mẫu tạo ca'
+              : 'Thêm ca làm việc mới'}
           </button>
         </div>
 
         {showCreateForm && (
           <form onSubmit={handleCreateShift} className="panel" style={{ marginBottom: '20px', padding: '16px' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 600 }}>Tạo ca làm việc mới</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 600 }}>
+              {editingShiftId ? `Chỉnh sửa ca làm việc (${shiftCode})` : 'Tạo ca làm việc mới'}
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               <label className="field">
                 <span>Mã ca *</span>
@@ -195,20 +277,41 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
                 <span>Ca mặc định toàn công ty</span>
               </label>
 
+              <label className="field" style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', paddingTop: '4px' }}>
+                <input
+                  type="checkbox"
+                  style={{ width: '18px', height: '18px', margin: 0 }}
+                  checked={hasBreak}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setHasBreak(checked);
+                    if (!checked) {
+                      setLunchStart('');
+                      setLunchEnd('');
+                    }
+                  }}
+                />
+                <span>Có nghỉ</span>
+              </label>
+
               <label className="field">
-                <span>Bắt đầu nghỉ trưa</span>
+                <span>Bắt đầu nghỉ</span>
                 <input
                   type="time"
-                  value={lunchStart}
+                  disabled={!hasBreak}
+                  required={hasBreak}
+                  value={hasBreak ? lunchStart : ''}
                   onChange={(e) => setLunchStart(e.target.value)}
                 />
               </label>
 
               <label className="field">
-                <span>Kết thúc nghỉ trưa</span>
+                <span>Kết thúc nghỉ</span>
                 <input
                   type="time"
-                  value={lunchEnd}
+                  disabled={!hasBreak}
+                  required={hasBreak}
+                  value={hasBreak ? lunchEnd : ''}
                   onChange={(e) => setLunchEnd(e.target.value)}
                 />
               </label>
@@ -218,7 +321,7 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
               <button
                 type="button"
                 className="button button-secondary"
-                onClick={() => setShowCreateForm(false)}
+                onClick={closeForm}
               >
                 Hủy
               </button>
@@ -227,7 +330,13 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
                 className="button button-primary"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Đang tạo...' : 'Lưu ca làm việc'}
+                {isSubmitting
+                  ? editingShiftId
+                    ? 'Đang cập nhật...'
+                    : 'Đang tạo...'
+                  : editingShiftId
+                    ? 'Cập nhật ca làm việc'
+                    : 'Lưu ca làm việc'}
               </button>
             </div>
           </form>
@@ -253,13 +362,29 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
                   <th>Nghỉ trưa</th>
                   <th>Ân hạn</th>
                   <th>Mặc định</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {shifts.map((s) => (
                   <tr key={s.id}>
                     <td>
-                      <strong>{s.shiftCode}</strong>
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(s)}
+                        title="Nhấn để chỉnh sửa ca làm việc"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          color: 'var(--primary, #2563eb)',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {s.shiftCode}
+                      </button>
                     </td>
                     <td>{s.shiftName}</td>
                     <td>
@@ -279,6 +404,18 @@ export function ShiftManagementModal({ isOpen, onClose, token }: ShiftManagement
                       ) : (
                         <span className="muted">---</span>
                       )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        style={{ padding: '4px 10px', fontSize: '0.82rem', color: 'var(--danger, #dc2626)' }}
+                        disabled={deletingShiftId === s.id || s.isDefault}
+                        title={s.isDefault ? 'Không thể xóa ca mặc định' : 'Xóa ca làm việc'}
+                        onClick={() => void handleDeleteShift(s)}
+                      >
+                        {deletingShiftId === s.id ? 'Đang xóa...' : 'Xóa'}
+                      </button>
                     </td>
                   </tr>
                 ))}

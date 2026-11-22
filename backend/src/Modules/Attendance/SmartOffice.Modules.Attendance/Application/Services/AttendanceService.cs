@@ -79,8 +79,8 @@ public sealed class AttendanceService(
             StartTime = request.StartTime,
             EndTime = request.EndTime,
             GraceMinutes = request.GraceMinutes,
-            LunchStart = request.LunchStart ?? new TimeOnly(12, 0),
-            LunchEnd = request.LunchEnd ?? new TimeOnly(13, 30),
+            LunchStart = request.LunchStart,
+            LunchEnd = request.LunchEnd,
             IsDefault = request.IsDefault
         };
 
@@ -97,6 +97,89 @@ public sealed class AttendanceService(
             shift.LunchStart,
             shift.LunchEnd,
             shift.IsDefault));
+    }
+
+
+    public async Task<Result<ShiftResponse>> UpdateShiftAsync(
+        Guid shiftId,
+        CreateShiftRequest request,
+        CancellationToken ct = default)
+    {
+        var shift = await dbContext.Shifts.FirstOrDefaultAsync(s => s.Id == shiftId, ct);
+        if (shift is null)
+        {
+            return Result.Failure<ShiftResponse>(
+                new Error("SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc cần chỉnh sửa."));
+        }
+
+        var code = request.ShiftCode.Trim().ToUpperInvariant();
+        if (await dbContext.Shifts.AnyAsync(s => s.Id != shiftId && s.ShiftCode == code, ct))
+        {
+            return Result.Failure<ShiftResponse>(
+                new Error("SHIFT_CODE_EXISTS", $"Mã ca làm việc '{code}' đã tồn tại."));
+        }
+
+        if (request.IsDefault)
+        {
+            var otherDefaults = await dbContext.Shifts
+                .Where(s => s.Id != shiftId && s.IsDefault)
+                .ToListAsync(ct);
+            foreach (var other in otherDefaults)
+            {
+                other.IsDefault = false;
+            }
+        }
+
+        shift.ShiftCode = code;
+        shift.ShiftName = request.ShiftName.Trim();
+        shift.StartTime = request.StartTime;
+        shift.EndTime = request.EndTime;
+        shift.GraceMinutes = request.GraceMinutes;
+        shift.LunchStart = request.LunchStart;
+        shift.LunchEnd = request.LunchEnd;
+        shift.IsDefault = request.IsDefault;
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return Result.Success(new ShiftResponse(
+            shift.Id,
+            shift.ShiftCode,
+            shift.ShiftName,
+            shift.StartTime,
+            shift.EndTime,
+            shift.GraceMinutes,
+            shift.LunchStart,
+            shift.LunchEnd,
+            shift.IsDefault));
+    }
+
+
+    public async Task<Result> DeleteShiftAsync(Guid shiftId, CancellationToken ct = default)
+    {
+        var shift = await dbContext.Shifts.FirstOrDefaultAsync(s => s.Id == shiftId, ct);
+        if (shift is null)
+        {
+            return Result.Failure(
+                new Error("SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc cần xóa."));
+        }
+
+        if (shift.IsDefault)
+        {
+            return Result.Failure(
+                new Error("SHIFT_IS_DEFAULT", "Không thể xóa ca mặc định toàn công ty. Hãy đặt ca khác làm mặc định trước."));
+        }
+
+        var hasLogs = await dbContext.AttendanceLogs.AnyAsync(l => l.ShiftId == shiftId, ct);
+        if (hasLogs)
+        {
+            return Result.Failure(
+                new Error("SHIFT_IN_USE", "Không thể xóa ca làm việc vì đã có dữ liệu chấm công gắn với ca này."));
+        }
+
+        dbContext.Shifts.Remove(shift);
+        await dbContext.SaveChangesAsync(ct);
+
+        return Result.Success();
     }
 
     public async Task<IReadOnlyList<ShiftResponse>> GetShiftsAsync(CancellationToken ct = default)

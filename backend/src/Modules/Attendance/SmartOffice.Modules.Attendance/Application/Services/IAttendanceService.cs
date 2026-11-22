@@ -7,6 +7,8 @@ namespace SmartOffice.Modules.Attendance.Application.Services;
 public interface IAttendanceService
 {
     Task<Result<ShiftResponse>> CreateShiftAsync(CreateShiftRequest request, CancellationToken ct = default);
+    Task<Result<ShiftResponse>> UpdateShiftAsync(Guid shiftId, CreateShiftRequest request, CancellationToken ct = default);
+    Task<Result> DeleteShiftAsync(Guid shiftId, CancellationToken ct = default);
     Task<IReadOnlyList<ShiftResponse>> GetShiftsAsync(CancellationToken ct = default);
 
     Task<Result<AttendanceRecordResponse>> ProcessCheckInOutAsync(CheckAttendanceRequest request, CancellationToken ct = default);

@@ -30,6 +30,41 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
         return Created($"/api/v1/attendance/shifts/{result.Value.Id}", result.Value);
     }
 
+    [HttpPut("shifts/{id:guid}")]
+    public async Task<IActionResult> UpdateShift(Guid id, [FromBody] CreateShiftRequest request, CancellationToken ct)
+    {
+        var result = await attendanceService.UpdateShiftAsync(id, request, ct);
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == "SHIFT_NOT_FOUND")
+            {
+                return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+            }
+
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
+
+    [HttpDelete("shifts/{id:guid}")]
+    public async Task<IActionResult> DeleteShift(Guid id, CancellationToken ct)
+    {
+        var result = await attendanceService.DeleteShiftAsync(id, ct);
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == "SHIFT_NOT_FOUND")
+            {
+                return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+            }
+
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return NoContent();
+    }
+
     [HttpPost("check")]
     public async Task<IActionResult> CheckInOut([FromBody] CheckAttendanceRequest request, CancellationToken ct)
     {
@@ -41,6 +76,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
 
         return Ok(result.Value);
     }
+
 
     [HttpGet("logs")]
     public async Task<IActionResult> GetDailyLogs(
@@ -72,6 +108,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
 
         return Ok(result.Value);
     }
+
 
     [HttpPost("logs/manual")]
     public async Task<IActionResult> CreateManualLog(
@@ -112,6 +149,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
         return Ok(result.Value);
     }
 
+
     [HttpGet("audits")]
     public async Task<IActionResult> GetAudits(
         [FromQuery] Guid? employeeId,
@@ -132,6 +170,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
 
         return Ok(result.Value);
     }
+
 
     [HttpPost("logs/{id:guid}/snapshot")]
     public async Task<IActionResult> UploadAttendanceSnapshot(
@@ -158,6 +197,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
 
         return Ok(result.Value);
     }
+
 
     [HttpGet("leaves")]
     public async Task<IActionResult> GetLeaves([FromQuery] DateOnly? date, CancellationToken ct)
@@ -190,6 +230,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
         return Ok(result.Value);
     }
 
+
     [HttpPost("leaves/{id:guid}/replace")]
     public async Task<IActionResult> ReplaceLeave(
         Guid id,
@@ -205,6 +246,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
         return Ok(result.Value);
     }
 
+
     [HttpPost("mark-absent")]
     public async Task<IActionResult> MarkDailyAbsent([FromQuery] DateOnly? date, CancellationToken ct)
     {
@@ -216,6 +258,7 @@ public sealed class AttendanceController(IAttendanceService attendanceService) :
 
         return Ok(result.Value);
     }
+
 
     private bool TryGetAuthenticatedActor(out ActorContext? actor, out IActionResult? errorResult)
     {

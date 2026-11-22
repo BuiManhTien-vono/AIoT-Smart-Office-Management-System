@@ -35,6 +35,32 @@ export async function createShift(
   });
 }
 
+export async function updateShift(
+  token: string,
+  shiftId: string,
+  input: CreateShiftInput,
+  signal?: AbortSignal
+): Promise<Shift> {
+  return apiRequest<Shift>(`/attendance/shifts/${shiftId}`, {
+    method: 'PUT',
+    token,
+    body: JSON.stringify(input),
+    signal,
+  });
+}
+
+export async function deleteShift(
+  token: string,
+  shiftId: string,
+  signal?: AbortSignal
+): Promise<void> {
+  await apiRequest<void>(`/attendance/shifts/${shiftId}`, {
+    method: 'DELETE',
+    token,
+    signal,
+  });
+}
+
 export async function listAttendanceLogs(
   token: string,
   date?: string,

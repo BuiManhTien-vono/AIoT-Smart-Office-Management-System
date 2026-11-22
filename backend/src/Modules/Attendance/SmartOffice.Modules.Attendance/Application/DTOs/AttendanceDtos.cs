@@ -17,8 +17,8 @@ public sealed record ShiftResponse(
     TimeOnly StartTime,
     TimeOnly EndTime,
     int GraceMinutes,
-    TimeOnly LunchStart,
-    TimeOnly LunchEnd,
+    TimeOnly? LunchStart,
+    TimeOnly? LunchEnd,
     bool IsDefault);
 
 public sealed record CheckAttendanceRequest(
